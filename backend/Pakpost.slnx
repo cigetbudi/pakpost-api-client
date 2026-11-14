@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Pakpost.Api/Pakpost.Api.csproj" />
+    <Project Path="src/Pakpost.Application/Pakpost.Application.csproj" />
+    <Project Path="src/Pakpost.Domain/Pakpost.Domain.csproj" />
+    <Project Path="src/Pakpost.Infrastructure/Pakpost.Infrastructure.csproj" />
+  </Folder>
+</Solution>

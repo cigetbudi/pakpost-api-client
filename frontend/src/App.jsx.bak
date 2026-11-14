@@ -1,0 +1,244 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowRight, Bolt, Check, ChevronDown, Clock3, Code2, Copy, Database, FileJson,
+  FolderClosed, FolderPlus, Globe2, Layers3, LockKeyhole, LogIn, LogOut, Menu,
+  Moon, Plus, Save, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users,
+  Wifi, X, Zap,
+} from 'lucide-react';
+
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+const EMPTY_HEADER = { key: '', value: '' };
+const storedToken = () => sessionStorage.getItem('pakpost_token') || '';
+const getMessage = (e) => e?.message || 'Something went wrong';
+
+async function api(path, method = 'GET', body, token = '') {
+  const headers = { 'Accept': 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  let data;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok) throw new Error(data?.message || (data?.errors?.map(e => e.message).join(', ')) || `HTTP ${res.status}`);
+  return data;
+}
+const toRows = (headers = {}) => Object.entries(headers).map(([key, value]) => ({ key, value }));
+function prettyJson(text) { try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; } }
+
+function IconButton({ icon: Icon, onClick, label, disabled = false }) {
+  return <button type="button" className="icon-btn" aria-label={label} title={label} disabled={disabled} onClick={onClick}><Icon size={16}/></button>;
+}
+function Empty({ icon: Icon, title, description }) {
+  return <div className="empty"><div className="empty-icon"><Icon size={23}/></div><strong>{title}</strong><p>{description}</p></div>;
+}
+function Dialog({ title, subtitle, onClose, children }) {
+  return <div className="overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="dialog-top"><div><h2>{title}</h2><p>{subtitle}</p></div><IconButton icon={X} label="Close" onClick={onClose}/></div>{children}
+    </div>
+  </div>;
+}
+
+export default function App() {
+  const [page, setPage] = useState('tester');
+  const [theme, setTheme] = useState(localStorage.getItem('pakpost_theme') || 'dark');
+  const [token, setToken] = useState(storedToken);
+  const [me, setMe] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authForm, setAuthForm] = useState({ displayName: '', email: '', password: '' });
+  const [notice, setNotice] = useState('');
+  const [method, setMethod] = useState('GET');
+  const [url, setUrl] = useState('https://httpbin.org/get');
+  const [rows, setRows] = useState([{ ...EMPTY_HEADER }]);
+  const [body, setBody] = useState('');
+  const [reqTab, setReqTab] = useState('headers');
+  const [resTab, setResTab] = useState('body');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [recent, setRecent] = useState([]);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedWs, setSelectedWs] = useState('');
+  const [collections, setCollections] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [wsTab, setWsTab] = useState('collections');
+  const [selectedCol, setSelectedCol] = useState('');
+  const [savedRequests, setSavedRequests] = useState([]);
+  const [selectedTeam, setSelectedTeam] = useState('');
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [newWs, setNewWs] = useState('');
+  const [newCollection, setNewCollection] = useState('');
+  const [newTeam, setNewTeam] = useState('');
+  const [newMember, setNewMember] = useState('');
+  const [newTeamMember, setNewTeamMember] = useState('');
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('New request');
+  const [saveWs, setSaveWs] = useState('');
+  const [saveCollection, setSaveCollection] = useState('');
+  const [saveCols, setSaveCols] = useState([]);
+  const [busyAction, setBusyAction] = useState(false);
+
+  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('pakpost_theme', theme); }, [theme]);
+  useEffect(() => {
+    let ignore = false;
+    if (!token) { setMe(null); setWorkspaces([]); return; }
+    api('/api/auth/me', 'GET', undefined, token).then(user => { if (!ignore) setMe(user); })
+      .catch(() => { if (!ignore) logout(); });
+    return () => { ignore = true; };
+  }, [token]);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(''), 4200);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  function logout() { sessionStorage.removeItem('pakpost_token'); setToken(''); setMe(null); setPage('tester'); setWorkspaces([]); }
+  function requiresLogin(target = 'workspace') {
+    if (token) return true;
+    setAuthMode('login'); setAuthError(''); setAuthOpen(true);
+    setNotice(`Sign in to access ${target}. The request tester is always available.`);
+    return false;
+  }
+  function navigate(target) {
+    if (target !== 'tester' && !requiresLogin(target)) return;
+    setPage(target);
+    if (target === 'workspace') loadWorkspaces();
+  }
+  async function submitAuth(e) {
+    e.preventDefault(); setAuthBusy(true); setAuthError('');
+    try {
+      const path = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const payload = authMode === 'register' ? authForm : { email: authForm.email, password: authForm.password };
+      const data = await api(path, 'POST', payload);
+      sessionStorage.setItem('pakpost_token', data.accessToken);
+      setToken(data.accessToken); setMe(data.user); setAuthOpen(false);
+      setAuthForm({ displayName: '', email: '', password: '' });
+      setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
+    } catch (e) { setAuthError(getMessage(e)); }
+    finally { setAuthBusy(false); }
+  }
+  async function loadWorkspaces(auth = token) {
+    if (!auth) return;
+    try {
+      const data = await api('/api/workspaces', 'GET', undefined, auth);
+      setWorkspaces(data);
+      setSelectedWs(current => data.some(x => x.id === current) ? current : (data[0]?.id || ''));
+    } catch (e) { setNotice(getMessage(e)); }
+  }
+  useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
+  useEffect(() => {
+    if (!token || !selectedWs) { setCollections([]); setMembers([]); setTeams([]); return; }
+    Promise.all([
+      api(`/api/workspaces/${selectedWs}/collections`, 'GET', undefined, token),
+      api(`/api/workspaces/${selectedWs}/members`, 'GET', undefined, token),
+      api(`/api/workspaces/${selectedWs}/teams`, 'GET', undefined, token),
+    ]).then(([cols, mems, tms]) => {
+      setCollections(cols); setMembers(mems); setTeams(tms);
+      setSelectedCol(current => cols.some(x => x.id === current) ? current : cols[0]?.id || '');
+      setSelectedTeam(current => tms.some(x => x.id === current) ? current : tms[0]?.id || '');
+    }).catch(e => setNotice(getMessage(e)));
+  }, [selectedWs, token]);
+  useEffect(() => {
+    if (!token || !selectedWs || !selectedCol) { setSavedRequests([]); return; }
+    api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests`, 'GET', undefined, token)
+      .then(setSavedRequests).catch(e => setNotice(getMessage(e)));
+  }, [selectedWs, selectedCol, token]);
+  useEffect(() => {
+    if (!token || !selectedWs || !selectedTeam) { setTeamMembers([]); return; }
+    api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`, 'GET', undefined, token)
+      .then(setTeamMembers).catch(e => setNotice(getMessage(e)));
+  }, [selectedWs, selectedTeam, token]);
+  useEffect(() => {
+    if (!token || !saveWs) { setSaveCols([]); return; }
+    api(`/api/workspaces/${saveWs}/collections`, 'GET', undefined, token)
+      .then(cols => { setSaveCols(cols); setSaveCollection(c => cols.some(x => x.id === c) ? c : cols[0]?.id || ''); })
+      .catch(e => setNotice(getMessage(e)));
+  }, [saveWs, token]);
+
+  const activeWorkspace = workspaces.find(x => x.id === selectedWs);
+  const activeTeam = teams.find(x => x.id === selectedTeam);
+  const headerCount = rows.filter(x => x.key.trim()).length;
+  const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()).map(x => [x.key.trim(), x.value]));
+  async function sendRequest() {
+    if (!url.trim()) { setNotice('Enter a target URL first.'); return; }
+    setLoading(true); setResult(null);
+    const command = { method, url: url.trim(), headers: requestHeaderObject(), body: body || '' };
+    try {
+      const r = await api('/api/proxy/send', 'POST', command);
+      setResult(r); setResTab('body');
+      setRecent(old => [{ method, url: command.url, status: r.statusCode, elapsed: r.elapsedMs, body, rows }, ...old].slice(0, 8));
+    } catch (e) { setResult({ error: getMessage(e) }); }
+    finally { setLoading(false); }
+  }
+  const doAction = async fn => {
+    setBusyAction(true);
+    try { await fn(); } catch (e) { setNotice(getMessage(e)); } finally { setBusyAction(false); }
+  };
+  function loadRequest(item) {
+    setMethod(item.method); setUrl(item.url); setBody(item.body || '');
+    setRows(Array.isArray(item.rows) ? item.rows : [...toRows(JSON.parse(item.headersJson || '{}')), { ...EMPTY_HEADER }]);
+    setResult(null); setPage('tester'); setNotice('Request loaded into workbench.');
+  }
+  function openSave() {
+    if (!requiresLogin('collections')) return;
+    setSaveWs(workspaces[0]?.id || '');
+    setSaveName(`${method} ${(() => { try { return new URL(url).pathname || '/'; } catch { return 'request'; } })()}`);
+    setSaveOpen(true);
+  }
+  async function saveRequest(e) {
+    e.preventDefault();
+    await doAction(async () => {
+      await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`, 'POST',
+        { name: saveName, method, url, headersJson: JSON.stringify(requestHeaderObject()), body }, token);
+      setSaveOpen(false); setNotice('Request saved to collection.');
+      if (selectedWs === saveWs && selectedCol === saveCollection)
+        setSavedRequests(await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`, 'GET', undefined, token));
+    });
+  }
+
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <div className="brand"><div className="brand-mark"><Zap size={23} fill="currentColor"/></div><div className="brand-copy"><strong>pakpost<span>.</span></strong><small>API WORKBENCH</small></div></div>
+      <div className="sidebar-caption">WORKSPACE</div>
+      <button className={`nav-item ${page === 'tester' ? 'active' : ''}`} onClick={() => navigate('tester')}><Terminal size={19}/><span>API Tester</span><span className="nav-tag">FREE</span></button>
+      <button className={`nav-item ${page === 'workspace' ? 'active' : ''}`} onClick={() => navigate('workspace')}><Layers3 size={19}/><span>Workspaces</span>{!token && <LockKeyhole size={14} className="muted"/>}</button>
+      <div className="sidebar-section"><span>GET STARTED</span><div className="sidebar-panel"><div className="status-dot"/> <strong>No account needed</strong><p>Send a request instantly. Sign in only to keep work with your team.</p></div></div>
+      <div className="sidebar-bottom">
+        <div className="user-card"><div className="avatar">{me ? me.displayName.charAt(0).toUpperCase() : <Globe2 size={19}/>}</div><div className="user-meta"><strong>{me ? me.displayName : 'Guest mode'}</strong><span>{me ? me.email : 'Public API tester'}</span></div></div>
+        {token ? <button className="sidebar-action" onClick={logout}><LogOut size={16}/> Sign out</button> : <button className="sidebar-action" onClick={() => setAuthOpen(true)}><LogIn size={16}/> Sign in / Create account</button>}
+      </div>
+    </aside>
+
+    <main className="main">
+      <header className="topbar"><div className="breadcrumbs"><span>Pakpost</span><span className="slash">/</span><strong>{page === 'tester' ? 'API Tester' : 'Workspaces'}</strong></div><div className="top-actions"><span className="build-label"><span className="green-dot"/> LOCAL MVP</span><IconButton icon={theme === 'dark' ? Sun : Moon} label="Toggle theme" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}/>{!token && <button className="btn secondary compact" onClick={() => setAuthOpen(true)}>Sign in <ArrowRight size={15}/></button>}</div></header>
+      {page === 'tester' ? <>
+        <section className="hero"><div className="eyebrow"><span className="eyebrow-dot"/> REQUEST PLAYGROUND</div><h1>Build. Send. Inspect.</h1><p>Test any public HTTP API right away — no login, no workspace, no setup.</p></section>
+        <section className="workbench">
+          <div className="section-head"><div><h2><Code2 size={18}/> Request builder</h2><p>Configure your endpoint and fire a request</p></div><div className="head-utilities"><span><ShieldCheck size={15}/> Public mode</span></div></div>
+          <div className="request-line"><select className={`method ${method.toLowerCase()}`} aria-label="HTTP method" value={method} onChange={e => setMethod(e.target.value)}>{METHODS.map(m => <option key={m}>{m}</option>)}</select><input aria-label="Request URL" spellCheck="false" type="url" placeholder="https://api.example.com/v1/users" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') sendRequest(); }}/><button className="btn primary send-btn" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={16}/>} {loading ? 'Sending...' : 'Send'}</button></div>
+          <div className="tabbar"><button className={reqTab === 'headers' ? 'chosen' : ''} onClick={() => setReqTab('headers')}>Headers <span className="count">{headerCount}</span></button><button className={reqTab === 'body' ? 'chosen' : ''} onClick={() => setReqTab('body')}>Body</button></div>
+          <div className="request-edit">{reqTab === 'headers' ? <><div className="table-heading"><span>KEY</span><span>VALUE</span><span/></div>{rows.map((r, i) => <div className="header-row" key={i}><input value={r.key} spellCheck="false" placeholder="Content-Type" aria-label="Header key" onChange={e => setRows(v => v.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}/><input value={r.value} spellCheck="false" placeholder="application/json" aria-label="Header value" onChange={e => setRows(v => v.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}/><IconButton icon={X} label="Remove header" onClick={() => setRows(v => v.filter((_, j) => j !== i))}/></div>)}<button className="text-action" onClick={() => setRows(v => [...v, { ...EMPTY_HEADER }])}><Plus size={14}/> Add header</button></> : <><div className="editor-caption"><FileJson size={15}/> Raw request body <span>UTF-8 · max 128 KB</span></div><textarea className="body-editor" spellCheck="false" value={body} onChange={e => setBody(e.target.value)} placeholder={'{\n  "hello": "pakpost"\n}'}/></>}</div>
+          <div className="builder-footer"><div className="muted helper-text"><ShieldCheck size={15}/> Requests are proxied; private network targets are blocked by default.</div><button className="btn secondary" onClick={openSave}><Save size={16}/> Save to collection {!token && <LockKeyhole size={13}/>}</button></div>
+        </section>
+        <section className="response-card"><div className="section-head response-heading"><div><h2><Bolt size={18}/> Response</h2><p>Live response from the target server</p></div>{result && !result.error && <div className="response-stats"><span className={result.statusCode < 400 ? 'status-good' : 'status-bad'}>{result.statusCode} {result.reasonPhrase}</span><span><Clock3 size={14}/>{result.elapsedMs} ms</span><span>{new Blob([result.body]).size.toLocaleString()} B</span></div>}</div>
+          {!result ? <Empty icon={Wifi} title={loading ? 'Request in progress…' : 'Ready when you are'} description="Hit Send to see response data, headers and timing here."/> : result.error ? <div className="error-response"><strong>Could not send request</strong><p>{result.error}</p></div> : <><div className="tabbar"><button className={resTab === 'body' ? 'chosen' : ''} onClick={() => setResTab('body')}>Response body</button><button className={resTab === 'headers' ? 'chosen' : ''} onClick={() => setResTab('headers')}>Response headers <span className="count">{Object.keys(result.headers || {}).length}</span></button><div className="tab-spacer"/><IconButton icon={Copy} label="Copy response" onClick={() => { navigator.clipboard?.writeText(resTab === 'body' ? result.body : JSON.stringify(result.headers,null,2));setNotice('Response copied'); }}/></div><pre className="response-code">{resTab === 'body' ? prettyJson(result.body) : JSON.stringify(result.headers,null,2)}</pre>{result.truncated && <p className="response-warning">Output truncated to 1 MB.</p>}{result.isBinary && <p className="response-warning">Binary content shown as Base64.</p>}</>}
+        </section>
+        {recent.length > 0 && <section className="recent-card"><h3><Clock3 size={16}/> Recent this session</h3><div className="history-list">{recent.map((x, i) => <button key={i} onClick={() => loadRequest(x)}><span className={`method-pill ${x.method.toLowerCase()}`}>{x.method}</span><span className="history-url">{x.url}</span><span className="history-status">{x.status}</span><span className="history-time">{x.elapsed} ms</span><ArrowRight size={15}/></button>)}</div></section>}
+      </> : <>
+        <section className="hero workspace-hero"><div className="eyebrow"><span className="eyebrow-dot"/> COLLABORATION</div><h1>Team workspaces</h1><p>Organize collections, saved requests, and team members. Requires sign in.</p></section>
+        <div className="workspace-grid"><section className="workspace-picker"><div className="panel-title">YOUR WORKSPACES <span className="count">{workspaces.length}</span></div><form onSubmit={e => {e.preventDefault();if(!newWs.trim())return;doAction(async()=>{const ws=await api('/api/workspaces','POST',{name:newWs.trim()},token);setNewWs('');await loadWorkspaces();setSelectedWs(ws.id);setNotice('Workspace created.');});}} className="inline-add"><input value={newWs} onChange={e=>setNewWs(e.target.value)} placeholder="New workspace name" maxLength={120}/><button className="small-add" disabled={busyAction} title="Create workspace"><Plus size={17}/></button></form><div className="workspace-list">{workspaces.length ? workspaces.map(ws => <button key={ws.id} onClick={() => setSelectedWs(ws.id)} className={ws.id === selectedWs ? 'current' : ''}><div className="workspace-avatar"><Layers3 size={17}/></div><span>{ws.name}</span><ArrowRight size={15}/></button>) : <p className="muted tiny-padding">Create a workspace to get started.</p>}</div></section>
+          <section className="workspace-details">{!activeWorkspace ? <Empty icon={FolderClosed} title="Pick a workspace" description="Create or select a workspace to manage collections, teams and members."/> : <><div className="ws-top"><div className="ws-title"><div className="workspace-avatar large"><Layers3 size={23}/></div><div><h2>{activeWorkspace.name}</h2><p>Workspace · secure member access</p></div></div><span className="private-label"><LockKeyhole size={13}/> Private</span></div><div className="tabbar workspace-tabs">{[['collections','Collections',FolderClosed],['teams','Teams',Users],['members','Members',ShieldCheck]].map(([id,label,Icon])=><button key={id} className={wsTab === id ? 'chosen':''} onClick={()=>setWsTab(id)}><Icon size={15}/> {label}</button>)}</div>
+              {wsTab === 'collections' && <div className="workspace-content"><div className="content-top"><strong>Collections</strong><form className="inline-add" onSubmit={e => {e.preventDefault();if(!newCollection.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name:newCollection.trim()},token);setNewCollection('');setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));setNotice('Collection created');});}}><input value={newCollection} onChange={e=>setNewCollection(e.target.value)} maxLength={120} placeholder="New collection"/><button title="Create collection" className="small-add" disabled={busyAction}><Plus size={17}/></button></form></div><div className="collection-list">{collections.map(col=><button key={col.id} className={`collection-row ${selectedCol === col.id?'current':''}`} onClick={()=>setSelectedCol(col.id)}><FolderClosed size={17}/><span>{col.name}</span><span className="muted">View requests</span><ChevronDown size={15}/></button>)}{!collections.length && <Empty icon={FolderPlus} title="No collections yet" description="Add one above to save your first request."/>}</div>{selectedCol && <div className="saved-zone"><h3>Saved requests</h3>{savedRequests.length ? savedRequests.map(item=><div key={item.id} className="saved-row"><span className={`method-pill ${item.method.toLowerCase()}`}>{item.method}</span><button className="saved-open" onClick={()=>loadRequest(item)}><strong>{item.name}</strong><small>{item.url}</small></button><IconButton icon={Trash2} label="Delete saved request" disabled={busyAction} onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/${item.id}`,'DELETE',undefined,token);setSavedRequests(v=>v.filter(x=>x.id!==item.id));})}/></div>) : <p className="muted smaller">No saved requests. Go to API Tester and choose “Save to collection”.</p>}</div>}</div>}
+              {wsTab === 'members' && <div className="workspace-content"><div className="content-top"><strong>Workspace members</strong><form className="inline-add" onSubmit={e=>{e.preventDefault();if(!newMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/members`,'POST',{email:newMember.trim(),role:'Member'},token);setNewMember('');setMembers(await api(`/api/workspaces/${selectedWs}/members`,'GET',undefined,token));setNotice('Member added');});}}><input type="email" placeholder="Registered user's email" value={newMember} onChange={e=>setNewMember(e.target.value)}/><button title="Add member" className="small-add" disabled={busyAction}><Plus size={17}/></button></form></div>{members.map(m=><div className="member-row" key={m.userId}><div className="avatar small">{m.displayName.charAt(0)}</div><div><strong>{m.displayName}</strong><small>{m.email}</small></div><span className="role-badge">{m.role}</span></div>)}<p className="muted smaller footnote">Members must create a Pakpost account before being added.</p></div>}
+              {wsTab === 'teams' && <div className="workspace-content"><div className="content-top"><strong>Teams</strong><form className="inline-add" onSubmit={e=>{e.preventDefault();if(!newTeam.trim())return;doAction(async()=>{const team=await api(`/api/workspaces/${selectedWs}/teams`,'POST',{name:newTeam.trim()},token);setNewTeam('');setTeams(await api(`/api/workspaces/${selectedWs}/teams`,'GET',undefined,token));setSelectedTeam(team.id);setNotice('Team created');});}}><input placeholder="New team name" value={newTeam} onChange={e=>setNewTeam(e.target.value)} maxLength={120}/><button title="Create team" className="small-add" disabled={busyAction}><Plus size={17}/></button></form></div><div className="team-list">{teams.map(team=><button key={team.id} className={`collection-row ${selectedTeam === team.id?'current':''}`} onClick={()=>setSelectedTeam(team.id)}><Users size={17}/><span>{team.name}</span><ArrowRight size={15}/></button>)}{!teams.length && <Empty icon={Users} title="No teams yet" description="Create a team to group your workspace members."/>}</div>{activeTeam && <div className="saved-zone"><div className="content-top"><strong>{activeTeam.name} · Members</strong><form className="inline-add" onSubmit={e=>{e.preventDefault();if(!newTeamMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'POST',{email:newTeamMember.trim()},token);setNewTeamMember('');setTeamMembers(await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'GET',undefined,token));setNotice('Added to team');});}}><input type="email" placeholder="Workspace member email" value={newTeamMember} onChange={e=>setNewTeamMember(e.target.value)}/><button title="Add team member" className="small-add" disabled={busyAction}><Plus size={17}/></button></form></div>{teamMembers.map(tm=><div className="member-row" key={tm.userId}><div className="avatar small">{tm.displayName.charAt(0)}</div><div><strong>{tm.displayName}</strong><small>{tm.email}</small></div></div>)}<p className="muted smaller footnote">Add users to the workspace before adding them to a team.</p></div>}</div>}
+            </>}</section></div>
+      </>}
+      <footer className="footer"><span>PAKPOST / MVP</span><span><ShieldCheck size={13}/> Guest requests are never stored in the database.</span></footer>
+    </main>
+    {notice && <div className="toast"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>}
+    {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Only needed for workspaces, teams and saved collections." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="btn primary full" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="muted smaller text-center">Google SSO will be added later. Guest testing always stays available.</p></form></Dialog>}
+    {saveOpen && <Dialog title="Save to collection" subtitle="Your saved requests stay private to your workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}><label>Request name<input required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label><label>Workspace<select value={saveWs} onChange={e=>setSaveWs(e.target.value)}>{workspaces.map(ws=><option key={ws.id} value={ws.id}>{ws.name}</option>)}</select></label><label>Collection<select required value={saveCollection} onChange={e=>setSaveCollection(e.target.value)}>{saveCols.map(col=><option key={col.id} value={col.id}>{col.name}</option>)}</select></label>{!saveCols.length && <div className="form-error">Create a workspace and collection first.</div>}<button className="btn primary full" type="submit" disabled={!saveCollection || busyAction}><Save size={16}/> Save request</button></form></Dialog>}
+  </div>;
+}

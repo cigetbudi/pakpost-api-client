@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+.env
+artifacts/
+.vscode/
+.idea/
+*.user

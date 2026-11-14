@@ -1,0 +1,117 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Pakpost.Application.Common.Exceptions;
+using Pakpost.Application.Internal.Requests;
+namespace Pakpost.Infrastructure.Services;
+public sealed class SafeHttpRequestRunner(IConfiguration configuration,IHostEnvironment environment):IHttpRequestRunner
+{
+    private const int MaxResponseBytes=1_048_576;
+    private static readonly HashSet<string> DisallowedHeaders=new(StringComparer.OrdinalIgnoreCase)
+    { "Host","Connection","Content-Length","Transfer-Encoding","Upgrade","Proxy-Authorization","Proxy-Connection","Keep-Alive","TE","Trailer" };
+    public async Task<SendHttpResponse> ExecuteAsync(SendHttpRequestCommand command,CancellationToken ct)
+    {
+        if(!Uri.TryCreate(command.Url,UriKind.Absolute,out var uri) ||
+           (uri.Scheme!="http" && uri.Scheme!="https") ||
+           !string.IsNullOrEmpty(uri.UserInfo) || uri.HostNameType==UriHostNameType.Unknown)
+            throw AppException.BadRequest("Only absolute HTTP(S) URLs without embedded credentials are allowed");
+        // Public proxy exposed over the internet: restrict ports; production has no private network access.
+        var allowedPorts=configuration.GetSection("Proxy:AllowedPorts").Get<int[]>() ?? [80,443];
+        if(!allowedPorts.Contains(uri.Port)) throw AppException.BadRequest("Target port is not allowed by this server");
+        bool allowPrivate=environment.IsDevelopment() && configuration.GetValue<bool>("Proxy:AllowPrivateNetworks");
+        var method=command.Method.ToUpperInvariant();
+        var body=command.Body ?? "";
+        if(Encoding.UTF8.GetByteCount(body)>131072) throw AppException.BadRequest("Request body too large");
+        var handler=new SocketsHttpHandler
+        {
+            AllowAutoRedirect=false,UseCookies=false,UseProxy=false,
+            AutomaticDecompression=DecompressionMethods.GZip|DecompressionMethods.Deflate|DecompressionMethods.Brotli,
+            ConnectTimeout=TimeSpan.FromSeconds(5),
+            ConnectCallback=async (context,cancel)=>
+            {
+                var endpoint=context.DnsEndPoint;
+                IPAddress[] ips=await Dns.GetHostAddressesAsync(endpoint.Host,cancel);
+                var chosen=ips.FirstOrDefault(ip=>allowPrivate || IsPublic(ip));
+                if(chosen is null) throw new HttpRequestException("Destination resolves only to blocked/private IP addresses");
+                var socket=new Socket(chosen.AddressFamily,SocketType.Stream,ProtocolType.Tcp);
+                try { await socket.ConnectAsync(new IPEndPoint(chosen,endpoint.Port),cancel);return new NetworkStream(socket,ownsSocket:true); }
+                catch { socket.Dispose();throw; }
+            }
+        };
+        using(handler)
+        using(var client=new HttpClient(handler,false) { Timeout=TimeSpan.FromSeconds(15) })
+        using(var request=new HttpRequestMessage(new HttpMethod(method),uri))
+        {
+            if(!string.IsNullOrEmpty(body) && method is not "GET" and not "HEAD")
+                request.Content=new StringContent(body,Encoding.UTF8);
+            if(command.Headers is not null)
+                foreach(var header in command.Headers)
+                {
+                    if(DisallowedHeaders.Contains(header.Key) || header.Key.StartsWith("Proxy-",StringComparison.OrdinalIgnoreCase))
+                        throw AppException.BadRequest($"Forbidden header: {header.Key}");
+                    if(header.Key.Length>100 || header.Value.Length>4096 || header.Value.Contains('\r') || header.Value.Contains('\n'))
+                        throw AppException.BadRequest("Invalid header");
+                    if(!request.Headers.TryAddWithoutValidation(header.Key,header.Value))
+                    {
+                        request.Content ??=new ByteArrayContent([]);
+                        if(!request.Content.Headers.TryAddWithoutValidation(header.Key,header.Value))
+                            throw AppException.BadRequest($"Unsupported header: {header.Key}");
+                    }
+                }
+            var watch=Stopwatch.StartNew();
+            try
+            {
+                using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,ct);
+                await using var stream=await response.Content.ReadAsStreamAsync(ct);
+                using var bytes=new MemoryStream();
+                var buffer=new byte[8192];bool truncated=false;
+                while(true)
+                {
+                    var n=await stream.ReadAsync(buffer,ct);
+                    if(n==0)break;
+                    var left=MaxResponseBytes-(int)bytes.Length;
+                    if(n>left){if(left>0)bytes.Write(buffer,0,left);truncated=true;break;}
+                    bytes.Write(buffer,0,n);
+                }
+                watch.Stop();
+                var headers=response.Headers.Concat(response.Content.Headers)
+                    .ToDictionary(x=>x.Key,x=>string.Join(", ",x.Value),StringComparer.OrdinalIgnoreCase);
+                string responseBody;bool isBinary=false;
+                try{responseBody=new UTF8Encoding(false,true).GetString(bytes.ToArray());}
+                catch(DecoderFallbackException){responseBody=Convert.ToBase64String(bytes.ToArray());isBinary=true;}
+                return new((int)response.StatusCode,response.ReasonPhrase??"",watch.ElapsedMilliseconds,headers,responseBody,truncated,isBinary);
+            }
+            catch(OperationCanceledException) when(!ct.IsCancellationRequested)
+            {throw AppException.BadRequest("Target request timed out after 15 seconds");}
+            catch(HttpRequestException ex)
+            {throw AppException.BadRequest("Target request failed: "+ex.Message);}
+        }
+    }
+    private static bool IsPublic(IPAddress ip)
+    {
+        if(ip.IsIPv4MappedToIPv6) ip=ip.MapToIPv4();
+        if(IPAddress.IsLoopback(ip))return false;
+        var b=ip.GetAddressBytes();
+        if(ip.AddressFamily==AddressFamily.InterNetwork)
+        {
+            int a=b[0],c=b[1];
+            return a!=0 && a!=10 && a!=127 && a!=169 && a!=192 && a!=198 &&
+                   a!=224 && a!=240 && a<224 &&
+                   !(a==172 && c>=16 && c<=31) &&
+                   !(a==100 && c>=64 && c<=127) &&
+                   !(a==192 && c==168) &&
+                   !(a==192 && c==0) &&
+                   !(a==203 && c==0 && b[2]==113);
+        }
+        if(ip.AddressFamily==AddressFamily.InterNetworkV6)
+        {
+            if(ip.Equals(IPAddress.IPv6Any) || ip.IsIPv6LinkLocal || ip.IsIPv6Multicast || ip.IsIPv6SiteLocal ||
+               (b[0]&0xfe)==0xfc || (b[0]==0x20 && b[1]==0x01 && b[2]==0x0d && b[3]==0xb8)) return false;
+            return true;
+        }
+        return false;
+    }
+}

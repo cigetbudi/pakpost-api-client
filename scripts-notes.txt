@@ -1,0 +1,1 @@
+Run backend scripts from the backend directory, and frontend npm commands from the frontend directory. See README.md.
