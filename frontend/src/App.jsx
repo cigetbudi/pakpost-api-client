@@ -6,7 +6,9 @@ import { TextEditor } from './features/Editors';
 import { RetroSelect } from './features/RetroSelect';
 import { VariableUrlInput } from './features/VariableUrlInput';
 import { FastTooltip } from './features/FastTooltip';
-import { EnvironmentDialog } from './features/Environments';
+import { EnvironmentExplorer } from './features/EnvironmentExplorer';
+import { WorkbenchSettings } from './features/WorkbenchSettings';
+import {sortCollectionRoots} from './features/collectionSort';
 import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
 import { blankDraft, parseCurl, isCurl } from './features/importExport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
@@ -17,7 +19,6 @@ import {createPostmanCollection} from './features/importExport';
 import {stripJsonComments,hasJsonComments} from './features/jsonComments';
 import {findBoundTab} from './features/sourceTabs';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
-import { AppearanceSidebar } from './features/AppearanceSidebar';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from './features/appearance';
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
 import { runSandbox } from './features/runScript';
@@ -74,6 +75,9 @@ function Dialog({ title, subtitle, onClose, children }) {
 
 export default function App() {
   const [page, setPage] = useState('tester');
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [commandIndex, setCommandIndex] = useState(0);
   const [theme, setTheme] = useState(() => readAppearance(localStorage));
   const [token, setToken] = useState(storedToken);
   const [me, setMe] = useState(null);
@@ -97,7 +101,6 @@ export default function App() {
   const [scriptError, setScriptError] = useState(RECOVERED.scriptError || '');
   const [responsePretty, setResponsePretty] = useState(true);
   const [prettyResponse, setPrettyResponse] = useState('');
-  const [envOpen, setEnvOpen] = useState(false);
   const [envScope, setEnvScope] = useState(CACHED?.envScope || 'local');
   const [localEnvironments, setLocalEnvironments] = useState(initialLocalEnvs);
   const [workspaceEnvironments, setWorkspaceEnvironments] = useState([]);
@@ -139,9 +142,12 @@ export default function App() {
   const [saveCols, setSaveCols] = useState([]);
   const [busyAction, setBusyAction] = useState(false);
   const [split, setSplit] = useState(() => CACHED?.split || localStorage.getItem('pakpost_split') || 'horizontal');
-  const [splitPercent, setSplitPercent] = useState(50);
-  const [explorerTab, setExplorerTab] = useState(CACHED?.explorerTab || 'collections');
+  const [splitPercent, setSplitPercent] = useState(56);
+  const [explorerTab, setExplorerTab] = useState(CACHED?.explorerTab === 'appearance' ? 'collections' : (CACHED?.explorerTab || 'collections'));
   const [explorerSearch, setExplorerSearch] = useState('');
+  const [collectionSort,setCollectionSort] = useState(()=>localStorage.getItem('pakpost_v14_global_collection_sort')||'manual');
+  const [rightWidth,setRightWidth] = useState(()=>Math.min(650,Math.max(280,Number(localStorage.getItem('pakpost_v14_right_width'))||340)));
+  const resizingRight=useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(CACHED?.sidebarCollapsed || false);
   const [expandedCollections, setExpandedCollections] = useState({});
   const [params, setParams] = useState(RECOVERED.params || [{ ...EMPTY_HEADER }]);
@@ -154,6 +160,18 @@ export default function App() {
   const tabSequence = useRef(Math.max(1,...(CACHED?.openTabs || []).map(t=>Number(String(t.id).replace(/^t/,'')) || 0)));
   const draftsRef = useRef(CACHED?.drafts || {});
   const panesRef = useRef(null);
+  useEffect(() => {
+    const onKey = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen(v => !v);
+        setCommandQuery('');
+        setCommandIndex(0);
+      } else if (event.key === 'Escape') setCommandOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const draggingRef = useRef(false);
 
   function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
@@ -168,6 +186,12 @@ export default function App() {
   }
   function stashActive() { draftsRef.current[activeTabRef.current] = snapshot(); }
   useEffect(()=>writeLocalCollections(localCollections),[localCollections]);
+  useEffect(()=>{localStorage.setItem('pakpost_v14_global_collection_sort',collectionSort)},[collectionSort]);
+  useEffect(()=>{localStorage.setItem('pakpost_v14_right_width',String(rightWidth))},[rightWidth]);
+  function openContext(view){setExplorerTab(view);setSidebarCollapsed(false);setPage('tester');}
+  function resizeRight(event){if(!resizingRight.current)return;setRightWidth(Math.max(280,Math.min(650,window.innerWidth-event.clientX-4)));}
+  function endRightResize(event){if(resizingRight.current){resizingRight.current=false;try{event.currentTarget.releasePointerCapture(event.pointerId)}catch{}}}
+
   useEffect(()=>{
     if(!tabMenu)return;
     const dismiss=e=>{if(!e.target.closest?.('.pp-tab-context'))setTabMenu(null)};
@@ -749,42 +773,54 @@ export default function App() {
     });
   }
 
-  const visibleCollections = collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (c.id === selectedCol && savedRequests.some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase()))));
+  const visibleCollections = sortCollectionRoots(collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (c.id === selectedCol && savedRequests.some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())))),collectionSort);
+  const visibleLocalCollections = sortCollectionRoots(localCollections,collectionSort);
   const activeRequestName = openTabs.find(t => t.id === activeTabId)?.name || 'Untitled Request';
   const responseType = result && !result.error ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain') : 'text/plain';
+  const commandItems = [
+    {key:'new-request', title:'New HTTP request', subtitle:'Open an empty request tab', icon:'action', run:()=>addTab()},
+    {key:'open-collections',title:'Show collections',subtitle:'Browse saved API requests',icon:'action',run:()=>{setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester')}},
+    {key:'open-history',title:'Open request history',subtitle:'Previously sent requests',icon:'action',run:()=>{setExplorerTab('history');setSidebarCollapsed(false);setPage('tester')}},
+    {key:'environments',title:'Manage environments',subtitle:'Edit local and workspace variables',icon:'action',run:()=>openContext('environments')},
+    {key:'code',title:'Generate code',subtitle:'cURL, Fetch, Go, C#, Python',icon:'action',run:()=>{setExplorerTab('code');setSidebarCollapsed(false);setPage('tester')}},
+    ...openTabs.map(t=>({key:`tab-${t.id}`,title:t.name,subtitle:`${t.method} · Open tab`,method:t.method,run:()=>selectTab(t.id)})),
+    ...localCollections.flatMap(col => (col.requests || []).map(req => ({key:`local-${col.id}-${req.id}`,title:req.requestName||req.name||'Untitled Request',subtitle:`${col.name} · ${req.url || ''}`,method:req.method||'GET',run:()=>openLocalRequest(req,col.id)}))),
+    ...(token?savedRequests.map(req=>({key:`neon-${req.id}`,title:req.name,subtitle:`Workspace · ${req.url||''}`,method:req.method||'GET',run:()=>loadSavedRequest(req)})):[])
+  ];
+  const visibleCommandItems = commandItems.filter(item => `${item.title} ${item.subtitle}`.toLowerCase().includes(commandQuery.trim().toLowerCase())).slice(0,30);
   const responseText = result && !result.error ? (resTab === 'body' ? (responsePretty ? (prettyResponse||prettyJson(result.body||'')) : (result.body||'')) : JSON.stringify(result.headers || {}, null, 2)) : '';
 
   return <div className="pp-app">
     <header className="pp-top">
       <div className="pp-logo"><div className="pp-logo-mark">p</div><span>pakpost</span><span className="pp-logo-sparkle" aria-hidden="true">✦</span></div>
-      <div className="pp-top-center"><span className="pp-env-dot"/> <span>REST CLIENT</span><span className="pp-top-divider"/><span className="pp-top-mode">{token ? 'Team workspace' : 'Guest workspace'}</span></div>
+      <button className="pp-top-search" type="button" aria-label="Search requests and commands" onClick={()=>{setCommandQuery('');setCommandIndex(0);setCommandOpen(true);}}><Search size={15}/><span>Search requests and commands</span><kbd>Ctrl K</kbd></button>
       <div className="pp-top-right">
         <div className="pp-env-top"><span>ENV</span>
           <RetroSelect ariaLabel="Environment scope" title="Environment storage" className="pp-top-scope" value={envScope} onChange={updateEnvScope} options={[{value:'local',label:'Local'},{value:'workspace',label:'Workspace',disabled:!token||!selectedWs}]}/>
           <RetroSelect ariaLabel="Active environment" className="pp-top-environment" value={activeEnvId} onChange={setActiveEnvId} options={[{value:'',label:'No environment'},...currentEnvironments.map(e=>({value:e.id,label:e.name}))]}/>
-          <button title="Manage environments" onClick={()=>setEnvOpen(true)}><Settings2 size={16}/></button>
+          <button title="Manage environments" onClick={()=>openContext('environments')}><Settings2 size={16}/></button>
         </div>
         <span className="pp-connection"><span/> Local development</span>
         {me ? <button className="pp-profile" title={me.email} onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
       </div>
     </header>
 
-    <div className="pp-main-frame">
-      <nav className="pp-rail" aria-label="Workbench navigation">
-        <button className={page === 'tester' && explorerTab === 'collections' ? 'selected' : ''} title="Collections" onClick={() => { setExplorerTab('collections'); setSidebarCollapsed(false); setPage('tester'); }}><Layers3 size={19}/></button>
-        <button className={page === 'tester' && explorerTab === 'history' ? 'selected' : ''} title="Request history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); setPage('tester'); }}><History size={19}/></button>
-        <button title="Environments" onClick={()=>setEnvOpen(true)}><Variable size={19}/></button>
-        <button className={explorerTab === 'code' ? 'selected' : ''} title="Generate Code" onClick={()=>{setExplorerTab('code');setSidebarCollapsed(false);setPage('tester')}}><Code2 size={19}/></button>
-        <button className={explorerTab === 'exchange' ? 'selected' : ''} title="Import / Export" onClick={()=>{setExplorerTab('exchange');setSidebarCollapsed(false);setPage('tester')}}><FileUp size={19}/></button>
-        <button className={explorerTab === 'teams' ? 'selected' : ''} title="Teams" onClick={() => { setExplorerTab('teams'); setSidebarCollapsed(false); if (token) { setWsTab('teams'); } }}><Users size={19}/></button>
+    <div className={`pp-main-frame ${page==='settings'?'pp-view-settings':page==='workspace'?'pp-view-workspace':'pp-view-tester'} ${sidebarCollapsed?'pp-navigator-collapsed':''}`} style={{'--pp-v14-right-width':`${rightWidth}px`}}>
+      <nav className="pp-rail pp-module-rail" aria-label="Main modules">
+        <button className={page!=='settings'?'selected':''} aria-label="REST" title="REST API client" onClick={()=>setPage('tester')}><Code2 size={20}/><span>REST</span></button>
         <div className="pp-rail-spacer"/>
-        <button title={sidebarCollapsed ? 'Expand navigator' : 'Collapse navigator'} onClick={() => setSidebarCollapsed(v => !v)}>{sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>
-        <button className={explorerTab === 'appearance' ? 'selected' : ''} title="Appearance settings" aria-label="Appearance settings" onClick={() => { setExplorerTab('appearance'); setSidebarCollapsed(false); setPage('tester'); }}><Settings2 size={19}/></button>
+        <button className={page==='settings'?'selected':''} aria-label="Settings" title="Settings" onClick={()=>setPage('settings')}><Settings2 size={20}/><span>Settings</span></button>
       </nav>
+      {page==='tester'&&<nav className="pp-context-rail" aria-label="Context panels">
+        {[["collections","Collections",Layers3],["environments","Environments",Variable],["history","History",History],["code","Generate Code",Code2],["exchange","Import / Export",FileUp],["teams","Teams",Users]].map(([id,title,Icon])=><button key={id} className={!sidebarCollapsed&&explorerTab===id?'selected':''} aria-label={title} title={title} onClick={()=>{if(!sidebarCollapsed&&explorerTab===id)setSidebarCollapsed(true);else openContext(id)}}><Icon size={18}/></button>)}
+        <div className="pp-rail-spacer"/>
+        <button title={sidebarCollapsed?'Show context panel':'Hide context panel'} aria-label={sidebarCollapsed?'Show context panel':'Hide context panel'} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<PanelLeftOpen size={17}/>:<PanelLeftClose size={17}/>}</button>
+        {!sidebarCollapsed&&<div className="pp-context-resizer" role="separator" aria-label="Resize context panel" aria-orientation="vertical" tabIndex={0} onPointerDown={e=>{e.preventDefault();resizingRight.current=true;e.currentTarget.setPointerCapture(e.pointerId)}} onPointerMove={resizeRight} onPointerUp={endRightResize} onPointerCancel={endRightResize} onKeyDown={e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setRightWidth(w=>Math.max(280,Math.min(650,w+(e.key==='ArrowLeft'?16:-16))))}}}><span/></div>}
+      </nav>}
 
-      {!sidebarCollapsed && <aside className="pp-explorer">
-        <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Explorer' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'appearance' ? 'Settings' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
-        {explorerTab === 'appearance' ? <AppearanceSidebar value={theme} onChange={setTheme}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
+      {page==='tester' && !sidebarCollapsed && <aside className="pp-explorer">
+        <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Collections' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'environments' ? 'Environments' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
+        {explorerTab === 'environments' ? <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
             environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
           <div className="pp-side-subhead"><span>RECENT REQUESTS</span><span>{recent.length}</span></div>
@@ -800,11 +836,12 @@ export default function App() {
           </div>
           {token && <button className="pp-link-row" onClick={() => navigate('workspace')}><Settings2 size={14}/> Manage workspace <ChevronRight size={13}/></button>}
           <div className="pp-explorer-search"><Search size={14}/><input placeholder="Search collections" aria-label="Search collections" value={explorerSearch} onChange={e => setExplorerSearch(e.target.value)}/></div>
+          <div className="pp-global-collection-sort"><span>Sort all collections</span><RetroSelect ariaLabel="Sort all collections" value={collectionSort} onChange={setCollectionSort} options={[{value:'manual',label:'Manual order'},{value:'name-asc',label:'Name A–Z'},{value:'name-desc',label:'Name Z–A'},{value:'newest',label:'Recently updated'}]}/></div>
           <div className="pp-side-subhead"><span>COLLECTIONS</span><button title="Create local collection" onClick={()=>setCreatingLocalCollection(true)}><Plus size={16}/></button></div>
           {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createLocalCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder="Collection name"/><button type="submit" title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
           <div className="pp-side-scroll">
             {localCollections.length>0&&<><div className="pp-local-subhead">LOCAL · BROWSER <span>{localCollections.length}</span></div>
-              <LocalCollectionsTree collections={localCollections} search={explorerSearch} onOpen={openLocalRequest} onAction={handleLocalMenu} onMove={moveLocalRequest}/>
+              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onAction={handleLocalMenu} onMove={moveLocalRequest}/>
             </>}
             {token && selectedWs ? <>
               <div className="pp-local-subhead">WORKSPACE · NEON</div>
@@ -836,6 +873,7 @@ export default function App() {
       </aside>}
 
       <main className="pp-content">
+        {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} split={split} onSplitChange={setSplit} onBack={()=>setPage('tester')}/>}
         <div className="pp-tabs-bar">
           <div className="pp-open-tabs" role="tablist" aria-label="Open requests">
             {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const from=tabDragRef.current;if(from)setOpenTabs(ts=>reorderTabs(ts,from,t.id));tabDragRef.current=null;}} onDragEnd={()=>{tabDragRef.current=null;}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
@@ -939,9 +977,9 @@ export default function App() {
       </main>
     </div>
     <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">Guest testing enabled · Private addresses blocked by proxy</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
+    {commandOpen && <div className="pp-command-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCommandOpen(false);}}><section className="pp-command-dialog" role="dialog" aria-modal="true" aria-label="Quick search and commands"><div className="pp-command-input-wrap"><Search size={18}/><input autoFocus aria-label="Search commands" value={commandQuery} onChange={e=>{setCommandQuery(e.target.value);setCommandIndex(0);}} onKeyDown={e=>{if(e.key==='ArrowDown'){e.preventDefault();setCommandIndex(i=>Math.min(visibleCommandItems.length-1,i+1));}else if(e.key==='ArrowUp'){e.preventDefault();setCommandIndex(i=>Math.max(0,i-1));}else if(e.key==='Enter'&&visibleCommandItems.length){e.preventDefault();setCommandOpen(false);visibleCommandItems[Math.min(commandIndex,visibleCommandItems.length-1)].run();}}} placeholder="Find a request or run a command..."/><kbd>Esc</kbd></div><div className="pp-command-results" role="listbox">{visibleCommandItems.length?visibleCommandItems.map((item,i)=><button type="button" role="option" aria-selected={commandIndex===i} onMouseEnter={()=>setCommandIndex(i)} key={item.key} onClick={()=>{setCommandOpen(false);item.run();}}>{item.method?<span className={`pp-http-label ${item.method.toLowerCase()}`}>{item.method}</span>:<Code2 size={15}/>}<span><strong>{item.title}</strong><small>{item.subtitle}</small></span><ArrowRight size={14}/></button>):<div className="pp-command-empty">No matching requests or commands.</div>}</div></section></div>}
     {notice && <div className="pp-toast"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>}
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="pp-muted-small pp-center">Google SSO can be added later.</p></form></Dialog>}
-    {envOpen && <EnvironmentDialog items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onClose={()=>setEnvOpen(false)} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/>}
     {saveOpen && <Dialog title="Save as new request" subtitle="Keep an independent copy in a local collection or a signed-in workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}>
       <label>Request name<input autoFocus required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label>
       <div className="pp-modal-select-label"><span>Destination</span><RetroSelect ariaLabel="Save scope" value={saveScope} onChange={setSaveScope} options={[{value:'local',label:'Local browser'},...(token?[{value:'workspace',label:'Workspace · Neon'}]:[])]}/></div>

@@ -17,7 +17,8 @@ test('restyled workbench retains functional request and script controls', () => 
   assert.match(app, /className="pp-url-entry"/);
   assert.match(app, /onClick=\{sendRequest\}/);
   assert.match(app, /className="pp-save-action" onClick=\{saveCurrent\}/);
-  assert.match(app, /<AppearanceSidebar value=\{theme\} onChange=\{setTheme\}\/>/);
+  // v14 moves appearance into a dedicated Settings page instead of the explorer.
+  assert.match(app, /<WorkbenchSettings theme=\{theme\} onThemeChange=\{setTheme\}/);
   assert.match(app, /onPointerMove=\{onSplitterMove\}/);
   assert.match(app, /<TextEditor value=\{preScript\}/);
   assert.match(app, /<TextEditor value=\{postScript\}/);

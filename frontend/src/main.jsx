@@ -8,6 +8,8 @@ import './v9-layout.css';
 import './v10-reference-workbench.css';
 import './v11-retro-controls.css';
 import './v12-collection-workflow.css';
+import './v13-horizon-workbench.css';
+import './v14-right-context.css';
 import { readAppearance } from './features/appearance.js';
 document.documentElement.dataset.theme = readAppearance(window.localStorage);
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
