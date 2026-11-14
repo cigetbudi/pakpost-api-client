@@ -99,12 +99,14 @@ function pmBody(body,draft){if(!body)return;
 export function parsePostmanCollection(doc){
   if(!doc||!Array.isArray(doc.item)||!doc.info)throw Error('Not a Postman Collection (requires info and item).');
   const result=[];
-  const walk=(items,folder='',parentAuth=doc.auth)=>{
+  const walk=(items,folder='',parentAuth=doc.auth,folderPath=[])=>{
     for(const item of items){
-      if(item.item){walk(item.item,folder?folder+' / '+safeString(item.name):safeString(item.name),item.auth??parentAuth);continue;}
+      if(item.item){const name=safeString(item.name);walk(item.item,folder?folder+' / '+name:name,item.auth??parentAuth,[...folderPath,name]);continue;}
       if(!item.request)continue;
       const req=typeof item.request==='string'?{url:item.request,method:'GET'}:item.request;
       const draft=blankDraft();draft.name=(folder?folder+' / ':'')+safeString(item.name||'Imported request');
+      draft.requestName=safeString(item.name||'Imported request');
+      draft.folderPath=folderPath;
       draft.method=safeString(req.method||'GET').toUpperCase();
       const rawUrl=pmUrl(req.url);
       const clean=splitQuery(rawUrl);draft.url=clean.url;
@@ -156,7 +158,27 @@ export function parseImportText(text){
   if(isCurl(text))return {requests:[parseCurl(text)],environments:[],kind:'curl'};
   let data;try{data=JSON.parse(text);}catch{throw Error('Invalid JSON. Paste cURL or choose a Pakpost/Postman JSON export.');}
   if(data?.format==='pakpost-workbench-session')return {...parseSession(data),kind:'pakpost'};
-  if(Array.isArray(data?.item))return {requests:parsePostmanCollection(data),environments:[],kind:'postman'};
+  if(Array.isArray(data?.item)){const requests=parsePostmanCollection(data);return {requests,environments:[],kind:'postman',collections:[{name:safeString(data.info?.name||'Imported collection'),requests}]};}
   if(Array.isArray(data?.values))return {requests:[],environments:[{name:data.name||'Imported environment',variables:data.values.filter(v=>v.enabled!==false).map(v=>({key:safeString(v.key),value:safeString(v.value),isSecret:v.type==='secret'}))}],kind:'environment'};
   throw Error('Unsupported file. Use a Postman v2.1 collection, Postman environment, Pakpost session, or cURL.');
+}
+
+/** Preserve nested imported Postman folders when exporting local collections. */
+export function createLocalPostmanExport(collections,{includeSecrets=false}={}){
+  const root=createPostmanCollection([],{name:'Pakpost local collections',includeSecrets});
+  for(const col of collections||[]){
+    const parent={name:col.name,item:[]};root.item.push(parent);
+    for(const draft of col.requests||[]){
+      const exported=createPostmanCollection([draft],{includeSecrets}).item[0];
+      exported.name=draft.requestName||draft.name||'Request';
+      let target=parent;
+      for(const segment of draft.folderPath||[]){
+        let folder=target.item.find(x=>Array.isArray(x.item)&&x.name===segment);
+        if(!folder){folder={name:segment,item:[]};target.item.push(folder);}
+        target=folder;
+      }
+      target.item.push(exported);
+    }
+  }
+  return root;
 }

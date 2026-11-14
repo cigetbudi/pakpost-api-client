@@ -174,3 +174,48 @@ button{border:0;background:none}h1,h2,h3,p{margin:0}
 @media (max-width:1250px){.pp-explorer:has(.pp-side-tool){flex-basis:300px}}
 @media (max-width:980px){.pp-explorer:has(.pp-side-tool){flex-basis:270px}}
 @media (prefers-reduced-motion:reduce){.pp-rail button,.pp-open-tab,.pp-panel-tabs>button,.pp-send{transition:none}}
+
+/* Workbench v5: subtle shape, motion, and a native-feeling tab menu. */
+:root{--pp-radius-sm:8px;--pp-radius-md:11px;--pp-radius-lg:14px;--pp-motion:190ms cubic-bezier(.2,.75,.3,1)}
+.pp-url-bar{border-radius:var(--pp-radius-md);overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.045)}
+.pp-send{border-radius:0 var(--pp-radius-md) var(--pp-radius-md) 0;transition:background-color var(--pp-motion),box-shadow var(--pp-motion)}
+.pp-send:hover:not(:disabled){box-shadow:0 3px 14px rgba(45,116,205,.2)}
+.pp-scope,.pp-explorer-search,.pp-env-top,.pp-script-console,.pp-response-error,.pp-binary-picker{border-radius:var(--pp-radius-md)}
+.pp-body-code,.pp-side-field select,.pp-import-text,.pp-side-code,.pp-side-actions button,.pp-export-buttons button{border-radius:var(--pp-radius-sm)}
+.pp-tree-row,.pp-tree-request,.pp-add-side,.pp-rail button,.pp-icon-btn,.icon-btn,.pp-plain-btn,.pp-local-delete{border-radius:var(--pp-radius-sm);transition:background-color var(--pp-motion),color var(--pp-motion),border-color var(--pp-motion),box-shadow var(--pp-motion)}
+.pp-explorer,.pp-rail{transition:flex-basis var(--pp-motion),background-color var(--pp-motion)}
+.pp-open-tab{border-radius:9px 9px 0 0;margin:4px 2px 0;height:calc(100% - 4px);min-width:146px;border:1px solid transparent;border-bottom:0;transition:background-color var(--pp-motion),border-color var(--pp-motion),color var(--pp-motion),box-shadow var(--pp-motion)}
+.pp-open-tab:hover{background:var(--hover);color:var(--text)}
+.pp-open-tab.current{background:var(--editor);border-color:var(--border-soft);box-shadow:inset 0 2px 0 var(--accent)}
+.pp-tab-x{border-radius:6px;transition:background-color var(--pp-motion)}
+.pp-tab-context{position:fixed;z-index:1000;width:214px;padding:6px;border:1px solid var(--border);background:var(--surface);border-radius:var(--pp-radius-md);box-shadow:0 14px 44px rgba(0,0,0,.3);animation:pp-context-in 150ms cubic-bezier(.2,.75,.3,1) both}
+.pp-tab-context button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:7px;font-size:11px;text-align:left;color:var(--text2);transition:background-color var(--pp-motion),color var(--pp-motion)}
+.pp-tab-context button svg{flex:none;color:var(--muted)}
+.pp-tab-context button:hover:not(:disabled),.pp-tab-context button:focus-visible{background:var(--accent-soft);color:var(--text)}
+.pp-tab-context button:disabled{opacity:.35}
+.pp-context-divider{height:1px;background:var(--border-soft);margin:5px 4px}
+@keyframes pp-context-in{from{opacity:0;transform:translateY(-5px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+.pp-local-subhead{display:flex;align-items:center;justify-content:space-between;padding:10px 9px 6px;margin-top:5px;color:var(--muted);font-size:9px;letter-spacing:.85px;font-weight:800}
+.pp-local-subhead span,.pp-local-collection-head small{font:10px 'JetBrains Mono',monospace;color:var(--muted)}
+.pp-local-collection{margin:2px 1px 5px}.pp-local-collection-head{display:flex;align-items:center;min-width:0}.pp-local-collection-head>.pp-tree-row{flex:1;min-width:0}
+.pp-local-delete{width:26px;height:26px;flex:none;color:var(--muted);display:grid;place-items:center;opacity:0}
+.pp-local-collection-head:hover .pp-local-delete,.pp-local-delete:focus-visible{opacity:1}
+.pp-local-delete:hover{background:rgba(244,100,100,.09);color:var(--red)}
+.pp-local-folder{color:var(--text2)}.pp-local-folder svg:nth-child(2){color:var(--accent)}
+.pp-local-request{height:31px;gap:9px}.pp-local-request:hover{background:var(--accent-soft)}
+.pp-local-create{display:flex;align-items:center;gap:5px;margin:0 12px 10px;padding:5px;border:1px solid var(--border);background:var(--editor);border-radius:var(--pp-radius-sm)}
+.pp-local-create input{flex:1;min-width:0;padding:5px;border:0;background:transparent;font-size:11px}
+.pp-local-create button{flex:none;border-radius:6px;padding:5px 7px;background:var(--accent-soft);color:var(--accent);font-size:11px}
+.pp-local-create button:last-child{background:transparent;color:var(--muted)}
+.pp-login-hint{color:var(--muted);font-weight:500}
+.pp-rail button:hover,.pp-side-actions button:hover:not(:disabled),.pp-plain-btn:hover{box-shadow:inset 0 0 0 1px var(--border-soft)}
+.dialog{border-radius:var(--pp-radius-lg);animation:pp-dialog-in 200ms cubic-bezier(.2,.75,.3,1) both}
+@keyframes pp-dialog-in{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(hover:none){.pp-local-delete{opacity:1}}
+@media(prefers-reduced-motion:reduce){.pp-open-tab,.pp-send,.pp-rail button,.pp-tree-row,.pp-tree-request,.pp-local-delete,.pp-tab-context,.dialog{transition:none!important;animation:none!important}}
+
+.pp-local-delete-confirm{margin:4px 7px 9px;padding:9px 10px;display:flex;flex-wrap:wrap;gap:7px;align-items:center;border:1px solid rgba(245,130,130,.24);background:rgba(244,100,100,.06);border-radius:9px;color:var(--text2);font-size:10px}
+.pp-local-delete-confirm span{width:100%}
+.pp-local-delete-confirm button{padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:10px}
+.pp-local-delete-confirm button:nth-of-type(1){color:var(--red);border-color:rgba(245,130,130,.3)}
+.pp-local-delete-confirm button:hover{background:var(--hover)}

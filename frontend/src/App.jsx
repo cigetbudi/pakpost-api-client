@@ -7,6 +7,9 @@ import { EnvironmentDialog } from './features/Environments';
 import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
 import { blankDraft, parseCurl, isCurl } from './features/importExport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
+import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
+import {planTabClose} from './features/tabActions';
+import {LocalCollectionsTree} from './features/LocalCollectionsTree';
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
 import { runSandbox } from './features/runScript';
 import { postmanRequestSnapshot } from './features/postmanCompat';
@@ -98,6 +101,9 @@ export default function App() {
   const [workspaces, setWorkspaces] = useState([]);
   const [selectedWs, setSelectedWs] = useState('');
   const [collections, setCollections] = useState([]);
+  const [localCollections, setLocalCollections] = useState(readLocalCollections);
+  const [creatingLocalCollection, setCreatingLocalCollection] = useState(false);
+  const [localCollectionName, setLocalCollectionName] = useState('');
   const [members, setMembers] = useState([]);
   const [teams, setTeams] = useState([]);
   const [wsTab, setWsTab] = useState('collections');
@@ -126,6 +132,7 @@ export default function App() {
   const [authType, setAuthType] = useState(RECOVERED.authType || 'none');
   const [bearerToken, setBearerToken] = useState(RECOVERED.bearerToken || '');
   const [openTabs, setOpenTabs] = useState(CACHED?.openTabs || [{ id: 't1', name: 'Untitled Request', method: 'GET' }]);
+  const [tabMenu, setTabMenu] = useState(null);
   const [activeTabId, setActiveTabId] = useState(CACHED?.activeTabId || 't1');
   const activeTabRef = useRef(CACHED?.activeTabId || 't1');
   const tabSequence = useRef(Math.max(1,...(CACHED?.openTabs || []).map(t=>Number(String(t.id).replace(/^t/,'')) || 0)));
@@ -144,6 +151,15 @@ export default function App() {
     setParams(next.params||[{...EMPTY_HEADER}]);setAuthType(next.authType||'none');setBearerToken(next.bearerToken||'');
   }
   function stashActive() { draftsRef.current[activeTabRef.current] = snapshot(); }
+  useEffect(()=>writeLocalCollections(localCollections),[localCollections]);
+  useEffect(()=>{
+    if(!tabMenu)return;
+    const dismiss=e=>{if(!e.target.closest?.('.pp-tab-context'))setTabMenu(null)};
+    const escape=e=>{if(e.key==='Escape')setTabMenu(null)};
+    const resized=()=>setTabMenu(null);
+    window.addEventListener('pointerdown',dismiss);window.addEventListener('keydown',escape);window.addEventListener('resize',resized);
+    return ()=>{window.removeEventListener('pointerdown',dismiss);window.removeEventListener('keydown',escape);window.removeEventListener('resize',resized)};
+  },[tabMenu]);
   // Persist drafts for refresh recovery (debounced, plus a beforeunload flush).
   useEffect(()=>{
     const persist=()=>writeWorkbenchCache({openTabs,activeTabId:activeTabRef.current,
@@ -174,18 +190,24 @@ export default function App() {
     setOpenTabs(t => [...t, { id, name, method: draft.method }]);
     setActiveTabId(id); restoreDraft(draft); setPage('tester');
   }
-  function importRequestsAndEnvironments({requests=[],environments=[]}) {
-    if(requests.length > 200)throw Error('Cannot import more than 200 requests at once.');
-    if(requests.length){
+  function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]}) {
+    if(requests.length>200)throw Error('Import limit: maximum 200 requests.');
+    if(kind==='postman'||kind==='curl'){
+      const sources=kind==='curl'?[{name:'Imported cURL',requests}]:incoming.length?incoming:[{name:'Imported collection',requests}];
+      const next=validateLibrary([...localCollections,...sources.map(c=>toLocalCollection(c))]);
+      setLocalCollections(next);
+      setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
+    }else if(requests.length){
+      // A Pakpost session is a tab backup, not a Postman collection import.
       stashActive();
-      const tabs = requests.map(request=>{
+      const tabs=requests.map(request=>{
         const id=`t${++tabSequence.current}`;
         const draft={...blankDraft(),...request,binaryFile:{name:request?.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
         draftsRef.current[id]=draft;
-        return {id,name:request.name || 'Imported Request',method:draft.method};
+        return {id,name:request.name||'Imported Request',method:draft.method};
       });
       setOpenTabs(old=>[...old,...tabs]);
-      const last=tabs[tabs.length-1];
+      const last=tabs.at(-1);
       activeTabRef.current=last.id;setActiveTabId(last.id);restoreDraft(draftsRef.current[last.id]);setPage('tester');
     }
     if(environments.length){
@@ -193,6 +215,16 @@ export default function App() {
       setLocalEnvironments(current=>[...current,...added]);
       setEnvScope('local');setActiveEnvId(added[0].id);
     }
+  }
+  function createLocalCollection(e){
+    e.preventDefault();
+    const name=localCollectionName.trim();if(!name)return;
+    try{setLocalCollections(validateLibrary([...localCollections,toLocalCollection({name,requests:[]})]));setLocalCollectionName('');setCreatingLocalCollection(false);}
+    catch(err){setNotice(getMessage(err));}
+  }
+  function deleteLocalCollection(id){
+    const collection=localCollections.find(c=>c.id===id);if(!collection)return;
+    setLocalCollections(old=>old.filter(c=>c.id!==id));
   }
   function importCurlIntoCurrent(value){
     try{
@@ -205,23 +237,35 @@ export default function App() {
       setNotice(`cURL imported: ${parsed.method} ${parsed.url}. Review before sending.`);
     }catch(e){setNotice(`cURL import failed: ${getMessage(e)}`);}
   }
-  function closeTab(id) {
-    if (openTabs.length === 1) {
-      restoreDraft({method:'GET',url:'',rows:[{...EMPTY_HEADER}],body:'',reqTab:'params',resTab:'body',result:null});
-      setOpenTabs([{ id, name: 'Untitled Request', method: 'GET' }]);
-      draftsRef.current[id] = { method: 'GET', url: '', rows: [{ ...EMPTY_HEADER }], body: '',format:'application/json',formFields:[{key:'',value:''}],preScript:'',postScript:'', reqTab: 'params', resTab: 'body', result: null, params: [{...EMPTY_HEADER}], authType: 'none', bearerToken: '' };
-      return;
+  function closeTab(id){performTabAction('close',id);}
+  function performTabAction(action,id){
+    setTabMenu(null);
+    if(action==='duplicate'){
+      stashActive();const source=draftsRef.current[id];if(!source)return;
+      const newId=`t${++tabSequence.current}`;
+      const cloned=JSON.parse(JSON.stringify(source));
+      draftsRef.current[newId]={...cloned,binaryFile:{name:cloned.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
+      const sourceTab=openTabs.find(t=>t.id===id);
+      const index=openTabs.findIndex(t=>t.id===id);
+      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:`${sourceTab?.name||'Request'} (copy)`,method:cloned.method},...t.slice(index+1)]);
+      selectTabFromDraft(newId);return;
     }
-    const idx = openTabs.findIndex(t => t.id === id);
-    const next = openTabs[idx + 1] || openTabs[idx - 1];
-    if (id === activeTabRef.current) {
-      // Set the draft on this tab to its latest contents; another draft will be activated below.
-      stashActive();
+    stashActive();
+    const plan=planTabClose(openTabs,id,activeTabRef.current,action);
+    if(plan.reset){
+      const blank={...blankDraft()};const blankId=id;
+      draftsRef.current={[blankId]:blank};
+      setOpenTabs([{id:blankId,name:'Untitled Request',method:'GET'}]);
+      selectTabFromDraft(blankId);return;
     }
-    const filtered = openTabs.filter(t => t.id !== id);
-    setOpenTabs(filtered);
-    if (id === activeTabRef.current && next) selectTabFromDraft(next.id);
-    delete draftsRef.current[id];
+    const removed=new Set(plan.removedIds);
+    for(const key of removed)delete draftsRef.current[key];
+    setOpenTabs(plan.remaining);
+    if(plan.nextActiveId!==activeTabRef.current)selectTabFromDraft(plan.nextActiveId);
+  }
+  function showTabContext(e,id){
+    e.preventDefault();e.stopPropagation();
+    setTabMenu({id,x:Math.max(8,Math.min(e.clientX,window.innerWidth-224)),y:Math.max(8,Math.min(e.clientY,window.innerHeight-190))});
   }
   function selectTabFromDraft(id) {
     const next = draftsRef.current[id];
@@ -545,7 +589,7 @@ export default function App() {
         <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Explorer' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
         {explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
-            environments={localEnvironments} onImport={importRequestsAndEnvironments} onMessage={setNotice}/> : explorerTab === 'history' ? <>
+            environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice}/> : explorerTab === 'history' ? <>
           <div className="pp-side-subhead"><span>RECENT REQUESTS</span><span>{recent.length}</span></div>
           {recent.length ? <div className="pp-side-scroll">{recent.map((r, i) => <button key={`${i}-${r.url}`} className="pp-history-item" onClick={() => loadRequest(r)}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span className="pp-history-main"><strong>{(() => { try { return new URL(r.url).pathname || '/'; } catch { return r.url; } })()}</strong><small>{r.url}</small></span><span className={r.status < 400 ? 'pp-history-ok' : 'pp-history-bad'}>{r.status}</span></button>)}</div> : <div className="pp-explorer-empty"><History size={23}/><strong>No history yet</strong><span>Requests you send during this session will appear here.</span></div>}
         </> : explorerTab === 'teams' ? <>
@@ -559,9 +603,14 @@ export default function App() {
           </div>
           {token && <button className="pp-link-row" onClick={() => navigate('workspace')}><Settings2 size={14}/> Manage workspace <ChevronRight size={13}/></button>}
           <div className="pp-explorer-search"><Search size={14}/><input placeholder="Search collections" aria-label="Search collections" value={explorerSearch} onChange={e => setExplorerSearch(e.target.value)}/></div>
-          <div className="pp-side-subhead"><span>COLLECTIONS</span><button title="Create collection" onClick={() => { if (!requiresLogin('collections')) return; navigate('workspace'); setWsTab('collections'); }}><Plus size={16}/></button></div>
+          <div className="pp-side-subhead"><span>COLLECTIONS</span><button title="Create local collection" onClick={()=>setCreatingLocalCollection(true)}><Plus size={16}/></button></div>
+          {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createLocalCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder="Collection name"/><button type="submit" title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
           <div className="pp-side-scroll">
+            {localCollections.length>0&&<><div className="pp-local-subhead">LOCAL · BROWSER <span>{localCollections.length}</span></div>
+              <LocalCollectionsTree collections={localCollections} search={explorerSearch} onOpen={r=>addTab({...r,name:r.requestName||r.name})} onDelete={deleteLocalCollection}/>
+            </>}
             {token && selectedWs ? <>
+              <div className="pp-local-subhead">WORKSPACE · NEON</div>
               {visibleCollections.map(c => <div key={c.id}>
                 <button className={`pp-tree-row ${selectedCol === c.id ? 'active' : ''}`} onClick={() => { setSelectedCol(c.id); setExpandedCollections(v => ({ ...v, [c.id]: !(v[c.id] ?? true) })); }}>
                   {(expandedCollections[c.id] ?? true) && selectedCol === c.id ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
@@ -572,9 +621,9 @@ export default function App() {
               {!collections.length && <div className="pp-tree-hint">No collections yet. Start by creating one.</div>}
               <button className="pp-add-side" onClick={() => { navigate('workspace'); setWsTab('collections'); }}><Plus size={14}/> New collection</button>
             </> : <>
-              <div className="pp-guest-tree"><FolderClosed size={16}/> My requests <span className="pp-guest-badge">GUEST</span></div>
-              <div className="pp-tree-hint">Use request tabs to try APIs instantly. Sign in to save collections and sync across workspaces.</div>
-              <button className="pp-add-side" onClick={() => setAuthOpen(true)}><LockKeyhole size={14}/> Sign in to save</button>
+              {!localCollections.length&&<div className="pp-tree-hint">Import a Postman Collection to see its folders and requests here. Nothing is sent until you open a request and click Send.</div>}
+              <button className="pp-add-side" onClick={()=>{setExplorerTab('exchange');setSidebarCollapsed(false)}}><FileUp size={14}/> Import a collection</button>
+              <button className="pp-add-side pp-login-hint" onClick={() => setAuthOpen(true)}><LockKeyhole size={14}/> Sign in to sync to workspace</button>
             </>}
           </div>
           <div className="pp-explorer-bottom">
@@ -586,12 +635,19 @@ export default function App() {
       <main className="pp-content">
         <div className="pp-tabs-bar">
           <div className="pp-open-tabs" role="tablist" aria-label="Open requests">
-            {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
+            {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab()}><Plus size={17}/></button>
           </div>
           <div className="pp-tabs-actions"><span><span className="pp-working-dot"/> {token ? 'Synced' : 'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
         </div>
+        {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
+          <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
+          <div className="pp-context-divider"/>
+          <button role="menuitem" onClick={()=>performTabAction('close',tabMenu.id)}><X size={14}/> Close tab</button>
+          <button role="menuitem" disabled={openTabs.length<=1} onClick={()=>performTabAction('others',tabMenu.id)}><Layers3 size={14}/> Close other tabs</button>
+          <button role="menuitem" disabled={openTabs.findIndex(t=>t.id===tabMenu.id)>=openTabs.length-1} onClick={()=>performTabAction('right',tabMenu.id)}><ArrowRight size={14}/> Close tabs to the right</button>
+        </div>}
 
         {page === 'tester' ? <div className="pp-tester">
           <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">· HTTP request</span><div className="pp-crumb-spacer"/><button onClick={openSave} title="Save request to a collection"><Save size={15}/><span>Save</span>{!token && <LockKeyhole size={12}/>}</button><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>

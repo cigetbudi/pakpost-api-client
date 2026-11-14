@@ -1,0 +1,13 @@
+/** Pure close-plan helper for request-tab context menus. */
+export function planTabClose(tabs,targetId,activeId,kind){
+  const index=tabs.findIndex(t=>t.id===targetId);
+  if(index<0)throw Error('Tab does not exist.');
+  let remaining;
+  if(kind==='close')remaining=tabs.filter(t=>t.id!==targetId);
+  else if(kind==='others')remaining=tabs.filter(t=>t.id===targetId);
+  else if(kind==='right')remaining=tabs.slice(0,index+1);
+  else throw Error('Unsupported tab action.');
+  const removedIds=tabs.filter(t=>!remaining.some(r=>r.id===t.id)).map(t=>t.id);
+  const nextActiveId=remaining.some(t=>t.id===activeId)?activeId:(remaining.some(t=>t.id===targetId)?targetId:(remaining[index]||remaining[index-1])?.id||null);
+  return {remaining,removedIds,nextActiveId,reset:remaining.length===0};
+}
