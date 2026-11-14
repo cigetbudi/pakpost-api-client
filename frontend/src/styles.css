@@ -219,3 +219,82 @@ button{border:0;background:none}h1,h2,h3,p{margin:0}
 .pp-local-delete-confirm button{padding:5px 9px;border:1px solid var(--border);border-radius:6px;font-size:10px}
 .pp-local-delete-confirm button:nth-of-type(1){color:var(--red);border-color:rgba(245,130,130,.3)}
 .pp-local-delete-confirm button:hover{background:var(--hover)}
+
+/* Workbench v6 — restrained five-theme appearance system. Only semantic tokens vary. */
+:root[data-theme='light']{
+  color-scheme:light;
+  --bg:#eff3f8;--top:#f9fbfe;--surface:#f9fbfe;--surface2:#edf3fa;--editor:#fff;
+  --hover:#e5edf7;--selected:#dfeaf8;--border:#d5e0ed;--border-soft:#e3eaf3;
+  --text:#1d2c3d;--text2:#475c73;--muted:#657c93;--accent:#276fc5;
+  --accent-soft:rgba(39,111,197,.11);--action:#256fc5;--action-hover:#1a60b6;
+  --green:#137e60;--yellow:#9c6a24;--red:#b64550;--shadow:0 16px 38px rgba(39,68,102,.10);
+}
+:root[data-theme='dark']{
+  color-scheme:dark;
+  --bg:#101923;--top:#15212e;--surface:#182634;--surface2:#203142;--editor:#111c28;
+  --hover:#26394b;--selected:#243b55;--border:#324457;--border-soft:#283848;
+  --text:#e8eef5;--text2:#b7c9d9;--muted:#90a5b9;--accent:#77b4ff;
+  --accent-soft:rgba(85,156,244,.14);--action:#2879d1;--action-hover:#348be5;
+  --green:#67d6af;--yellow:#f2c47b;--red:#f68f91;--shadow:0 16px 44px rgba(0,0,0,.28);
+}
+:root[data-theme='dark-pink']{
+  color-scheme:dark;
+  --bg:#17151b;--top:#201c26;--surface:#231f29;--surface2:#2c2632;--editor:#18151d;
+  --hover:#362e3b;--selected:#413143;--border:#463b48;--border-soft:#352e3a;
+  --text:#f1eaf1;--text2:#d3c2cf;--muted:#a99aab;--accent:#e7a1bc;
+  --accent-soft:rgba(224,137,174,.14);--action:#aa557f;--action-hover:#be6593;
+  --green:#7bd4b0;--yellow:#e9c178;--red:#fa979a;--shadow:0 16px 44px rgba(0,0,0,.30);
+}
+:root[data-theme='dark-green']{
+  color-scheme:dark;
+  --bg:#101a1a;--top:#152321;--surface:#192928;--surface2:#223533;--editor:#111f1e;
+  --hover:#29403d;--selected:#284a42;--border:#354b47;--border-soft:#293d39;
+  --text:#e7f1ed;--text2:#b9d0c9;--muted:#93aaa4;--accent:#72d2b8;
+  --accent-soft:rgba(91,199,166,.14);--action:#20876d;--action-hover:#2b9b7e;
+  --green:#77dcbc;--yellow:#e9c181;--red:#ef9797;--shadow:0 16px 44px rgba(0,0,0,.27);
+}
+:root[data-theme='oled']{
+  color-scheme:dark;
+  --bg:#000;--top:#000;--surface:#090b0e;--surface2:#10151c;--editor:#000;
+  --hover:#161f2a;--selected:#162b42;--border:#27313e;--border-soft:#1a2430;
+  --text:#f1f4f8;--text2:#c6d3df;--muted:#98a8b8;--accent:#86bbff;
+  --accent-soft:rgba(88,159,249,.16);--action:#2679d7;--action-hover:#398de7;
+  --green:#79dcb9;--yellow:#f1c479;--red:#fa9292;--shadow:0 18px 38px rgba(0,0,0,.68);
+}
+:root[data-theme] .pp-logo-mark,
+:root[data-theme] .pp-send,
+:root[data-theme] .pp-modal-submit,
+:root[data-theme] .pp-manager-add button,
+:root[data-theme] .pp-binary-picker label{
+  background:var(--action);color:white;
+}
+:root[data-theme] .pp-send:hover:not(:disabled){background:var(--action-hover);filter:none;box-shadow:0 3px 12px color-mix(in srgb, var(--action) 18%, transparent)}
+:root[data-theme] .pp-small-primary{background:var(--action);color:white}
+:root[data-theme] .pp-cm-editor .cm-editor{background:var(--editor)}
+:root[data-theme] .pp-cm-editor .cm-gutters{background:var(--surface2);color:var(--muted)}
+:root[data-theme] .pp-cm-editor .cm-activeLine{background:var(--accent-soft)}
+
+/* Appearance menu — inline in the sidebar instead of taking editor space. */
+.pp-appearance{display:flex;flex-direction:column;gap:16px;min-height:0;overflow:auto;padding:18px 13px 24px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.pp-appearance-heading{display:flex;align-items:center;gap:10px;margin-bottom:3px}
+.pp-appearance-heading-icon{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:var(--accent-soft);color:var(--accent);flex:none}
+.pp-appearance-heading>div:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pp-appearance-heading strong{font-size:13px;font-weight:700;letter-spacing:-.1px}
+.pp-appearance-heading span{font-size:10px;color:var(--muted)}
+.pp-appearance-section-label{font-size:10px;letter-spacing:.75px;font-weight:750;color:var(--muted);margin-top:4px}
+.pp-appearance-options{display:flex;flex-direction:column;gap:8px}
+.pp-theme-option{border:1px solid var(--border);background:var(--surface2);color:var(--text);padding:9px;border-radius:10px;width:100%;display:flex;gap:9px;align-items:center;text-align:left;transition:background-color var(--pp-motion),border-color var(--pp-motion),box-shadow var(--pp-motion)}
+.pp-theme-option:hover{background:var(--hover);border-color:var(--accent)}
+.pp-theme-option.active{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 18%,transparent)}
+.pp-theme-thumbnail{width:53px;height:39px;flex:none;border:1px solid;border-radius:6px;padding:4px;display:flex;gap:3px}
+.pp-theme-thumb-rail{width:11px;border:1px solid;border-radius:2px}
+.pp-theme-thumb-work{flex:1;display:flex;flex-direction:column;gap:4px;padding:5px 4px;border:1px solid;border-radius:3px}
+.pp-theme-thumb-work i{height:3px;border-radius:2px}.pp-theme-thumb-work i:nth-child(2){width:80%}.pp-theme-thumb-work i:nth-child(3){width:60%}
+.pp-theme-option-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.pp-theme-option-copy strong{font-size:11px;font-weight:750}.pp-theme-option-copy small{font-size:9px;color:var(--muted)}
+.pp-theme-choice{width:22px;height:22px;display:grid;place-items:center;color:var(--muted);border-radius:50%;flex:none}
+.pp-theme-option.active .pp-theme-choice{background:var(--accent);color:var(--bg)}
+.pp-appearance-note{display:flex;gap:9px;padding:11px 10px;border-top:1px solid var(--border-soft);font-size:10px;color:var(--muted);line-height:1.6}
+.pp-appearance-note svg{flex:none;color:var(--accent);margin-top:2px}
+@media(max-width:1100px){.pp-appearance{padding:13px 9px}.pp-theme-option{gap:6px;padding:8px 7px}.pp-theme-thumbnail{width:45px}}
+@media(prefers-reduced-motion:reduce){.pp-theme-option{transition:none}}

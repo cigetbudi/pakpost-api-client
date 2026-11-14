@@ -1,14 +1,19 @@
 import React, {useRef,useState} from 'react';
 import {Check,ClipboardPaste,Copy,Download,FileJson,FileUp,Import,ShieldAlert,Upload} from 'lucide-react';
 import {GENERATORS,generateCode} from './requestTools';
+import {TextEditor} from './Editors';
 import {createPostmanCollection,createLocalPostmanExport,createSessionExport,parseImportText} from './importExport';
+
+const IMPORT_PLACEHOLDER = String.raw`curl -X POST https://postman-echo.com/post \
+  -H "Content-Type: application/json" \
+  -d '{"hello":"world"}'`;
 
 function saveJSON(data,filename){
   const blob=new Blob([JSON.stringify(data,null,2)+'\n'],{type:'application/json'});
   const href=URL.createObjectURL(blob);const a=document.createElement('a');a.href=href;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(href),1000);
 }
 
-export function CodeSidebar({request,buildResolved}){
+export function CodeSidebar({request,buildResolved,theme='dark'}){
   const [language,setLanguage]=useState('curl');const [resolve,setResolve]=useState(false);const [secrets,setSecrets]=useState(false);const [copied,setCopied]=useState(false);
   let code='',error='';
   try{code=generateCode(resolve?buildResolved(secrets):request,language)}catch(e){error=e.message}
@@ -20,11 +25,11 @@ export function CodeSidebar({request,buildResolved}){
     <label className="pp-side-check"><input type="checkbox" disabled={!resolve} checked={secrets} onChange={e=>setSecrets(e.target.checked)}/> Include secret values</label>
     {secrets&&<p className="pp-side-alert"><ShieldAlert size={14}/> This snippet may contain credentials. Review before sharing.</p>}
     <div className="pp-side-code-toolbar"><span>{language.toUpperCase()} · preview</span><button disabled={!!error} onClick={onCopy}>{copied?<Check size={13}/>:<Copy size={13}/>} {copied?'Copied':'Copy'}</button></div>
-    {error?<p className="pp-side-alert">{error}</p>:<pre className="pp-side-code" aria-label="Generated request code">{code}</pre>}
+    {error?<p className="pp-side-alert">{error}</p>:<div className="pp-side-code pp-highlighted-code" aria-label="Generated request code"><TextEditor value={code} readOnly lint={false} theme={theme} lang={language==='curl'?'shell':language==='fetch'||language==='axios'?'javascript':language} minHeight="215px" lineNumbers={false}/></div>}
   </div>;
 }
 
-export function ImportExportSidebar({requests,environments,localCollections=[],onImport,onMessage}){
+export function ImportExportSidebar({requests,environments,localCollections=[],onImport,onMessage,theme='dark'}){
   const [text,setText]=useState('');const [busy,setBusy]=useState(false);const [includeSecrets,setIncludeSecrets]=useState(false);
   const fileInput=useRef(null);
   async function doImport(source){
@@ -44,7 +49,7 @@ export function ImportExportSidebar({requests,environments,localCollections=[],o
   return <div className="pp-side-tool pp-exchange-panel">
     <div className="pp-side-section-title">IMPORT</div>
     <p className="pp-side-hint">Postman collections and cURL imports are organized in local Collections. Pakpost session backups restore tabs.</p>
-    <textarea className="pp-import-text" spellCheck="false" value={text} placeholder={'curl -X POST https://postman-echo.com/post \\\n  -H "Content-Type: application/json" \\\n  -d \'{"hello":"world"}\''} onChange={e=>setText(e.target.value)} aria-label="Paste cURL or JSON export"/>
+    <div className="pp-import-text pp-highlighted-import" aria-label="Paste cURL or JSON export"><TextEditor value={text} onChange={setText} theme={theme} lint={false} lang={text.length > 80000 ? 'text' : /^[\s]*[\[{]/.test(text) ? 'json' : 'shell'} minHeight="155px" placeholder={IMPORT_PLACEHOLDER}/></div>
     <div className="pp-side-actions"><button onClick={()=>doImport(text)} disabled={!text.trim()||busy}><ClipboardPaste size={14}/> Import pasted</button><button onClick={()=>fileInput.current?.click()} disabled={busy}><Upload size={14}/> Choose file</button><input ref={fileInput} type="file" hidden accept=".json,.txt,.sh,.curl,application/json,text/plain" onChange={pickFile}/></div>
     <div className="pp-side-divider"/>
     <div className="pp-side-section-title">EXPORT</div>

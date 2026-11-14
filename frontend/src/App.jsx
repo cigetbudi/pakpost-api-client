@@ -3,6 +3,8 @@ import {
   ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2,
 } from 'lucide-react';
 import { TextEditor } from './features/Editors';
+import { VariableUrlInput } from './features/VariableUrlInput';
+import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentDialog } from './features/Environments';
 import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
 import { blankDraft, parseCurl, isCurl } from './features/importExport';
@@ -10,6 +12,8 @@ import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCac
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
 import {planTabClose} from './features/tabActions';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
+import { AppearanceSidebar } from './features/AppearanceSidebar';
+import { isDarkAppearance, normalizeAppearance, readAppearance } from './features/appearance';
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
 import { runSandbox } from './features/runScript';
 import { postmanRequestSnapshot } from './features/postmanCompat';
@@ -65,7 +69,7 @@ function Dialog({ title, subtitle, onClose, children }) {
 
 export default function App() {
   const [page, setPage] = useState('tester');
-  const [theme, setTheme] = useState(localStorage.getItem('pakpost_theme') || 'dark');
+  const [theme, setTheme] = useState(() => readAppearance(localStorage));
   const [token, setToken] = useState(storedToken);
   const [me, setMe] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -381,7 +385,10 @@ export default function App() {
     return {method,url:target,headers:maskSensitiveHeaders({headers}).headers,body,bodyMode:fmt.mode,contentType:format,
       formFields:formFields.map(x=>({key:x.key,value:x.value,fileName:x.fileName,base64:x.fileBase64})),fileName:binaryFile.name};
   }
-  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('pakpost_theme', theme); }, [theme]);
+  useEffect(() => {
+    document.documentElement.dataset.theme = normalizeAppearance(theme);
+    try { localStorage.setItem('pakpost_theme', normalizeAppearance(theme)); } catch {}
+  }, [theme]);
   useEffect(() => {
     let ignore = false;
     if (!token) { setMe(null); setWorkspaces([]); return; }
@@ -567,7 +574,6 @@ export default function App() {
           <button title="Manage environments" onClick={()=>setEnvOpen(true)}><Settings2 size={16}/></button>
         </div>
         <span className="pp-connection"><span/> Local development</span>
-        <IconButton icon={theme === 'dark' ? Sun : Moon} label="Toggle light/dark theme" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}/>
         {me ? <button className="pp-profile" title={me.email} onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
       </div>
     </header>
@@ -582,14 +588,14 @@ export default function App() {
         <button className={explorerTab === 'teams' ? 'selected' : ''} title="Teams" onClick={() => { setExplorerTab('teams'); setSidebarCollapsed(false); if (token) { setWsTab('teams'); } }}><Users size={19}/></button>
         <div className="pp-rail-spacer"/>
         <button title={sidebarCollapsed ? 'Expand navigator' : 'Collapse navigator'} onClick={() => setSidebarCollapsed(v => !v)}>{sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>
-        <button title="Toggle theme" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Moon size={18}/> : <Sun size={18}/>}</button>
+        <button className={explorerTab === 'appearance' ? 'selected' : ''} title="Appearance settings" aria-label="Appearance settings" onClick={() => { setExplorerTab('appearance'); setSidebarCollapsed(false); setPage('tester'); }}><Settings2 size={19}/></button>
       </nav>
 
       {!sidebarCollapsed && <aside className="pp-explorer">
-        <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Explorer' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
-        {explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest}/> : explorerTab === 'exchange' ?
+        <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Explorer' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'appearance' ? 'Settings' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
+        {explorerTab === 'appearance' ? <AppearanceSidebar value={theme} onChange={setTheme}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
-            environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice}/> : explorerTab === 'history' ? <>
+            environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
           <div className="pp-side-subhead"><span>RECENT REQUESTS</span><span>{recent.length}</span></div>
           {recent.length ? <div className="pp-side-scroll">{recent.map((r, i) => <button key={`${i}-${r.url}`} className="pp-history-item" onClick={() => loadRequest(r)}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span className="pp-history-main"><strong>{(() => { try { return new URL(r.url).pathname || '/'; } catch { return r.url; } })()}</strong><small>{r.url}</small></span><span className={r.status < 400 ? 'pp-history-ok' : 'pp-history-bad'}>{r.status}</span></button>)}</div> : <div className="pp-explorer-empty"><History size={23}/><strong>No history yet</strong><span>Requests you send during this session will appear here.</span></div>}
         </> : explorerTab === 'teams' ? <>
@@ -649,9 +655,9 @@ export default function App() {
           <button role="menuitem" disabled={openTabs.findIndex(t=>t.id===tabMenu.id)>=openTabs.length-1} onClick={()=>performTabAction('right',tabMenu.id)}><ArrowRight size={14}/> Close tabs to the right</button>
         </div>}
 
-        {page === 'tester' ? <div className="pp-tester">
-          <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">· HTTP request</span><div className="pp-crumb-spacer"/><button onClick={openSave} title="Save request to a collection"><Save size={15}/><span>Save</span>{!token && <LockKeyhole size={12}/>}</button><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
-          <div className="pp-url-bar"><div className="pp-method-wrap"><select className={`pp-method ${method.toLowerCase()}`} aria-label="HTTP method" value={method} onChange={e => { setMethod(e.target.value); setOpenTabs(t => t.map(x => x.id === activeTabId ? { ...x, method: e.target.value } : x)); }}>{METHODS.map(m => <option key={m}>{m}</option>)}</select><ChevronDown size={13}/></div><div className="pp-url-input"><Link2 size={16}/><input aria-label="Request URL" spellCheck="false" type="text" placeholder="Enter URL or paste a cURL command…" value={url} onChange={e => setUrl(e.target.value)} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}} onKeyDown={e => { if (e.key === 'Enter') sendRequest(); }}/></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button></div>
+        {page === 'tester' ? <div key={activeTabId} className="pp-tester pp-fade-content">
+          <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
+          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><select className={`pp-method ${method.toLowerCase()}`} aria-label="HTTP method" value={method} onChange={e => { setMethod(e.target.value); setOpenTabs(t => t.map(x => x.id === activeTabId ? { ...x, method: e.target.value } : x)); }}>{METHODS.map(m => <option key={m}>{m}</option>)}</select><ChevronDown size={13}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} variables={varsFromEnv()} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={openSave} title="Save request to a collection"><Save size={15}/><span>Save</span>{!token && <LockKeyhole size={12}/>}</button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
               <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
@@ -672,7 +678,7 @@ export default function App() {
                   </div>
                   {bodyFormat(format).mode==='none'&&<div className="pp-body-empty">This request has no body. Choose a format to start editing.</div>}
                   {bodyFormat(format).mode==='raw'&&<div className="pp-body-code">
-                    <TextEditor value={body} onChange={setBody} lang={languageFromMime(format)} theme={theme} />
+                    <TextEditor value={body} onChange={setBody} lang={languageFromMime(format)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} />
                     {syntaxProblem(body,languageFromMime(format))&&<div className="pp-inline-validation"><AlertTriangle size={14}/><span>{syntaxProblem(body,languageFromMime(format))?.message}</span></div>}
                   </div>}
                   {(bodyFormat(format).mode==='urlencoded'||bodyFormat(format).mode==='multipart')&&<>
@@ -694,9 +700,9 @@ export default function App() {
                 {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Only applied to outgoing request</span></div><div className="pp-auth-form"><label>Auth type<select value={authType} onChange={e => setAuthType(e.target.value)}><option value="none">No Auth</option><option value="bearer">Bearer Token</option></select></label>{authType === 'bearer' && <label>Token<input type="password" autoComplete="off" placeholder="Paste bearer token" value={bearerToken} onChange={e => setBearerToken(e.target.value)}/></label>}<p>Use Headers for API keys, basic authentication, or custom authorization headers. Authorization values are not saved in request history.</p></div></>}
                 {reqTab === 'scripts'&&<div className="pp-script-panel">
                   <div className="pp-script-label"><strong>Pre-request script</strong><span>Runs before resolving and sending HTTP request</span></div>
-                  <TextEditor value={preScript} onChange={setPreScript} lang="javascript" theme={theme} minHeight="180px" lint={false}/>
+                  <TextEditor value={preScript} onChange={setPreScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false}/>
                   <div className="pp-script-label"><strong>Post-response script</strong><span>Runs after receiving the HTTP response</span></div>
-                  <TextEditor value={postScript} onChange={setPostScript} lang="javascript" theme={theme} minHeight="180px" lint={false}/>
+                  <TextEditor value={postScript} onChange={setPostScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false}/>
                   <p className="pp-script-note">Postman-compatible subset: require('crypto-js'), pm.request.url.path, pm.request.body.raw, pm.variables.get/set, pm.environment.get/set, pm.response.json(), pm.test(), console.log().
                   Scripts run in an isolated, time-limited QuickJS worker. External npm import is not enabled yet.</p>
                   {(scriptLog.length>0||scriptTests.length>0||scriptError)&&<div className="pp-script-console"><strong>Script results</strong>
@@ -713,7 +719,7 @@ export default function App() {
               <div className="pp-pane-heading pp-response-heading"><span className="pp-pane-title"><Bolt size={15}/> Response</span>{result && !result.error ? <div className="pp-response-metrics"><span className={`pp-status ${result.statusCode < 400 ? 'good' : 'bad'}`}><span className="pp-status-dot"/>{result.statusCode} {result.reasonPhrase}</span><span><Clock3 size={13}/> {result.elapsedMs} ms</span><span><ArrowDownToLine size={13}/> {new Blob([result.body || '']).size.toLocaleString()} B</span></div> : <span className="pp-pane-meta">Awaiting response</span>}</div>
               <div className="pp-panel-tabs"><button className={resTab === 'body' ? 'active' : ''} onClick={()=>setResTab('body')}>Body</button><button className={resTab === 'headers' ? 'active' : ''} onClick={()=>setResTab('headers')}>Headers{result && !result.error && <span className="pp-tiny-count">{Object.keys(result.headers || {}).length}</span>}</button><div className="pp-panel-tabs-spacer"/><button className="pp-copy-response" disabled={!result||!!result.error} onClick={beautifyResult} title="Beautify response"><WandSparkles size={14}/> Beautify</button><button className="pp-copy-response" disabled={!result||!!result.error} onClick={()=>setResponsePretty(v=>!v)} title="Toggle raw/pretty">{responsePretty?'Pretty':'Raw'}</button><button className="pp-copy-response" title="Copy response" disabled={!result || !!result.error} onClick={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}><Copy size={14}/> Copy</button></div>
               <div className="pp-panel-body pp-response-body">
-                {!result ? <div className="pp-response-empty"><div className="pp-response-empty-symbol"><Terminal size={28}/></div><strong>{loading ? 'Sending request…' : 'Ready to send a request'}</strong><p>{loading ? 'The server is processing your request.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p><span>⌘ / Ctrl + Enter</span></div> : result.error ? <div className="pp-response-error"><div><X size={18}/></div><strong>Request failed</strong><p>{result.error}</p></div> : <><div className="pp-response-code"><TextEditor readOnly value={responseText} lang={resTab==='headers'?'json':languageFromMime(responseType)} theme={theme} minHeight="250px"/></div>{result.truncated && <div className="pp-response-warning">Output truncated to 1 MB.</div>}{result.isBinary && <div className="pp-response-warning">Binary content displayed as Base64.</div>}</>}
+                {!result ? <div className="pp-response-empty"><div className="pp-response-empty-symbol"><Terminal size={28}/></div><strong>{loading ? 'Sending request…' : 'Ready to send a request'}</strong><p>{loading ? 'The server is processing your request.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p><span>⌘ / Ctrl + Enter</span></div> : result.error ? <div className="pp-response-error"><div><X size={18}/></div><strong>Request failed</strong><p>{result.error}</p></div> : <><div className="pp-response-code"><TextEditor readOnly value={responseText} lang={resTab==='headers'?'json':languageFromMime(responseType)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="250px"/></div>{result.truncated && <div className="pp-response-warning">Output truncated to 1 MB.</div>}{result.isBinary && <div className="pp-response-warning">Binary content displayed as Base64.</div>}</>}
               </div>
               <div className="pp-pane-footer"><span>{result && !result.error ? `HTTP ${result.statusCode}` : 'No response yet'}</span><span className="pp-footer-tail">{result?.truncated ? 'Truncated' : 'Raw / JSON preview'}</span></div>
             </section>
@@ -736,5 +742,6 @@ export default function App() {
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="pp-muted-small pp-center">Google SSO can be added later.</p></form></Dialog>}
     {envOpen && <EnvironmentDialog items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onClose={()=>setEnvOpen(false)} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/>}
     {saveOpen && <Dialog title="Save to collection" subtitle="Saved requests are private to members of your workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}><label>Request name<input required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label><label>Workspace<select value={saveWs} onChange={e=>setSaveWs(e.target.value)}>{workspaces.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label><label>Collection<select required value={saveCollection} onChange={e=>setSaveCollection(e.target.value)}>{saveCols.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>{!saveCols.length && <div className="form-error">Create a workspace and collection first.</div>}<button className="pp-modal-submit" type="submit" disabled={!saveCollection || busyAction}><Save size={16}/> Save request</button></form></Dialog>}
+  <FastTooltip/>
   </div>;
 }
