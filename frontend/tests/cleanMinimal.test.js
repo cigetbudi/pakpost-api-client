@@ -20,7 +20,8 @@ test('request URL editor keeps cURL paste and Send action', () => {
   assert.match(app, /className="pp-send" disabled=\{loading\} onClick=\{sendRequest\}/);
 });
 
-test('Save action remains accessible next to Send without bypassing auth', () => {
-  assert.match(app, /className="pp-save-action" onClick=\{openSave\}/);
-  assert.match(app, /function openSave\(\)\s*\{\s*if \(!requiresLogin\('collections'\)\) return;/);
+test('Save updates bound requests and Save As creates new record', () => {
+  assert.match(app, /className="pp-save-action" onClick=\{saveCurrent\}/);
+  assert.match(app, /function openSaveAs\(/);
+  assert.match(app, /async function saveCurrent\(/);
 });

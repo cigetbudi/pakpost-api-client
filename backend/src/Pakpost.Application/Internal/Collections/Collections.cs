@@ -36,3 +36,31 @@ public sealed class CreateCollectionHandler(ICollectionRepository collections, I
         return new(col.Id, col.WorkspaceId, col.Name);
     }
 }
+
+public sealed record RenameCollectionCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,string Name):IRequest<CollectionDto>;
+public sealed class RenameCollectionValidator:AbstractValidator<RenameCollectionCommand>
+{
+    public RenameCollectionValidator()=>RuleFor(x=>x.Name).NotEmpty().MaximumLength(120);
+}
+public sealed class RenameCollectionHandler(ICollectionRepository collections,IWorkspaceRepository workspaces,IUnitOfWork uow):IRequestHandler<RenameCollectionCommand,CollectionDto>
+{
+    public async Task<CollectionDto> Handle(RenameCollectionCommand cmd,CancellationToken ct)
+    {
+        if(await workspaces.FindMemberAsync(cmd.WorkspaceId,cmd.ActorId,ct) is null)throw AppException.Forbidden();
+        var item=await collections.FindAsync(cmd.CollectionId,ct);
+        if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
+        item.Rename(cmd.Name);await uow.SaveChangesAsync(ct);
+        return new(item.Id,item.WorkspaceId,item.Name);
+    }
+}
+public sealed record DeleteCollectionCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId):IRequest;
+public sealed class DeleteCollectionHandler(ICollectionRepository collections,IWorkspaceRepository workspaces,IUnitOfWork uow):IRequestHandler<DeleteCollectionCommand>
+{
+    public async Task Handle(DeleteCollectionCommand cmd,CancellationToken ct)
+    {
+        if(await workspaces.FindMemberAsync(cmd.WorkspaceId,cmd.ActorId,ct) is null)throw AppException.Forbidden();
+        var item=await collections.FindAsync(cmd.CollectionId,ct);
+        if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
+        collections.Remove(item);await uow.SaveChangesAsync(ct);
+    }
+}

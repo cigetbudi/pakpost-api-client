@@ -8,4 +8,5 @@ public sealed class CollectionRepository(PakpostDbContext db) : ICollectionRepos
     public async Task<IReadOnlyList<Collection>> ListAsync(Guid workspaceId,CancellationToken ct)
         => await db.Collections.AsNoTracking().Where(x=>x.WorkspaceId==workspaceId).OrderBy(x=>x.Name).ToListAsync(ct);
     public void Add(Collection collection)=>db.Collections.Add(collection);
+    public void Remove(Collection collection)=>db.Collections.Remove(collection);
 }

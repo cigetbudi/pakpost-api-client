@@ -1,3 +1,4 @@
+import {stripJsonComments} from './jsonComments.js';
 export const BODY_FORMATS = [
   {group: 'General', label: 'None', mime: 'none', mode: 'none'},
   {group: 'Text', label: 'application/json', mime: 'application/json', mode: 'raw', lang: 'json'},
@@ -49,7 +50,7 @@ export function syntaxProblem(text, lang) {
   if (lang === 'json') {
     try {
       // Substitute placeholders to validate a template without falsely flagging {{var}}.
-      const sanitized = text.replace(/\{\{\s*[A-Za-z_]\w*\s*\}\}/g,'0').replace(/<<\s*[A-Za-z_]\w*\s*>>/g,'0');
+      const sanitized = stripJsonComments(text).replace(/\{\{\s*[A-Za-z_]\w*\s*\}\}/g,'0').replace(/<<\s*[A-Za-z_]\w*\s*>>/g,'0');
       JSON.parse(sanitized); return null;
     } catch (error) {
       const pos = /position\s+(\d+)/i.exec(error.message);

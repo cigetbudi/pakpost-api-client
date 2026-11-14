@@ -1,4 +1,4 @@
-import React, {useMemo} from 'react';
+import React, {useMemo,useRef} from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import {json} from '@codemirror/lang-json';
 import {xml} from '@codemirror/lang-xml';
@@ -7,25 +7,34 @@ import {javascript} from '@codemirror/lang-javascript';
 import {linter} from '@codemirror/lint';
 import {syntaxProblem} from './requestTools';
 import {extraCodeLanguage} from './extraCodeLanguages';
+import {keymap} from '@codemirror/view';
+import {toggleLineComment} from './commentEditing';
+import {MessageSquareText} from 'lucide-react';
 
-export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder=''}) {
+export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false}) {
+  const editorView=useRef(null);
   const extensions=useMemo(()=>{
     const ex=[];
     if(lang==='json')ex.push(json());
+    if(lang==='jsonc')ex.push(javascript());
     if(lang==='xml')ex.push(xml());
     if(lang==='html')ex.push(html());
     if(lang==='javascript')ex.push(javascript());
     if(['shell','python','go','csharp','curl'].includes(lang))ex.push(extraCodeLanguage());
-    if(lint && !readOnly && ['json','xml'].includes(lang)) {
+    if(allowComments&&!readOnly)ex.push(keymap.of([{key:'Mod-/',run:view=>toggleLineComment(view,lang)}]));
+    if(lint && !readOnly && ['json','jsonc','xml'].includes(lang)) {
       ex.push(linter(view=>{
-        const problem=syntaxProblem(view.state.doc.toString(),lang);
+        const problem=syntaxProblem(view.state.doc.toString(),lang==='jsonc'?'json':lang);
         return problem?[{...problem,severity:'error'}]:[];
       },{delay:350}));
     }
     return ex;
-  },[lang,lint,readOnly]);
-  return <CodeMirror value={value} theme={theme === 'dark' ? 'dark' : 'light'}
-    extensions={extensions} onChange={onChange} readOnly={readOnly}
+  },[lang,lint,readOnly,allowComments]);
+  return <div className={'pp-editor-wrap'+(fill?' pp-editor-wrap-fill':'')}>
+    {allowComments&&!readOnly&&<button className="pp-editor-comment" type="button" title="Toggle comment on selected lines (Ctrl/Cmd+/)" aria-label="Toggle comment selection" onMouseDown={e=>e.preventDefault()} onClick={()=>{if(editorView.current)toggleLineComment(editorView.current,lang)}}><MessageSquareText size={14}/> <span>Comment</span></button>}
+    <CodeMirror value={value} theme={theme === 'dark' ? 'dark' : 'light'}
+    extensions={extensions} onChange={onChange} readOnly={readOnly} onCreateEditor={view=>{editorView.current=view;}}
     basicSetup={{foldGutter:lineNumbers,lineNumbers,highlightActiveLine:!readOnly,autocompletion:!readOnly}}
-    minHeight={minHeight} placeholder={placeholder} className="pp-cm-editor" />;
+    minHeight={fill?'100%':minHeight} height={fill?'100%':undefined} placeholder={placeholder} className={fill?'pp-cm-editor pp-cm-fill':'pp-cm-editor'} />
+  </div>;
 }

@@ -21,6 +21,7 @@ public sealed class SavedRequest
         Id = Guid.NewGuid();CollectionId = collectionId;CreatedAt = DateTimeOffset.UtcNow;
         Update(name,method,url,headersJson,body,bodyMode,contentType,formFieldsJson,preRequestScript,postResponseScript);
     }
+    public void MoveTo(Guid collectionId) { CollectionId = collectionId; UpdatedAt = DateTimeOffset.UtcNow; }
     public void Update(string name,string method,string url,string headersJson,string body,string bodyMode="raw",string contentType="application/json",string formFieldsJson="[]",string preRequestScript="",string postResponseScript="")
     {
         Name = name.Trim();Method = method.ToUpperInvariant();Url = url.Trim();

@@ -1,15 +1,15 @@
-/** Pakpost appearance presets. Use stable identifiers in localStorage. */
+/** Pakpost appearance presets. Theme choice is kept in browser storage. */
 export const APPEARANCE_KEY = 'pakpost_theme';
 
 export const APPEARANCE_THEMES = Object.freeze([
-  { id: 'light', name: 'Light Blue', description: 'Soft white · cool blue', mode: 'light', swatches: ['#f4f7fb', '#ffffff', '#dce7f4', '#276fc5'] },
-  { id: 'dark', name: 'Dark Blue', description: 'Slate · cobalt', mode: 'dark', swatches: ['#101923', '#172331', '#293e52', '#66aaff'] },
-  { id: 'dark-pink', name: 'Dark Pink', description: 'Ink · muted rose', mode: 'dark', swatches: ['#17151c', '#211d27', '#443140', '#e68eae'] },
-  { id: 'dark-green', name: 'Dark Green', description: 'Pine · sea glass', mode: 'dark', swatches: ['#101b1b', '#172626', '#2b4340', '#65c9b3'] },
-  { id: 'oled', name: 'OLED Black', description: 'True black · electric blue', mode: 'dark', swatches: ['#000000', '#090c10', '#263242', '#65a8ff'] },
+  { id: 'light', name: 'Light', description: 'Warm ivory · pastel blue', mode: 'light', swatches: ['#faf7f1', '#fffdf9', '#d9d0c4', '#4488de'] },
+  { id: 'dark', name: 'Dark', description: 'Charcoal · soft blue', mode: 'dark', swatches: ['#1b1c21', '#282a31', '#42434c', '#8ab8ff'] },
+  { id: 'oled', name: 'AMOLED', description: 'True black · crisp accents', mode: 'dark', swatches: ['#000000', '#08090b', '#282b31', '#8ab8ff'] },
 ]);
 
 export function normalizeAppearance(value) {
+  // Existing Dark Pink / Dark Green users migrate to Dark without losing any data.
+  if (value === 'dark-pink' || value === 'dark-green') return 'dark';
   return APPEARANCE_THEMES.some(t => t.id === value) ? value : 'dark';
 }
 

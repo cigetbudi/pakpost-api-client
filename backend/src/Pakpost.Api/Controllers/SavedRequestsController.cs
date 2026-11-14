@@ -16,6 +16,14 @@ public sealed class SavedRequestsController(ISender sender):ControllerBase
     [HttpPost]
     public async Task<IActionResult> Save(Guid workspaceId,Guid collectionId,SaveRequestBody body,CancellationToken ct)
         =>Ok(await sender.Send(new SaveRequestCommand(User.GetUserId(),workspaceId,collectionId,body.Name,body.Method,body.Url,body.HeadersJson,body.Body,body.BodyMode,body.ContentType,body.FormFieldsJson,body.PreRequestScript,body.PostResponseScript),ct));
+    [HttpPut("{requestId:guid}")]
+    public async Task<IActionResult> Update(Guid workspaceId,Guid collectionId,Guid requestId,SaveRequestBody body,CancellationToken ct)
+        =>Ok(await sender.Send(new UpdateSavedRequestCommand(User.GetUserId(),workspaceId,collectionId,requestId,
+            body.Name,body.Method,body.Url,body.HeadersJson,body.Body,body.BodyMode,body.ContentType,body.FormFieldsJson,body.PreRequestScript,body.PostResponseScript),ct));
+    public sealed record MoveRequestBody(Guid TargetCollectionId);
+    [HttpPatch("{requestId:guid}/move")]
+    public async Task<IActionResult> Move(Guid workspaceId,Guid collectionId,Guid requestId,[FromBody] MoveRequestBody body,CancellationToken ct)
+        =>Ok(await sender.Send(new MoveSavedRequestCommand(User.GetUserId(),workspaceId,collectionId,requestId,body.TargetCollectionId),ct));
     [HttpDelete("{requestId:guid}")]
     public async Task<IActionResult> Delete(Guid workspaceId,Guid collectionId,Guid requestId,CancellationToken ct)
     { await sender.Send(new DeleteSavedRequestCommand(User.GetUserId(),workspaceId,collectionId,requestId),ct);return NoContent(); }

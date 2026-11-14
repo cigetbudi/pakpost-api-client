@@ -11,3 +11,11 @@ export function planTabClose(tabs,targetId,activeId,kind){
   const nextActiveId=remaining.some(t=>t.id===activeId)?activeId:(remaining.some(t=>t.id===targetId)?targetId:(remaining[index]||remaining[index-1])?.id||null);
   return {remaining,removedIds,nextActiveId,reset:remaining.length===0};
 }
+
+/** Drag tab source before/after another open tab, retaining source identity. */
+export function reorderTabs(tabs,sourceId,targetId){
+  if(sourceId===targetId)return tabs;
+  const from=tabs.findIndex(t=>t.id===sourceId),to=tabs.findIndex(t=>t.id===targetId);
+  if(from<0||to<0)return tabs;
+  const next=[...tabs],item=next.splice(from,1)[0];next.splice(to,0,item);return next;
+}

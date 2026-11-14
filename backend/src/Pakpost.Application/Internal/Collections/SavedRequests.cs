@@ -61,3 +61,52 @@ public sealed class DeleteSavedRequestHandler(IWorkspaceRepository workspaces,IC
       if(item is null || item.CollectionId!=c.CollectionId) throw AppException.NotFound();
       requests.Remove(item);await uow.SaveChangesAsync(ct); }
 }
+
+public sealed record UpdateSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId,
+    string Name,string Method,string Url,string HeadersJson,string Body,
+    string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript=""):IRequest<SavedRequestDto>;
+public sealed class UpdateSavedRequestValidator:AbstractValidator<UpdateSavedRequestCommand>
+{
+    public UpdateSavedRequestValidator()
+    {
+        RuleFor(x=>x.Name).NotEmpty().MaximumLength(120);
+        RuleFor(x=>x.Method).Must(x=>x is not null&&new[]{"GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"}.Contains(x.ToUpperInvariant()));
+        RuleFor(x=>x.Url).NotEmpty().MaximumLength(2048);
+        RuleFor(x=>x.HeadersJson).Must(IsJsonObject).WithMessage("HeadersJson must be a JSON object");
+        RuleFor(x=>x.Body).MaximumLength(131072);
+        RuleFor(x=>x.BodyMode).Must(x=>new[]{"none","raw","urlencoded","multipart","binary"}.Contains(x));
+        RuleFor(x=>x.FormFieldsJson).Must(IsJsonArray).WithMessage("FormFieldsJson must be a JSON array");
+        RuleFor(x=>x.PreRequestScript).MaximumLength(64000);
+        RuleFor(x=>x.PostResponseScript).MaximumLength(64000);
+    }
+    private static bool IsJsonObject(string value){try{using var data=JsonDocument.Parse(value);return data.RootElement.ValueKind==JsonValueKind.Object;}catch{return false;}}
+    private static bool IsJsonArray(string value){try{using var data=JsonDocument.Parse(value);return data.RootElement.ValueKind==JsonValueKind.Array;}catch{return false;}}
+}
+public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
+    :SavedRequestsAccess,IRequestHandler<UpdateSavedRequestCommand,SavedRequestDto>
+{
+    public async Task<SavedRequestDto> Handle(UpdateSavedRequestCommand cmd,CancellationToken ct)
+    {
+        await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct);
+        var item=await requests.FindAsync(cmd.RequestId,ct);
+        if(item is null||item.CollectionId!=cmd.CollectionId)throw AppException.NotFound("Request not found");
+        item.Update(cmd.Name,cmd.Method,cmd.Url,cmd.HeadersJson,cmd.Body,cmd.BodyMode,cmd.ContentType,cmd.FormFieldsJson,cmd.PreRequestScript,cmd.PostResponseScript);
+        await uow.SaveChangesAsync(ct);return ToDto(item);
+    }
+}
+
+public sealed record MoveSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId,Guid TargetCollectionId):IRequest<SavedRequestDto>;
+public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
+    :SavedRequestsAccess,IRequestHandler<MoveSavedRequestCommand,SavedRequestDto>
+{
+    public async Task<SavedRequestDto> Handle(MoveSavedRequestCommand cmd,CancellationToken ct)
+    {
+        await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct);
+        var destination=await collections.FindAsync(cmd.TargetCollectionId,ct);
+        if(destination is null||destination.WorkspaceId!=cmd.WorkspaceId)throw AppException.Forbidden();
+        var item=await requests.FindAsync(cmd.RequestId,ct);
+        if(item is null||item.CollectionId!=cmd.CollectionId)throw AppException.NotFound("Request not found");
+        item.MoveTo(cmd.TargetCollectionId);await uow.SaveChangesAsync(ct);
+        return ToDto(item);
+    }
+}

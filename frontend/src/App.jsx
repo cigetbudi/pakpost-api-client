@@ -3,6 +3,7 @@ import {
   ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2,
 } from 'lucide-react';
 import { TextEditor } from './features/Editors';
+import { RetroSelect } from './features/RetroSelect';
 import { VariableUrlInput } from './features/VariableUrlInput';
 import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentDialog } from './features/Environments';
@@ -10,7 +11,11 @@ import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
 import { blankDraft, parseCurl, isCurl } from './features/importExport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
-import {planTabClose} from './features/tabActions';
+import {planTabClose,reorderTabs} from './features/tabActions';
+import {applyLocalAction,exportLocalCollection,updateLocalRequest,createLocalSavedRequest} from './features/localCollectionActions';
+import {createPostmanCollection} from './features/importExport';
+import {stripJsonComments,hasJsonComments} from './features/jsonComments';
+import {findBoundTab} from './features/sourceTabs';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
 import { AppearanceSidebar } from './features/AppearanceSidebar';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from './features/appearance';
@@ -121,6 +126,13 @@ export default function App() {
   const [newMember, setNewMember] = useState('');
   const [newTeamMember, setNewTeamMember] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
+  const [saveScope,setSaveScope] = useState('local');
+  const [saveLocalCollection,setSaveLocalCollection] = useState('');
+  const [actionDialog,setActionDialog] = useState(null);
+  const [actionName,setActionName] = useState('');
+  const [workspaceMenu,setWorkspaceMenu] = useState(null);
+  const [workspaceSorted,setWorkspaceSorted]=useState(()=>{try{return JSON.parse(localStorage.getItem('pakpost_workspace_sort')||'{}')}catch{return {}}});
+  const tabDragRef=useRef(null);
   const [saveName, setSaveName] = useState('New request');
   const [saveWs, setSaveWs] = useState('');
   const [saveCollection, setSaveCollection] = useState('');
@@ -164,6 +176,13 @@ export default function App() {
     window.addEventListener('pointerdown',dismiss);window.addEventListener('keydown',escape);window.addEventListener('resize',resized);
     return ()=>{window.removeEventListener('pointerdown',dismiss);window.removeEventListener('keydown',escape);window.removeEventListener('resize',resized)};
   },[tabMenu]);
+  useEffect(()=>{if(!workspaceMenu)return;
+    const click=e=>{if(!e.target.closest?.('.pp-collection-popup'))setWorkspaceMenu(null)};
+    const key=e=>{if(e.key==='Escape')setWorkspaceMenu(null)};
+    window.addEventListener('pointerdown',click);window.addEventListener('keydown',key);
+    return ()=>{window.removeEventListener('pointerdown',click);window.removeEventListener('keydown',key)};
+  },[workspaceMenu]);
+  useEffect(()=>{try{localStorage.setItem('pakpost_workspace_sort',JSON.stringify(workspaceSorted))}catch{}},[workspaceSorted]);
   // Persist drafts for refresh recovery (debounced, plus a beforeunload flush).
   useEffect(()=>{
     const persist=()=>writeWorkbenchCache({openTabs,activeTabId:activeTabRef.current,
@@ -183,7 +202,7 @@ export default function App() {
 
     setPage('tester');
   }
-  function addTab(request) {
+  function addTab(request, source = null) {
     stashActive();
     const id = `t${++tabSequence.current}`;
     const draft = { ...blankDraft(), ...request, binaryFile:{name:request?.binaryFile?.name||'',base64:''},
@@ -191,7 +210,7 @@ export default function App() {
       formFields:request?.formFields||[{...EMPTY_HEADER}],result:null,scriptLog:[],scriptTests:[],scriptError:''};
     draftsRef.current[id] = draft; activeTabRef.current = id;
     const name = request?.name || 'Untitled Request';
-    setOpenTabs(t => [...t, { id, name, method: draft.method }]);
+    setOpenTabs(t => [...t, { id, name, method: draft.method, source }]);
     setActiveTabId(id); restoreDraft(draft); setPage('tester');
   }
   function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]}) {
@@ -226,9 +245,142 @@ export default function App() {
     try{setLocalCollections(validateLibrary([...localCollections,toLocalCollection({name,requests:[]})]));setLocalCollectionName('');setCreatingLocalCollection(false);}
     catch(err){setNotice(getMessage(err));}
   }
-  function deleteLocalCollection(id){
-    const collection=localCollections.find(c=>c.id===id);if(!collection)return;
-    setLocalCollections(old=>old.filter(c=>c.id!==id));
+  function openBoundRequest(request,source){
+    const current=findBoundTab(openTabs,source);
+    if(current){selectTab(current.id);return;}
+    addTab(request,source);
+  }
+  function openLocalRequest(request,collectionId){
+    openBoundRequest({...request,name:request.requestName||request.name},
+      {scope:'local',collectionId,requestId:request.id});
+  }
+  function downloadJson(data,filename){
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;
+    anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }
+  function updateLocal(action){
+    try{setLocalCollections(old=>applyLocalAction(old,action));
+      if(action.type==='deleteRequest'||action.type==='deleteCollection')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&(action.type==='deleteCollection'?t.source.collectionId===action.collectionId:(t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId))?{...t,source:null}:t));
+      if(action.type==='renameRequest')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId?{...t,name:action.name}:t));
+      if(action.type==='deleteRequest'||action.type==='deleteCollection')setNotice('Deleted from local collection. Open drafts are preserved.');
+    }catch(e){setNotice(getMessage(e));}
+  }
+  function handleLocalMenu(item){
+    const {action,collectionId,requestId,folderPath}=item;
+    const collection=localCollections.find(c=>c.id===collectionId);
+    if(!collection)return;
+    if(action==='exportCollection'){
+      downloadJson(exportLocalCollection(collection),`${collection.name.replace(/[^a-z0-9_-]/gi,'_')}.postman_collection.json`);return;
+    }
+    if(action==='newRequest'){
+      const draft={...blankDraft(),name:'New Request',requestName:'New Request',folderPath:folderPath||[]};
+      try{
+        const next=createLocalSavedRequest(localCollections,collectionId,draft);
+        setLocalCollections(next.collections);openLocalRequest(next.request,collectionId);
+      }catch(e){setNotice(getMessage(e));}
+      return;
+    }
+    const immediate={duplicateCollection:'duplicateCollection',duplicateFolder:'duplicateFolder',duplicateRequest:'duplicateRequest',sortCollection:'sortCollection',sortMethod:'sortCollection',sortFolder:'sortFolder'};
+    if(immediate[action]){updateLocal({...item,type:immediate[action],sort:action==='sortMethod'?'method':'name'});return;}
+    setActionName(item.name||'');setActionDialog({scope:'local',...item});
+  }
+  function moveLocalRequest({collectionId,requestId,targetCollectionId,targetFolderPath,beforeRequestId}){
+    updateLocal({type:'moveRequest',collectionId,requestId,targetCollectionId,targetFolderPath,beforeRequestId});
+    if(collectionId!==targetCollectionId)setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===collectionId&&t.source.requestId===requestId?
+      {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
+  }
+  const WORKSPACE_DRAG='application/x-pakpost-workspace-request';
+  async function moveWorkspaceRequest(e,targetCollectionId){
+    e.preventDefault();e.stopPropagation();
+    if(!token)return;
+    try{
+      const raw=e.dataTransfer.getData(WORKSPACE_DRAG);
+      if(!raw)return;
+      const {collectionId,requestId}=JSON.parse(raw);
+      if(collectionId===targetCollectionId)return;
+      await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests/${requestId}/move`,'PATCH',
+        {targetCollectionId},token);
+      setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.requestId===requestId?
+        {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
+      if(selectedCol===collectionId)
+        setSavedRequests(await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token));
+      setNotice('Request moved to workspace collection');
+    }catch(err){setNotice(getMessage(err));}
+  }
+  function showWorkspaceMenu(e,item){
+    e.preventDefault();e.stopPropagation();
+    const rect=e.currentTarget.getBoundingClientRect();
+    setWorkspaceMenu({...item,x:Math.max(8,Math.min(e.clientX||rect.right,window.innerWidth-226)),y:Math.max(8,Math.min(e.clientY||rect.bottom,window.innerHeight-282))});
+  }
+  function workspaceDraft(item){
+    let headers={};try{headers=JSON.parse(item.headersJson||'{}')}catch{}
+    let fields=[];try{fields=JSON.parse(item.formFieldsJson||'[]')}catch{}
+    return {...blankDraft(),...item,rows:[...toRows(headers),{...EMPTY_HEADER}],format:item.contentType||'application/json',
+      formFields:fields,preScript:item.preRequestScript||'',postScript:item.postResponseScript||''};
+  }
+  async function handleWorkspaceMenu(action,item){
+    setWorkspaceMenu(null);
+    if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
+      setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
+    }
+    const base=`/api/workspaces/${selectedWs}/collections`;
+    await doAction(async()=>{
+      if(action==='newRequest'){
+        addTab({...blankDraft(),name:'New Request'});
+        openSaveAs({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId});setSaveName('New Request');return;
+      }
+      if(action==='sortCollection'){
+        setWorkspaceSorted(old=>({...old,[item.collectionId]:'name'}));
+        return;
+      }
+      const list=await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token);
+      if(action==='exportCollection'){
+        const name=collections.find(c=>c.id===item.collectionId)?.name||'Workspace collection';
+        downloadJson(createPostmanCollection(list.map(workspaceDraft),{name}),`${name.replace(/[^a-z0-9_-]/gi,'_')}.postman_collection.json`);return;
+      }
+      if(action==='duplicateCollection'){
+        if(list.length>100)throw Error('Duplicate limit: 100 saved requests');
+        const source=collections.find(c=>c.id===item.collectionId);
+        const destination=await api(base,'POST',{name:`${source?.name||'Collection'} (copy)`},token);
+        for(const req of list)await api(`${base}/${destination.id}/requests`,'POST',
+          {name:req.name,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
+        setCollections(await api(base,'GET',undefined,token));return;
+      }
+      if(action==='duplicateRequest'){
+        const req=list.find(x=>x.id===item.requestId);if(!req)return;
+        await api(`${base}/${item.collectionId}/requests`,'POST',
+          {name:`${req.name} (copy)`,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
+        if(selectedCol===item.collectionId)setSavedRequests(await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token));
+      }
+    });
+  }
+  async function executeActionDialog(e){
+    e.preventDefault();if(!actionDialog)return;
+    const {scope,action,collectionId,requestId,folderPath}=actionDialog;
+    const name=actionName.trim();
+    if(action.startsWith('rename')&&!name)return;
+    if(scope==='local')updateLocal({type:action,collectionId,requestId,folderPath,name});
+    else { const success=await doAction(async()=>{
+      const base=`/api/workspaces/${selectedWs}/collections/${collectionId}`;
+      if(action==='renameCollection'){
+        await api(base,'PUT',{name},token);setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));
+      }else if(action==='deleteCollection'){
+        await api(base,'DELETE',undefined,token);setCollections(old=>old.filter(c=>c.id!==collectionId));
+        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.collectionId===collectionId&&t.source.workspaceId===selectedWs?{...t,source:null}:t));
+        if(selectedCol===collectionId)setSelectedCol('');
+      }else if(action==='renameRequest'){
+        const item=savedRequests.find(x=>x.id===requestId);if(!item)return;
+        await api(`${base}/requests/${requestId}`,'PUT',{...item,name},token);
+        setSavedRequests(old=>old.map(x=>x.id===requestId?{...x,name}:x));
+        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,name}:t));
+      }else if(action==='deleteRequest'){
+        await api(`${base}/requests/${requestId}`,'DELETE',undefined,token);
+        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,source:null}:t));
+        setSavedRequests(old=>old.filter(x=>x.id!==requestId));
+      }
+    }); if(!success)return; }
+    setActionDialog(null);
   }
   function importCurlIntoCurrent(value){
     try{
@@ -251,7 +403,7 @@ export default function App() {
       draftsRef.current[newId]={...cloned,binaryFile:{name:cloned.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
       const sourceTab=openTabs.find(t=>t.id===id);
       const index=openTabs.findIndex(t=>t.id===id);
-      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:`${sourceTab?.name||'Request'} (copy)`,method:cloned.method},...t.slice(index+1)]);
+      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:`${sourceTab?.name||'Request'} (copy)`,method:cloned.method,source:null},...t.slice(index+1)]);
       selectTabFromDraft(newId);return;
     }
     stashActive();
@@ -298,8 +450,8 @@ export default function App() {
     try { savedRows = toRows(JSON.parse(item.headersJson || '{}')); } catch { savedRows = []; }
     let formFields = [];
     try { formFields = JSON.parse(item.formFieldsJson||'[]'); }catch{}
-    addTab({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' });
-    setNotice('Opened saved request in a new tab.');
+    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
+      {scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId||selectedCol,requestId:item.id});
   }
 
 
@@ -349,7 +501,7 @@ export default function App() {
   }
   const selectFormat=(v)=>{setFormat(v);};
   async function beautifyBody(){
-    try{setBody(await formatSource(body,languageFromMime(format)));setNotice('Body formatted');}
+    try{if(languageFromMime(format)==='json'&&hasJsonComments(body))throw Error('Remove JSON comments before Beautify (to avoid losing them).');setBody(await formatSource(body,languageFromMime(format)));setNotice('Body formatted');}
     catch(e){setNotice(`Cannot format: ${getMessage(e)}`)}
   }
   async function beautifyResult(){
@@ -358,7 +510,8 @@ export default function App() {
     catch(e){setNotice(`Cannot format response: ${getMessage(e)}`)}
   }
   function buildOutgoing(vars=varsFromEnv()) {
-    const command=buildCommand({method,url,headers:rows,body,format,fields:formFields,fileBase64:binaryFile.base64,fileName:binaryFile.name},vars);
+    const preparedBody=languageFromMime(format)==='json'?stripJsonComments(body):body;
+    const command=buildCommand({method,url,headers:rows,body:preparedBody,format,fields:formFields,fileBase64:binaryFile.base64,fileName:binaryFile.name},vars);
     const parsed=new URL(command.url);
     resolveRows(params,vars).forEach(p=>parsed.searchParams.append(p.key,p.value));
     command.url=parsed.toString();
@@ -382,7 +535,7 @@ export default function App() {
     const target=url+(query?(url.includes('?')?'&':'?')+query:'');
     const headers={...requestHeaderObject()};
     if(fmt.mode==='raw'&&body&&!Object.keys(headers).some(x=>x.toLowerCase()==='content-type'))headers['Content-Type']=fmt.mime;
-    return {method,url:target,headers:maskSensitiveHeaders({headers}).headers,body,bodyMode:fmt.mode,contentType:format,
+    return {method,url:target,headers:maskSensitiveHeaders({headers}).headers,body:languageFromMime(format)==='json'?stripJsonComments(body):body,bodyMode:fmt.mode,contentType:format,
       formFields:formFields.map(x=>({key:x.key,value:x.value,fileName:x.fileName,base64:x.fileBase64})),fileName:binaryFile.name};
   }
   useEffect(() => {
@@ -467,6 +620,11 @@ export default function App() {
 
   useEffect(() => {
     const onKeyboard = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if(page === 'tester' && !busyAction && !saveOpen && !actionDialog)saveCurrent();
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && page === 'tester') {
         e.preventDefault();
         if (!loading) sendRequest();
@@ -474,7 +632,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyboard);
     return () => window.removeEventListener('keydown', onKeyboard);
-  }, [page, loading, method, url, rows, body, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript]);
+  }, [page, loading, method, url, rows, body, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,actionDialog]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
   const activeTeam = teams.find(x => x.id === selectedTeam);
@@ -488,7 +646,7 @@ export default function App() {
     let variables=varsFromEnv();
     const logs=[],tests=[];
     try {
-      const pre=await runSandbox(preScript,'pre',variables,postmanRequestSnapshot({method,url,headers:requestHeaderObject(),body,format},variables),null);
+      const pre=await runSandbox(preScript,'pre',variables,postmanRequestSnapshot({method,url,headers:requestHeaderObject(),body:languageFromMime(format)==='json'?stripJsonComments(body):body,format},variables),null);
       if(pre.error)throw new Error(`Pre-request script: ${pre.error}`);
       variables=pre.variables;logs.push(...pre.logs.map(x=>'PRE: '+x));tests.push(...pre.tests);
       await applyScriptVariables(pre.environmentVariables || variables);
@@ -529,28 +687,65 @@ export default function App() {
 
   const doAction = async fn => {
     setBusyAction(true);
-    try { await fn(); } catch (e) { setNotice(getMessage(e)); } finally { setBusyAction(false); }
+    try { await fn(); return true; } catch (e) { setNotice(getMessage(e)); return false; } finally { setBusyAction(false); }
   };
   function loadRequest(item) {
     if (Array.isArray(item.rows)) addTab({ ...item, name: item.name || 'From history' });
     else loadSavedRequest(item);
   }
 
-  function openSave() {
-    if (!requiresLogin('collections')) return;
-    setSaveWs(workspaces[0]?.id || '');
-    setSaveName(`${method} ${(() => { try { return new URL(url).pathname || '/'; } catch { return 'request'; } })()}`);
+  const activeSource=()=>openTabs.find(t=>t.id===activeTabRef.current)?.source;
+  const currentSavePayload=(name)=>({name,method,url,headersJson:JSON.stringify(requestHeaderObject()),body,
+    bodyMode:bodyFormat(format).mode,contentType:format,
+    formFieldsJson:JSON.stringify(formFields.map(({key,value,fileName,contentType})=>({key,value,fileName,contentType}))),
+    preRequestScript:preScript,postResponseScript:postScript});
+  function openSaveAs(destination=null){
+    const origin=destination||activeSource();
+    setSaveScope(origin?.scope||'local');
+    setSaveLocalCollection(origin?.scope==='local'?origin.collectionId:localCollections[0]?.id||'');
+    setSaveWs(origin?.workspaceId||selectedWs||workspaces[0]?.id||'');
+    setSaveCollection(origin?.scope==='workspace'?origin.collectionId:selectedCol||'');
+    setSaveName(activeRequestName==='Untitled Request'?`${method} ${url||'request'}`:activeRequestName);
     setSaveOpen(true);
   }
-  async function saveRequest(e) {
+  async function saveCurrent(){
+    const origin=activeSource();
+    if(!origin){openSaveAs();return;}
+    const name=activeRequestName;
+    const tabId=activeTabRef.current;
+    await doAction(async()=>{
+      if(origin.scope==='local'){
+        setLocalCollections(updateLocalRequest(localCollections,origin.collectionId,origin.requestId,{...snapshot(),name}));
+      }else{
+        if(!token)throw Error('Sign in to update workspace requests');
+        await api(`/api/workspaces/${origin.workspaceId}/collections/${origin.collectionId}/requests/${origin.requestId}`,'PUT',currentSavePayload(name),token);
+        if(origin.workspaceId===selectedWs&&origin.collectionId===selectedCol)
+          setSavedRequests(await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests`,'GET',undefined,token));
+      }
+      // Keep saved draft (response state remains in-memory, never copied to collection).
+      draftsRef.current[tabId]={...snapshot()};
+      setNotice(`Saved changes to ${name}`);
+    });
+  }
+  async function saveRequest(e){
     e.preventDefault();
-    await doAction(async () => {
-      await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`, 'POST',
-        { name: saveName, method, url, headersJson: JSON.stringify(requestHeaderObject()), body,bodyMode:bodyFormat(format).mode,contentType:format,
-          formFieldsJson:JSON.stringify(formFields.map(({key,value,fileName,contentType})=>({key,value,fileName,contentType}))),preRequestScript:preScript,postResponseScript:postScript }, token);
-      setSaveOpen(false); setNotice('Request saved to collection.');
-      if (selectedWs === saveWs && selectedCol === saveCollection)
-        setSavedRequests(await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`, 'GET', undefined, token));
+    if(!saveName.trim())return;
+    await doAction(async()=>{
+      let source;
+      if(saveScope==='local'){
+        const next=createLocalSavedRequest(localCollections,saveLocalCollection,{...snapshot(),name:saveName});
+        setLocalCollections(next.collections);
+        source={scope:'local',collectionId:saveLocalCollection,requestId:next.request.id};
+      }else{
+        if(!token)throw Error('Sign in to save to workspace');
+        const saved=await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`,'POST',currentSavePayload(saveName),token);
+        source={scope:'workspace',workspaceId:saveWs,collectionId:saveCollection,requestId:saved.id};
+        if(saveWs===selectedWs&&saveCollection===selectedCol)
+          setSavedRequests(await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests`,'GET',undefined,token));
+      }
+      const id=activeTabRef.current;
+      setOpenTabs(ts=>ts.map(t=>t.id===id?{...t,name:saveName,source}:t));
+      setSaveOpen(false);setNotice(`Saved ${saveName}`);
     });
   }
 
@@ -561,16 +756,12 @@ export default function App() {
 
   return <div className="pp-app">
     <header className="pp-top">
-      <div className="pp-logo"><div className="pp-logo-mark">p</div><span>pakpost</span></div>
+      <div className="pp-logo"><div className="pp-logo-mark">p</div><span>pakpost</span><span className="pp-logo-sparkle" aria-hidden="true">✦</span></div>
       <div className="pp-top-center"><span className="pp-env-dot"/> <span>REST CLIENT</span><span className="pp-top-divider"/><span className="pp-top-mode">{token ? 'Team workspace' : 'Guest workspace'}</span></div>
       <div className="pp-top-right">
         <div className="pp-env-top"><span>ENV</span>
-          <select aria-label="Environment scope" title="Environment storage" value={envScope} onChange={e=>updateEnvScope(e.target.value)}>
-            <option value="local">Local</option>{token&&selectedWs&&<option value="workspace">Workspace</option>}
-          </select>
-          <select aria-label="Active environment" value={activeEnvId} onChange={e=>setActiveEnvId(e.target.value)}>
-            <option value="">No Environment</option>{currentEnvironments.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
+          <RetroSelect ariaLabel="Environment scope" title="Environment storage" className="pp-top-scope" value={envScope} onChange={updateEnvScope} options={[{value:'local',label:'Local'},{value:'workspace',label:'Workspace',disabled:!token||!selectedWs}]}/>
+          <RetroSelect ariaLabel="Active environment" className="pp-top-environment" value={activeEnvId} onChange={setActiveEnvId} options={[{value:'',label:'No environment'},...currentEnvironments.map(e=>({value:e.id,label:e.name}))]}/>
           <button title="Manage environments" onClick={()=>setEnvOpen(true)}><Settings2 size={16}/></button>
         </div>
         <span className="pp-connection"><span/> Local development</span>
@@ -604,7 +795,7 @@ export default function App() {
           <div className="pp-scope">
             <div className="pp-scope-logo"><Layers3 size={17}/></div>
             <div><strong>{activeWorkspace?.name || 'Personal scratchpad'}</strong><small>{token ? 'Private workspace' : 'Local · guest mode'}</small></div>
-            {token && <select aria-label="Switch workspace" title="Switch workspace" value={selectedWs} onChange={e => setSelectedWs(e.target.value)}>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select>}
+            {token && <RetroSelect ariaLabel="Switch workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/>}
             <ChevronDown size={15} className="pp-scope-chevron"/>
           </div>
           {token && <button className="pp-link-row" onClick={() => navigate('workspace')}><Settings2 size={14}/> Manage workspace <ChevronRight size={13}/></button>}
@@ -613,16 +804,22 @@ export default function App() {
           {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createLocalCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder="Collection name"/><button type="submit" title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
           <div className="pp-side-scroll">
             {localCollections.length>0&&<><div className="pp-local-subhead">LOCAL · BROWSER <span>{localCollections.length}</span></div>
-              <LocalCollectionsTree collections={localCollections} search={explorerSearch} onOpen={r=>addTab({...r,name:r.requestName||r.name})} onDelete={deleteLocalCollection}/>
+              <LocalCollectionsTree collections={localCollections} search={explorerSearch} onOpen={openLocalRequest} onAction={handleLocalMenu} onMove={moveLocalRequest}/>
             </>}
             {token && selectedWs ? <>
               <div className="pp-local-subhead">WORKSPACE · NEON</div>
               {visibleCollections.map(c => <div key={c.id}>
-                <button className={`pp-tree-row ${selectedCol === c.id ? 'active' : ''}`} onClick={() => { setSelectedCol(c.id); setExpandedCollections(v => ({ ...v, [c.id]: !(v[c.id] ?? true) })); }}>
-                  {(expandedCollections[c.id] ?? true) && selectedCol === c.id ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
-                  <FolderClosed size={15}/><span>{c.name}</span>
-                </button>
-                {(expandedCollections[c.id] ?? true) && selectedCol === c.id && savedRequests.filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).map(r => <button key={r.id} className="pp-tree-request" title={r.url} onClick={() => loadSavedRequest(r)}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>)}
+                <div className="pp-tree-item-container" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(WORKSPACE_DRAG))e.preventDefault()}} onDrop={e=>moveWorkspaceRequest(e,c.id)}>
+                  <button className={`pp-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => { setSelectedCol(c.id); setExpandedCollections(v => ({ ...v, [c.id]: !(v[c.id] ?? true) })); }}>
+                    {(expandedCollections[c.id] ?? true) && selectedCol === c.id ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                    <FolderClosed size={15}/><span>{c.name}</span>
+                  </button>
+                  <button className="pp-tree-action" title="Collection actions" aria-label={`Actions for ${c.name}`} onClick={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})}><Settings2 size={14}/></button>
+                </div>
+                {(expandedCollections[c.id] ?? true) && selectedCol === c.id && [...savedRequests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => <div className="pp-tree-item-container" key={r.id} draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
+                  <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest(r)}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
+                  <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
+                </div>)}
               </div>)}
               {!collections.length && <div className="pp-tree-hint">No collections yet. Start by creating one.</div>}
               <button className="pp-add-side" onClick={() => { navigate('workspace'); setWsTab('collections'); }}><Plus size={14}/> New collection</button>
@@ -641,14 +838,22 @@ export default function App() {
       <main className="pp-content">
         <div className="pp-tabs-bar">
           <div className="pp-open-tabs" role="tablist" aria-label="Open requests">
-            {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
+            {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const from=tabDragRef.current;if(from)setOpenTabs(ts=>reorderTabs(ts,from,t.id));tabDragRef.current=null;}} onDragEnd={()=>{tabDragRef.current=null;}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab()}><Plus size={17}/></button>
           </div>
           <div className="pp-tabs-actions"><span><span className="pp-working-dot"/> {token ? 'Synced' : 'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
         </div>
+        {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
+          {(workspaceMenu.type==='collection'?[
+            ['newRequest','New request'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
+          ]:[['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
+            <button key={id} role="menuitem" className={id.startsWith('delete')?'danger':''} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</button>)}
+        </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
+          <button role="menuitem" onClick={()=>{selectTab(tabMenu.id);setTabMenu(null);setTimeout(()=>openSaveAs(),0);}}><Save size={14}/> Save as new request</button>
+
           <div className="pp-context-divider"/>
           <button role="menuitem" onClick={()=>performTabAction('close',tabMenu.id)}><X size={14}/> Close tab</button>
           <button role="menuitem" disabled={openTabs.length<=1} onClick={()=>performTabAction('others',tabMenu.id)}><Layers3 size={14}/> Close other tabs</button>
@@ -657,7 +862,7 @@ export default function App() {
 
         {page === 'tester' ? <div key={activeTabId} className="pp-tester pp-fade-content">
           <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
-          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><select className={`pp-method ${method.toLowerCase()}`} aria-label="HTTP method" value={method} onChange={e => { setMethod(e.target.value); setOpenTabs(t => t.map(x => x.id === activeTabId ? { ...x, method: e.target.value } : x)); }}>{METHODS.map(m => <option key={m}>{m}</option>)}</select><ChevronDown size={13}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} variables={varsFromEnv()} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={openSave} title="Save request to a collection"><Save size={15}/><span>Save</span>{!token && <LockKeyhole size={12}/>}</button></div>
+          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} variables={varsFromEnv()} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} title="Save changes (Ctrl/Cmd+S)"><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
               <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
@@ -668,17 +873,13 @@ export default function App() {
                 {reqTab === 'params' && <><div className="pp-form-caption"><span>QUERY PARAMETERS</span><span>Added to URL when you send</span></div><div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE</span><span/></div>{params.map((r,i) => <div className="pp-keyvalue-row" key={i}><input placeholder="parameter" aria-label="Query key" value={r.key} onChange={e => setParams(v => v.map((x,j)=> j === i ? {...x, key:e.target.value}:x))}/><input placeholder="value" aria-label="Query value" value={r.value} onChange={e => setParams(v => v.map((x,j)=> j === i ? {...x, value:e.target.value}:x))}/><IconButton icon={X} label="Remove query parameter" onClick={() => setParams(v => v.filter((_,j)=>j!==i))}/></div>)}<button className="pp-inline-add" onClick={() => setParams(v => [...v, { ...EMPTY_HEADER }])}><Plus size={14}/> Add parameter</button></>}
                 {reqTab === 'headers' && <><div className="pp-form-caption"><span>REQUEST HEADERS</span><span>Custom key-value pairs</span></div><div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE</span><span/></div>{rows.map((r,i) => <div className="pp-keyvalue-row" key={i}><input value={r.key} spellCheck="false" placeholder="Content-Type" aria-label="Header key" onChange={e => setRows(v => v.map((x,j)=>j===i?{...x,key:e.target.value}:x))}/><input value={r.value} spellCheck="false" placeholder="application/json" aria-label="Header value" onChange={e => setRows(v => v.map((x,j)=>j===i?{...x,value:e.target.value}:x))}/><IconButton icon={X} label="Remove header" onClick={() => setRows(v => v.filter((_,j)=>j!==i))}/></div>)}<button className="pp-inline-add" onClick={() => setRows(v => [...v, { ...EMPTY_HEADER }])}><Plus size={14}/> Add header</button></>}
                 {reqTab === 'body' && <div className="pp-body-composer">
-                  <div className="pp-body-toolbar"><label>Body type<select value={format} onChange={e=>selectFormat(e.target.value)}>
-                    {['General','Text','Structured','Binary'].map(group=><optgroup key={group} label={group}>
-                      {BODY_FORMATS.filter(x=>x.group===group).map(f=><option value={f.mime} key={f.mime}>{f.label}</option>)}
-                    </optgroup>)}
-                  </select></label>
+                  <div className="pp-body-toolbar"><div className="pp-body-format-label"><span>Body type</span><RetroSelect ariaLabel="Body type" className="pp-body-format-select" value={format} onChange={selectFormat} options={BODY_FORMATS.map(f=>({value:f.mime,label:f.label,group:f.group}))}/></div>
                     {bodyFormat(format).mode==='raw'&&<button title="Beautify request body" onClick={beautifyBody}><WandSparkles size={15}/> Beautify</button>}
                     <span>UTF-8</span>
                   </div>
                   {bodyFormat(format).mode==='none'&&<div className="pp-body-empty">This request has no body. Choose a format to start editing.</div>}
                   {bodyFormat(format).mode==='raw'&&<div className="pp-body-code">
-                    <TextEditor value={body} onChange={setBody} lang={languageFromMime(format)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} />
+                    <TextEditor value={body} onChange={setBody} lang={languageFromMime(format)==='json'?'jsonc':languageFromMime(format)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="100%" placeholder="Write request body here…" allowComments fill/>
                     {syntaxProblem(body,languageFromMime(format))&&<div className="pp-inline-validation"><AlertTriangle size={14}/><span>{syntaxProblem(body,languageFromMime(format))?.message}</span></div>}
                   </div>}
                   {(bodyFormat(format).mode==='urlencoded'||bodyFormat(format).mode==='multipart')&&<>
@@ -697,12 +898,12 @@ export default function App() {
                   </>}
                   {bodyFormat(format).mode==='binary'&&<div className="pp-binary-picker"><FileUp size={22}/><span>{binaryFile.name||'Select a binary file (up to 5 MB)'}</span><label>Choose file<input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{setBinaryFile({name:file.name,base64:await encodeFile(file)})}catch(err){setNotice(err.message)}}}/></label></div>}
                 </div>}
-                {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Only applied to outgoing request</span></div><div className="pp-auth-form"><label>Auth type<select value={authType} onChange={e => setAuthType(e.target.value)}><option value="none">No Auth</option><option value="bearer">Bearer Token</option></select></label>{authType === 'bearer' && <label>Token<input type="password" autoComplete="off" placeholder="Paste bearer token" value={bearerToken} onChange={e => setBearerToken(e.target.value)}/></label>}<p>Use Headers for API keys, basic authentication, or custom authorization headers. Authorization values are not saved in request history.</p></div></>}
+                {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Only applied to outgoing request</span></div><div className="pp-auth-form"><div className="pp-auth-select"><span>Auth type</span><RetroSelect ariaLabel="Auth type" value={authType} onChange={setAuthType} options={[{value:'none',label:'No Auth'},{value:'bearer',label:'Bearer Token'}]}/></div>{authType === 'bearer' && <label>Token<input type="password" autoComplete="off" placeholder="Paste bearer token" value={bearerToken} onChange={e => setBearerToken(e.target.value)}/></label>}<p>Use Headers for API keys, basic authentication, or custom authorization headers. Authorization values are not saved in request history.</p></div></>}
                 {reqTab === 'scripts'&&<div className="pp-script-panel">
                   <div className="pp-script-label"><strong>Pre-request script</strong><span>Runs before resolving and sending HTTP request</span></div>
-                  <TextEditor value={preScript} onChange={setPreScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false}/>
+                  <TextEditor value={preScript} onChange={setPreScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments/>
                   <div className="pp-script-label"><strong>Post-response script</strong><span>Runs after receiving the HTTP response</span></div>
-                  <TextEditor value={postScript} onChange={setPostScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false}/>
+                  <TextEditor value={postScript} onChange={setPostScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments/>
                   <p className="pp-script-note">Postman-compatible subset: require('crypto-js'), pm.request.url.path, pm.request.body.raw, pm.variables.get/set, pm.environment.get/set, pm.response.json(), pm.test(), console.log().
                   Scripts run in an isolated, time-limited QuickJS worker. External npm import is not enabled yet.</p>
                   {(scriptLog.length>0||scriptTests.length>0||scriptError)&&<div className="pp-script-console"><strong>Script results</strong>
@@ -741,7 +942,20 @@ export default function App() {
     {notice && <div className="pp-toast"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>}
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="pp-muted-small pp-center">Google SSO can be added later.</p></form></Dialog>}
     {envOpen && <EnvironmentDialog items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onClose={()=>setEnvOpen(false)} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/>}
-    {saveOpen && <Dialog title="Save to collection" subtitle="Saved requests are private to members of your workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}><label>Request name<input required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label><label>Workspace<select value={saveWs} onChange={e=>setSaveWs(e.target.value)}>{workspaces.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label><label>Collection<select required value={saveCollection} onChange={e=>setSaveCollection(e.target.value)}>{saveCols.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>{!saveCols.length && <div className="form-error">Create a workspace and collection first.</div>}<button className="pp-modal-submit" type="submit" disabled={!saveCollection || busyAction}><Save size={16}/> Save request</button></form></Dialog>}
+    {saveOpen && <Dialog title="Save as new request" subtitle="Keep an independent copy in a local collection or a signed-in workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}>
+      <label>Request name<input autoFocus required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label>
+      <div className="pp-modal-select-label"><span>Destination</span><RetroSelect ariaLabel="Save scope" value={saveScope} onChange={setSaveScope} options={[{value:'local',label:'Local browser'},...(token?[{value:'workspace',label:'Workspace · Neon'}]:[])]}/></div>
+      {saveScope==='local'?<div className="pp-modal-select-label"><span>Local collection</span><RetroSelect ariaLabel="Local collection" value={saveLocalCollection} onChange={setSaveLocalCollection} options={localCollections.map(c=>({value:c.id,label:c.name}))}/></div>:
+        <><div className="pp-modal-select-label"><span>Workspace</span><RetroSelect ariaLabel="Save workspace" value={saveWs} onChange={setSaveWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/></div><div className="pp-modal-select-label"><span>Collection</span><RetroSelect ariaLabel="Save collection" value={saveCollection} onChange={setSaveCollection} options={saveCols.map(c=>({value:c.id,label:c.name}))}/></div></>}
+      {!(saveScope==='local'?localCollections.length:saveCols.length)&&<div className="form-error">Create a collection first.</div>}
+      <button className="pp-modal-submit" type="submit" disabled={!(saveScope==='local'?saveLocalCollection:saveCollection)||busyAction}><Save size={16}/> Save new request</button>
+    </form></Dialog>}
+    {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
+      <form className="modal-form" onSubmit={executeActionDialog}>
+        {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required maxLength={120} value={actionName} onChange={e=>setActionName(e.target.value)}/></label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}
+        <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
+      </form>
+    </Dialog>}
   <FastTooltip/>
   </div>;
 }

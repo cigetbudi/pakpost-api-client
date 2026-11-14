@@ -8,6 +8,7 @@ public sealed class Collection
     public string Name { get; private set; } = string.Empty;
     public Guid CreatedByUserId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+    public void Rename(string name) { if(string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Collection name required"); Name = name.Trim(); }
     public Collection(Guid workspaceId, string name, Guid createdByUserId)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Collection name required");

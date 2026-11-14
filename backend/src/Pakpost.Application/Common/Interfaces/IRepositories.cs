@@ -20,6 +20,7 @@ public interface ICollectionRepository
     Task<Collection?> FindAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<Collection>> ListAsync(Guid workspaceId, CancellationToken ct);
     void Add(Collection collection);
+    void Remove(Collection collection);
 }
 public interface ITeamRepository
 {

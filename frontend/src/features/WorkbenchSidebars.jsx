@@ -2,6 +2,7 @@ import React, {useRef,useState} from 'react';
 import {Check,ClipboardPaste,Copy,Download,FileJson,FileUp,Import,ShieldAlert,Upload} from 'lucide-react';
 import {GENERATORS,generateCode} from './requestTools';
 import {TextEditor} from './Editors';
+import {RetroSelect} from './RetroSelect';
 import {createPostmanCollection,createLocalPostmanExport,createSessionExport,parseImportText} from './importExport';
 
 const IMPORT_PLACEHOLDER = String.raw`curl -X POST https://postman-echo.com/post \
@@ -20,7 +21,7 @@ export function CodeSidebar({request,buildResolved,theme='dark'}){
   async function onCopy(){try{await navigator.clipboard.writeText(code);setCopied(true);setTimeout(()=>setCopied(false),1600)}catch{/* Browser requires HTTPS or permission. */}}
   return <div className="pp-side-tool">
     <p className="pp-side-hint">Generate code for the active request. Choose a language and copy the snippet.</p>
-    <label className="pp-side-field">Language<select value={language} onChange={e=>setLanguage(e.target.value)}>{GENERATORS.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+    <div className="pp-side-field">Language<RetroSelect ariaLabel="Code generator language" value={language} onChange={setLanguage} options={GENERATORS.map(([value,label])=>({value,label}))}/></div>
     <label className="pp-side-check"><input type="checkbox" checked={resolve} onChange={e=>setResolve(e.target.checked)}/> Resolve variables</label>
     <label className="pp-side-check"><input type="checkbox" disabled={!resolve} checked={secrets} onChange={e=>setSecrets(e.target.checked)}/> Include secret values</label>
     {secrets&&<p className="pp-side-alert"><ShieldAlert size={14}/> This snippet may contain credentials. Review before sharing.</p>}
