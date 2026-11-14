@@ -5,9 +5,10 @@ using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
 namespace Pakpost.Application.Internal.Collections;
-public sealed record SavedRequestDto(Guid Id,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body);
+public sealed record SavedRequestDto(Guid Id,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body,
+    string BodyMode,string ContentType,string FormFieldsJson,string PreRequestScript,string PostResponseScript);
 public sealed record ListSavedRequestsQuery(Guid ActorId,Guid WorkspaceId,Guid CollectionId):IRequest<IReadOnlyList<SavedRequestDto>>;
-public sealed record SaveRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body):IRequest<SavedRequestDto>;
+public sealed record SaveRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body,string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript=""):IRequest<SavedRequestDto>;
 public sealed record DeleteSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId):IRequest;
 public sealed class SaveRequestValidator:AbstractValidator<SaveRequestCommand>
 {
@@ -18,7 +19,12 @@ public sealed class SaveRequestValidator:AbstractValidator<SaveRequestCommand>
         RuleFor(x=>x.Url).NotEmpty().MaximumLength(2048);
         RuleFor(x=>x.HeadersJson).Must(x=>IsJsonObject(x)).WithMessage("HeadersJson must be a JSON object");
         RuleFor(x=>x.Body).MaximumLength(131072);
+        RuleFor(x=>x.BodyMode).Must(x=>new[]{"none","raw","urlencoded","multipart","binary"}.Contains(x));
+        RuleFor(x=>x.FormFieldsJson).Must(x=>IsJsonArray(x)).WithMessage("FormFieldsJson must be a JSON array");
+        RuleFor(x=>x.PreRequestScript).MaximumLength(64000);
+        RuleFor(x=>x.PostResponseScript).MaximumLength(64000);
     }
+    private static bool IsJsonArray(string x) { try {using var j=JsonDocument.Parse(x);return j.RootElement.ValueKind==JsonValueKind.Array;}catch{return false;} }
     private static bool IsJsonObject(string x) { try { using var j=JsonDocument.Parse(x);return j.RootElement.ValueKind==JsonValueKind.Object; }catch {return false;} }
 }
 public abstract class SavedRequestsAccess
@@ -29,7 +35,7 @@ public abstract class SavedRequestsAccess
         var c=await collections.FindAsync(collectionId,ct);
         if (c is null || c.WorkspaceId!=workspaceId) throw AppException.NotFound("Collection not found");
     }
-    protected static SavedRequestDto ToDto(SavedRequest x)=>new(x.Id,x.CollectionId,x.Name,x.Method,x.Url,x.HeadersJson,x.Body);
+    protected static SavedRequestDto ToDto(SavedRequest x)=>new(x.Id,x.CollectionId,x.Name,x.Method,x.Url,x.HeadersJson,x.Body,x.BodyMode,x.ContentType,x.FormFieldsJson,x.PreRequestScript,x.PostResponseScript);
 }
 public sealed class ListSavedRequestsHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests)
     :SavedRequestsAccess,IRequestHandler<ListSavedRequestsQuery,IReadOnlyList<SavedRequestDto>>
@@ -43,7 +49,7 @@ public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollecti
 {
     public async Task<SavedRequestDto> Handle(SaveRequestCommand c,CancellationToken ct)
     { await Check(c.ActorId,c.WorkspaceId,c.CollectionId,workspaces,collections,ct);
-      var item=new SavedRequest(c.CollectionId,c.Name,c.Method,c.Url,c.HeadersJson,c.Body);
+      var item=new SavedRequest(c.CollectionId,c.Name,c.Method,c.Url,c.HeadersJson,c.Body,c.BodyMode,c.ContentType,c.FormFieldsJson,c.PreRequestScript,c.PostResponseScript);
       requests.Add(item);await uow.SaveChangesAsync(ct);return ToDto(item); }
 }
 public sealed class DeleteSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)

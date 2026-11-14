@@ -22,6 +22,8 @@ public static class DependencyInjection
         services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<ISavedRequestRepository, SavedRequestRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
+        services.AddScoped<IRequestEnvironmentRepository, RequestEnvironmentRepository>();
+        services.AddSingleton<IEnvironmentValueCipher, EnvironmentValueCipher>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddTransient<IHttpRequestRunner, SafeHttpRequestRunner>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();

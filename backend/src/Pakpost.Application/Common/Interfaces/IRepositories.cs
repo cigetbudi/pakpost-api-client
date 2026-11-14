@@ -44,3 +44,16 @@ public interface IPasswordHasher
     bool Verify(string password, string storedHash);
 }
 public interface IJwtTokenService { (string token, int expiresInSeconds) CreateToken(User user); }
+
+public interface IRequestEnvironmentRepository
+{
+    Task<IReadOnlyList<RequestEnvironment>> ListAsync(Guid workspaceId,CancellationToken ct);
+    Task<RequestEnvironment?> FindAsync(Guid id,CancellationToken ct);
+    void Add(RequestEnvironment environment);
+    void Remove(RequestEnvironment environment);
+}
+public interface IEnvironmentValueCipher
+{
+    string Protect(string clear);
+    string Unprotect(string value);
+}

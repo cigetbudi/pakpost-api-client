@@ -12,6 +12,11 @@ public sealed class SavedRequestConfiguration:IEntityTypeConfiguration<SavedRequ
         b.Property(x=>x.Url).HasMaxLength(2048).IsRequired();
         b.Property(x=>x.HeadersJson).HasColumnType("jsonb").IsRequired();
         b.Property(x=>x.Body).HasColumnType("text").IsRequired();
+        b.Property(x=>x.BodyMode).HasMaxLength(20).HasDefaultValue("raw").IsRequired();
+        b.Property(x=>x.ContentType).HasMaxLength(150).HasDefaultValue("application/json").IsRequired();
+        b.Property(x=>x.FormFieldsJson).HasColumnType("jsonb").HasDefaultValue("[]").IsRequired();
+        b.Property(x=>x.PreRequestScript).HasColumnType("text").HasDefaultValue("").IsRequired();
+        b.Property(x=>x.PostResponseScript).HasColumnType("text").HasDefaultValue("").IsRequired();
         b.HasOne<Collection>().WithMany().HasForeignKey(x=>x.CollectionId).OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(x=>x.CollectionId);
     }

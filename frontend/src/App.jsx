@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ArrowDownToLine, ArrowRight, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2,
+  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2,
 } from 'lucide-react';
+import { TextEditor } from './features/Editors';
+import { EnvironmentDialog } from './features/Environments';
+import { CodeGenerator } from './features/CodeGenerator';
+import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
+import { runSandbox } from './features/runScript';
+import { postmanRequestSnapshot } from './features/postmanCompat';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const EMPTY_HEADER = { key: '', value: '' };
@@ -20,6 +26,21 @@ async function api(path, method = 'GET', body, token = '') {
 }
 const toRows = (headers = {}) => Object.entries(headers).map(([key, value]) => ({ key, value }));
 function prettyJson(text) { try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; } }
+const initialLocalEnvs=()=>{
+  try {
+    const data=JSON.parse(localStorage.getItem('pakpost_guest_envs')||'[]');
+    const secrets=JSON.parse(sessionStorage.getItem('pakpost_guest_secrets')||'{}');
+    return data.map(env=>({...env,variables:env.variables.map(v=>v.isSecret?{...v,value:secrets[env.id]?.[v.key]||''}:v)}));
+  }catch{return []}
+};
+const rowFromFile = (file,base64) => ({key:'file',value:'',fileName:file.name,fileBase64:base64,contentType:file.type||'application/octet-stream'});
+async function encodeFile(file) {
+  if(file.size>5*1024*1024)throw new Error('Maximum file size is 5 MB');
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  let binary=''; for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+  return btoa(binary);
+}
+
 
 function IconButton({ icon: Icon, onClick, label, disabled = false }) {
   return <button type="button" className="icon-btn" aria-label={label} title={label} disabled={disabled} onClick={onClick}><Icon size={16}/></button>;
@@ -50,6 +71,22 @@ export default function App() {
   const [url, setUrl] = useState('https://httpbin.org/get');
   const [rows, setRows] = useState([{ ...EMPTY_HEADER }]);
   const [body, setBody] = useState('');
+  const [format, setFormat] = useState('application/json');
+  const [formFields, setFormFields] = useState([{key:'',value:''}]);
+  const [binaryFile, setBinaryFile] = useState({name:'',base64:''});
+  const [preScript, setPreScript] = useState('');
+  const [postScript, setPostScript] = useState('');
+  const [scriptLog, setScriptLog] = useState([]);
+  const [scriptTests, setScriptTests] = useState([]);
+  const [scriptError, setScriptError] = useState('');
+  const [responsePretty, setResponsePretty] = useState(true);
+  const [prettyResponse, setPrettyResponse] = useState('');
+  const [envOpen, setEnvOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [envScope, setEnvScope] = useState('local');
+  const [localEnvironments, setLocalEnvironments] = useState(initialLocalEnvs);
+  const [workspaceEnvironments, setWorkspaceEnvironments] = useState([]);
+  const [activeEnvId, setActiveEnvId] = useState('');
   const [reqTab, setReqTab] = useState('params');
   const [resTab, setResTab] = useState('body');
   const [loading, setLoading] = useState(false);
@@ -93,7 +130,16 @@ export default function App() {
   const panesRef = useRef(null);
   const draggingRef = useRef(false);
 
-  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
+  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
+  function restoreDraft(next) {
+    setMethod(next.method);setUrl(next.url);setRows(next.rows);setBody(next.body);
+    setFormat(next.format||'application/json');setFormFields(next.formFields||[{key:'',value:''}]);
+    setBinaryFile(next.binaryFile||{name:'',base64:''});
+    setPreScript(next.preScript||'');setPostScript(next.postScript||'');
+    setScriptLog(next.scriptLog||[]);setScriptTests(next.scriptTests||[]);setScriptError(next.scriptError||'');
+    setReqTab(next.reqTab);setResTab(next.resTab);setResult(next.result);setResponsePretty(next.responsePretty??true);setPrettyResponse(next.prettyResponse||'');
+    setParams(next.params||[{...EMPTY_HEADER}]);setAuthType(next.authType||'none');setBearerToken(next.bearerToken||'');
+  }
   function stashActive() { draftsRef.current[activeTabRef.current] = snapshot(); }
   function selectTab(id) {
     if (id === activeTabRef.current) { setPage('tester'); return; }
@@ -101,28 +147,25 @@ export default function App() {
     const next = draftsRef.current[id];
     if (!next) return;
     activeTabRef.current = id; setActiveTabId(id);
-    setMethod(next.method); setUrl(next.url); setRows(next.rows); setBody(next.body);
-    setReqTab(next.reqTab); setResTab(next.resTab); setResult(next.result);
-    setParams(next.params || [{ ...EMPTY_HEADER }]); setAuthType(next.authType || 'none'); setBearerToken(next.bearerToken || '');
+    restoreDraft(next);
+
     setPage('tester');
   }
   function addTab(request) {
     stashActive();
     const id = `t${++tabSequence.current}`;
-    const draft = { method: request?.method || 'GET', url: request?.url || '', rows: request?.rows || [{ ...EMPTY_HEADER }], body: request?.body || '', reqTab: 'params', resTab: 'body', result: null, params: [{ ...EMPTY_HEADER }], authType: 'none', bearerToken: '' };
+    const draft = { method: request?.method || 'GET', url: request?.url || '', rows: request?.rows || [{ ...EMPTY_HEADER }], body: request?.body || '', format:request?.format||'application/json',formFields:request?.formFields||[{key:'',value:''}],binaryFile:{name:'',base64:''},preScript:request?.preScript||'',postScript:request?.postScript||'',scriptLog:[],scriptTests:[],scriptError:'', reqTab: 'params', resTab: 'body', result: null, params: [{ ...EMPTY_HEADER }], authType: 'none', bearerToken: '' };
     draftsRef.current[id] = draft; activeTabRef.current = id;
     const name = request?.name || 'Untitled Request';
     setOpenTabs(t => [...t, { id, name, method: draft.method }]);
     setActiveTabId(id); setMethod(draft.method); setUrl(draft.url); setRows(draft.rows);
-    setBody(draft.body); setReqTab(draft.reqTab); setResTab(draft.resTab); setResult(null);
-    setParams(draft.params); setAuthType('none'); setBearerToken(''); setPage('tester');
+    restoreDraft(draft); setPage('tester');
   }
   function closeTab(id) {
     if (openTabs.length === 1) {
-      setMethod('GET'); setUrl(''); setRows([{ ...EMPTY_HEADER }]); setBody('');
-      setReqTab('params'); setResult(null); setParams([{ ...EMPTY_HEADER }]); setAuthType('none'); setBearerToken('');
+      restoreDraft({method:'GET',url:'',rows:[{...EMPTY_HEADER}],body:'',reqTab:'params',resTab:'body',result:null});
       setOpenTabs([{ id, name: 'Untitled Request', method: 'GET' }]);
-      draftsRef.current[id] = { method: 'GET', url: '', rows: [{ ...EMPTY_HEADER }], body: '', reqTab: 'params', resTab: 'body', result: null, params: [{...EMPTY_HEADER}], authType: 'none', bearerToken: '' };
+      draftsRef.current[id] = { method: 'GET', url: '', rows: [{ ...EMPTY_HEADER }], body: '',format:'application/json',formFields:[{key:'',value:''}],preScript:'',postScript:'', reqTab: 'params', resTab: 'body', result: null, params: [{...EMPTY_HEADER}], authType: 'none', bearerToken: '' };
       return;
     }
     const idx = openTabs.findIndex(t => t.id === id);
@@ -140,9 +183,8 @@ export default function App() {
     const next = draftsRef.current[id];
     if (!next) return;
     activeTabRef.current = id; setActiveTabId(id);
-    setMethod(next.method); setUrl(next.url); setRows(next.rows); setBody(next.body);
-    setReqTab(next.reqTab); setResTab(next.resTab); setResult(next.result);
-    setParams(next.params || [{ ...EMPTY_HEADER }]); setAuthType(next.authType || 'none'); setBearerToken(next.bearerToken || '');
+    restoreDraft(next);
+
     setPage('tester');
   }
   useEffect(() => { localStorage.setItem('pakpost_split', split); setSplitPercent(50); }, [split]);
@@ -162,11 +204,95 @@ export default function App() {
   function loadSavedRequest(item) {
     let savedRows;
     try { savedRows = toRows(JSON.parse(item.headersJson || '{}')); } catch { savedRows = []; }
-    addTab({ ...item, rows: [...savedRows, { ...EMPTY_HEADER }] });
+    let formFields = [];
+    try { formFields = JSON.parse(item.formFieldsJson||'[]'); }catch{}
+    addTab({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' });
     setNotice('Opened saved request in a new tab.');
   }
 
 
+  useEffect(()=>{if(!token&&envScope==='workspace'){setEnvScope('local');setActiveEnvId('');}},[token,envScope]);
+  useEffect(()=>{
+    const safe=localEnvironments.map(e=>({...e,variables:e.variables.map(v=>v.isSecret?{...v,value:''}:v)}));
+    const secrets=Object.fromEntries(localEnvironments.map(e=>[e.id,Object.fromEntries(e.variables.filter(v=>v.isSecret).map(v=>[v.key,v.value]))]));
+    localStorage.setItem('pakpost_guest_envs',JSON.stringify(safe));
+    sessionStorage.setItem('pakpost_guest_secrets',JSON.stringify(secrets));
+  },[localEnvironments]);
+  useEffect(()=>{
+    if(envScope!=='workspace'||!token||!selectedWs){setWorkspaceEnvironments([]);return;}
+    api(`/api/workspaces/${selectedWs}/environments`,'GET',undefined,token)
+      .then(setWorkspaceEnvironments).catch(e=>setNotice(`Environments API: ${getMessage(e)}. Apply the v3 EF migration.`));
+  },[envScope,token,selectedWs]);
+  const currentEnvironments=envScope==='workspace'?workspaceEnvironments:localEnvironments;
+  const activeEnvironment=currentEnvironments.find(e=>e.id===activeEnvId);
+  const varsFromEnv=(allowSecrets=true)=>Object.fromEntries((activeEnvironment?.variables||[]).map(v=>[v.key,v.isSecret&&!allowSecrets?'[REDACTED]':v.value]));
+  function updateEnvScope(scope){setEnvScope(scope);setActiveEnvId('');}
+  async function createEnvironment(name){
+    if(envScope==='workspace'){
+      if(!selectedWs||!token)throw new Error('Sign in and choose a workspace');
+      const env=await api(`/api/workspaces/${selectedWs}/environments`,'POST',{name},token);
+      setWorkspaceEnvironments(v=>[...v,env]);setActiveEnvId(env.id);
+    }else{const env={id:crypto.randomUUID(),name,variables:[]};setLocalEnvironments(v=>[...v,env]);setActiveEnvId(env.id)}
+  }
+  async function persistEnvironment(env){
+    if(envScope==='workspace'){
+      const saved=await api(`/api/workspaces/${selectedWs}/environments/${env.id}`,'PUT',{name:env.name,variables:env.variables},token);
+      setWorkspaceEnvironments(v=>v.map(x=>x.id===saved.id?saved:x));
+    }else setLocalEnvironments(v=>v.map(x=>x.id===env.id?env:x));
+    setNotice('Environment saved');
+  }
+  async function deleteEnvironment(id){
+    if(envScope==='workspace'){
+      await api(`/api/workspaces/${selectedWs}/environments/${id}`,'DELETE',undefined,token);
+      setWorkspaceEnvironments(v=>v.filter(x=>x.id!==id));
+    }else setLocalEnvironments(v=>v.filter(x=>x.id!==id));
+    setActiveEnvId('');
+  }
+  async function applyScriptVariables(values) {
+    if(!activeEnvironment)return;
+    const old=activeEnvironment.variables;
+    const merged=Object.entries(values).map(([key,value])=>({key,value:String(value),isSecret:old.find(x=>x.key===key)?.isSecret||false}));
+    if(JSON.stringify(Object.fromEntries(old.map(x=>[x.key,x.value])))!==JSON.stringify(values))
+      await persistEnvironment({...activeEnvironment,variables:merged});
+  }
+  const selectFormat=(v)=>{setFormat(v);};
+  async function beautifyBody(){
+    try{setBody(await formatSource(body,languageFromMime(format)));setNotice('Body formatted');}
+    catch(e){setNotice(`Cannot format: ${getMessage(e)}`)}
+  }
+  async function beautifyResult(){
+    if(!result||result.error)return;
+    try{setPrettyResponse(await formatSource(result.body||'',languageFromMime(result.headers?.['Content-Type']||result.headers?.['content-type']||'')));setResponsePretty(true);}
+    catch(e){setNotice(`Cannot format response: ${getMessage(e)}`)}
+  }
+  function buildOutgoing(vars=varsFromEnv()) {
+    const command=buildCommand({method,url,headers:rows,body,format,fields:formFields,fileBase64:binaryFile.base64,fileName:binaryFile.name},vars);
+    const parsed=new URL(command.url);
+    resolveRows(params,vars).forEach(p=>parsed.searchParams.append(p.key,p.value));
+    command.url=parsed.toString();
+    if(authType==='bearer'&&bearerToken.trim())command.headers.Authorization=`Bearer ${resolveVars(bearerToken.trim(),vars).value}`;
+    return command;
+  }
+  function maskSensitiveHeaders(request) {
+    for(const key of Object.keys(request.headers||{})) {
+      if(/(authorization|cookie|token|secret|api[-_]?key)/i.test(key))
+        request.headers[key]='{{REDACTED_SECRET}}';
+    }
+    return request;
+  }
+  function buildCodeRequest(allowSecrets=false){
+    const request=buildOutgoing(varsFromEnv(allowSecrets));
+    return allowSecrets?request:maskSensitiveHeaders(request);
+  }
+  function codePreviewRequest(){
+    const fmt=bodyFormat(format);
+    const query=params.filter(x=>x.key.trim()).map(x=>`${encodeURIComponent(x.key)}=${encodeURIComponent(x.value||'')}`).join('&');
+    const target=url+(query?(url.includes('?')?'&':'?')+query:'');
+    const headers={...requestHeaderObject()};
+    if(fmt.mode==='raw'&&body&&!Object.keys(headers).some(x=>x.toLowerCase()==='content-type'))headers['Content-Type']=fmt.mime;
+    return {method,url:target,headers:maskSensitiveHeaders({headers}).headers,body,bodyMode:fmt.mode,contentType:format,
+      formFields:formFields.map(x=>({key:x.key,value:x.value,fileName:x.fileName,base64:x.fileBase64})),fileName:binaryFile.name};
+  }
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('pakpost_theme', theme); }, [theme]);
   useEffect(() => {
     let ignore = false;
@@ -253,38 +379,57 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyboard);
     return () => window.removeEventListener('keydown', onKeyboard);
-  }, [page, loading, method, url, rows, body, params, authType, bearerToken]);
+  }, [page, loading, method, url, rows, body, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
   const activeTeam = teams.find(x => x.id === selectedTeam);
   const headerCount = rows.filter(x => x.key.trim()).length;
   const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()).map(x => [x.key.trim(), x.value]));
   async function sendRequest() {
-    if (!url.trim()) { setNotice('Enter a target URL first.'); return; }
-    const tabId = activeTabRef.current;
-    stashActive();
-    if (loading) return;
-    setLoading(true); setResult(null);
-    let targetUrl = url.trim();
+    if(!url.trim()){setNotice('Enter a request URL first');return;}
+    if(loading)return;
+    const tabId=activeTabRef.current;
+    stashActive();setLoading(true);setResult(null);setPrettyResponse('');setResponsePretty(true);setScriptError('');setScriptLog([]);setScriptTests([]);
+    let variables=varsFromEnv();
+    const logs=[],tests=[];
     try {
-      const parsed = new URL(targetUrl);
-      params.filter(p => p.key.trim()).forEach(p => parsed.searchParams.append(p.key.trim(), p.value));
-      targetUrl = parsed.toString();
-    } catch { /* Let the API return its own URL validation response. */ }
-    const headers = requestHeaderObject();
-    if (authType === 'bearer' && bearerToken.trim()) headers.Authorization = `Bearer ${bearerToken.trim()}`;
-    const command = { method, url: targetUrl, headers, body: body || '' };
-    try {
-      const r = await api('/api/proxy/send', 'POST', command);
-      draftsRef.current[tabId] = { ...draftsRef.current[tabId], result: r, resTab: 'body' };
-      if (tabId === activeTabRef.current) { setResult(r); setResTab('body'); }
-      setOpenTabs(t => t.map(x => x.id === tabId ? { ...x, status: r.statusCode } : x));
-      setRecent(old => [{ method, url: command.url, status: r.statusCode, elapsed: r.elapsedMs, body, rows: rows.map(x => ({ ...x })) }, ...old].slice(0, 20));
-    } catch (e) {
-      const error = { error: getMessage(e) };
-      draftsRef.current[tabId] = { ...draftsRef.current[tabId], result: error };
-      if (tabId === activeTabRef.current) setResult(error);
-    } finally { setLoading(false); }
+      const pre=await runSandbox(preScript,'pre',variables,postmanRequestSnapshot({method,url,headers:requestHeaderObject(),body,format},variables),null);
+      if(pre.error)throw new Error(`Pre-request script: ${pre.error}`);
+      variables=pre.variables;logs.push(...pre.logs.map(x=>'PRE: '+x));tests.push(...pre.tests);
+      await applyScriptVariables(pre.environmentVariables || variables);
+      const command=buildOutgoing(variables);
+      for(const [name,value] of Object.entries(pre.requestHeaderOverrides||{})){
+        const previous=Object.keys(command.headers).find(key=>key.toLowerCase()===name.toLowerCase());
+        if(previous)delete command.headers[previous];
+        command.headers[name]=value;
+      }
+      if(command.bodyMode==='multipart'&&formFields.some(x=>x.fileName&&!x.fileBase64))throw new Error('Reattach saved multipart file before sending.');
+      if(command.bodyMode==='binary'&&!binaryFile.base64)throw new Error('Choose a binary file before sending.');
+      if(command.bodyMode==='raw'){
+        const problem=syntaxProblem(command.body,languageFromMime(format));
+        if(problem)throw new Error('Request body is invalid: '+problem.message);
+      }
+      const r=await api('/api/proxy/send','POST',command);
+      // An HTTP request that completed must remain visible even if the post-response script fails.
+      let scriptErrorNext='';
+      try {
+        const post=await runSandbox(postScript,'post',pre.environmentVariables||varsFromEnv(),command,r,pre.localVariables||{});
+        logs.push(...post.logs.map(x=>'POST: '+x));tests.push(...post.tests);
+        if(post.error){scriptErrorNext=post.error;logs.push('SCRIPT ERROR: '+post.error);}
+        else await applyScriptVariables(post.environmentVariables||post.variables);
+      }catch(scriptFailure){
+        scriptErrorNext=getMessage(scriptFailure);
+        logs.push('SCRIPT ERROR: '+scriptErrorNext);
+      }
+      draftsRef.current[tabId]={...draftsRef.current[tabId],result:r,resTab:'body',scriptLog:logs,scriptTests:tests,scriptError:scriptErrorNext};
+      if(tabId===activeTabRef.current){setResult(r);setResTab('body');setScriptLog(logs);setScriptTests(tests);setScriptError(scriptErrorNext);}
+      setOpenTabs(t=>t.map(x=>x.id===tabId?{...x,status:r.statusCode}:x));
+      setRecent(old=>[{method,url:command.url,status:r.statusCode,elapsed:r.elapsedMs,body,rows:rows.map(x=>({...x}))},...old].slice(0,20));
+    }catch(e){
+      const error={error:getMessage(e)};
+      draftsRef.current[tabId]={...draftsRef.current[tabId],result:error,scriptLog:logs,scriptTests:tests,scriptError:getMessage(e)};
+      if(tabId===activeTabRef.current){setResult(error);setScriptLog(logs);setScriptTests(tests);setScriptError(getMessage(e));}
+    }finally{setLoading(false)}
   }
 
   const doAction = async fn => {
@@ -306,7 +451,8 @@ export default function App() {
     e.preventDefault();
     await doAction(async () => {
       await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`, 'POST',
-        { name: saveName, method, url, headersJson: JSON.stringify(requestHeaderObject()), body }, token);
+        { name: saveName, method, url, headersJson: JSON.stringify(requestHeaderObject()), body,bodyMode:bodyFormat(format).mode,contentType:format,
+          formFieldsJson:JSON.stringify(formFields.map(({key,value,fileName,contentType})=>({key,value,fileName,contentType}))),preRequestScript:preScript,postResponseScript:postScript }, token);
       setSaveOpen(false); setNotice('Request saved to collection.');
       if (selectedWs === saveWs && selectedCol === saveCollection)
         setSavedRequests(await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`, 'GET', undefined, token));
@@ -315,13 +461,23 @@ export default function App() {
 
   const visibleCollections = collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (c.id === selectedCol && savedRequests.some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase()))));
   const activeRequestName = openTabs.find(t => t.id === activeTabId)?.name || 'Untitled Request';
-  const responseText = result && !result.error ? (resTab === 'body' ? prettyJson(result.body || '') : JSON.stringify(result.headers || {}, null, 2)) : '';
+  const responseType = result && !result.error ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain') : 'text/plain';
+  const responseText = result && !result.error ? (resTab === 'body' ? (responsePretty ? (prettyResponse||prettyJson(result.body||'')) : (result.body||'')) : JSON.stringify(result.headers || {}, null, 2)) : '';
 
   return <div className="pp-app">
     <header className="pp-top">
       <div className="pp-logo"><div className="pp-logo-mark"><Zap size={18} fill="currentColor"/></div><span>pakpost<span className="pp-logo-dot">.</span></span><span className="pp-logo-tag">WORKBENCH</span></div>
       <div className="pp-top-center"><span className="pp-env-dot"/> <span>REST CLIENT</span><span className="pp-top-divider"/><span className="pp-top-mode">{token ? 'Team workspace' : 'Guest workspace'}</span></div>
       <div className="pp-top-right">
+        <div className="pp-env-top"><span>ENV</span>
+          <select aria-label="Environment scope" title="Environment storage" value={envScope} onChange={e=>updateEnvScope(e.target.value)}>
+            <option value="local">Local</option>{token&&selectedWs&&<option value="workspace">Workspace</option>}
+          </select>
+          <select aria-label="Active environment" value={activeEnvId} onChange={e=>setActiveEnvId(e.target.value)}>
+            <option value="">No Environment</option>{currentEnvironments.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+          <button title="Manage environments" onClick={()=>setEnvOpen(true)}><Settings2 size={16}/></button>
+        </div>
         <span className="pp-connection"><span/> Local development</span>
         <IconButton icon={theme === 'dark' ? Sun : Moon} label="Toggle light/dark theme" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}/>
         {me ? <button className="pp-profile" title={me.email} onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
@@ -332,6 +488,7 @@ export default function App() {
       <nav className="pp-rail" aria-label="Workbench navigation">
         <button className={page === 'tester' && explorerTab === 'collections' ? 'selected' : ''} title="Collections" onClick={() => { setExplorerTab('collections'); setSidebarCollapsed(false); setPage('tester'); }}><Layers3 size={19}/></button>
         <button className={page === 'tester' && explorerTab === 'history' ? 'selected' : ''} title="Request history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); setPage('tester'); }}><History size={19}/></button>
+        <button title="Environments" onClick={()=>setEnvOpen(true)}><Variable size={19}/></button>
         <button className={explorerTab === 'teams' ? 'selected' : ''} title="Teams" onClick={() => { setExplorerTab('teams'); setSidebarCollapsed(false); if (token) { setWsTab('teams'); } }}><Users size={19}/></button>
         <div className="pp-rail-spacer"/>
         <button title={sidebarCollapsed ? 'Expand navigator' : 'Collapse navigator'} onClick={() => setSidebarCollapsed(v => !v)}>{sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>
@@ -389,28 +546,70 @@ export default function App() {
         </div>
 
         {page === 'tester' ? <div className="pp-tester">
-          <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">· HTTP request</span><div className="pp-crumb-spacer"/><button onClick={openSave} title="Save request to a collection"><Save size={15}/><span>Save</span>{!token && <LockKeyhole size={12}/>}</button><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
+          <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">· HTTP request</span><div className="pp-crumb-spacer"/><button onClick={()=>setCodeOpen(true)} title="Generate Code"><Code2 size={15}/><span>Code</span></button><button onClick={openSave} title="Save request to a collection"><Save size={15}/><span>Save</span>{!token && <LockKeyhole size={12}/>}</button><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
           <div className="pp-url-bar"><div className="pp-method-wrap"><select className={`pp-method ${method.toLowerCase()}`} aria-label="HTTP method" value={method} onChange={e => { setMethod(e.target.value); setOpenTabs(t => t.map(x => x.id === activeTabId ? { ...x, method: e.target.value } : x)); }}>{METHODS.map(m => <option key={m}>{m}</option>)}</select><ChevronDown size={13}/></div><div className="pp-url-input"><Link2 size={16}/><input aria-label="Request URL" spellCheck="false" type="url" placeholder="Enter request URL, e.g. https://httpbin.org/get" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendRequest(); }}/></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
               <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
               <div className="pp-panel-tabs">
-                {[[ 'params','Params' ],[ 'headers','Headers' ],[ 'body','Body' ],[ 'auth','Authorization' ]].map(([id, name]) => <button key={id} className={reqTab === id ? 'active' : ''} onClick={() => setReqTab(id)}>{name}{id === 'headers' && headerCount > 0 && <span className="pp-tiny-count">{headerCount}</span>}</button>)}
+                {[[ 'params','Params' ],[ 'headers','Headers' ],[ 'body','Body' ],[ 'auth','Authorization' ],[ 'scripts','Scripts' ]].map(([id, name]) => <button key={id} className={reqTab === id ? 'active' : ''} onClick={() => setReqTab(id)}>{name}{id === 'headers' && headerCount > 0 && <span className="pp-tiny-count">{headerCount}</span>}</button>)}
               </div>
               <div className="pp-panel-body pp-request-body">
                 {reqTab === 'params' && <><div className="pp-form-caption"><span>QUERY PARAMETERS</span><span>Added to URL when you send</span></div><div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE</span><span/></div>{params.map((r,i) => <div className="pp-keyvalue-row" key={i}><input placeholder="parameter" aria-label="Query key" value={r.key} onChange={e => setParams(v => v.map((x,j)=> j === i ? {...x, key:e.target.value}:x))}/><input placeholder="value" aria-label="Query value" value={r.value} onChange={e => setParams(v => v.map((x,j)=> j === i ? {...x, value:e.target.value}:x))}/><IconButton icon={X} label="Remove query parameter" onClick={() => setParams(v => v.filter((_,j)=>j!==i))}/></div>)}<button className="pp-inline-add" onClick={() => setParams(v => [...v, { ...EMPTY_HEADER }])}><Plus size={14}/> Add parameter</button></>}
                 {reqTab === 'headers' && <><div className="pp-form-caption"><span>REQUEST HEADERS</span><span>Custom key-value pairs</span></div><div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE</span><span/></div>{rows.map((r,i) => <div className="pp-keyvalue-row" key={i}><input value={r.key} spellCheck="false" placeholder="Content-Type" aria-label="Header key" onChange={e => setRows(v => v.map((x,j)=>j===i?{...x,key:e.target.value}:x))}/><input value={r.value} spellCheck="false" placeholder="application/json" aria-label="Header value" onChange={e => setRows(v => v.map((x,j)=>j===i?{...x,value:e.target.value}:x))}/><IconButton icon={X} label="Remove header" onClick={() => setRows(v => v.filter((_,j)=>j!==i))}/></div>)}<button className="pp-inline-add" onClick={() => setRows(v => [...v, { ...EMPTY_HEADER }])}><Plus size={14}/> Add header</button></>}
-                {reqTab === 'body' && <><div className="pp-form-caption"><span>RAW REQUEST BODY</span><span>UTF-8 · 128 KB max</span></div><div className="pp-editor-wrap"><div className="pp-editor-toolbar"><FileJson size={14}/> JSON / raw text <span>UTF-8</span></div><textarea spellCheck="false" className="pp-editor-textarea" value={body} placeholder={'{\n  "message": "Hello, Pakpost!"\n}'} onChange={e => setBody(e.target.value)}/></div></>}
+                {reqTab === 'body' && <div className="pp-body-composer">
+                  <div className="pp-body-toolbar"><label>Body type<select value={format} onChange={e=>selectFormat(e.target.value)}>
+                    {['General','Text','Structured','Binary'].map(group=><optgroup key={group} label={group}>
+                      {BODY_FORMATS.filter(x=>x.group===group).map(f=><option value={f.mime} key={f.mime}>{f.label}</option>)}
+                    </optgroup>)}
+                  </select></label>
+                    {bodyFormat(format).mode==='raw'&&<button title="Beautify request body" onClick={beautifyBody}><WandSparkles size={15}/> Beautify</button>}
+                    <span>UTF-8</span>
+                  </div>
+                  {bodyFormat(format).mode==='none'&&<div className="pp-body-empty">This request has no body. Choose a format to start editing.</div>}
+                  {bodyFormat(format).mode==='raw'&&<div className="pp-body-code">
+                    <TextEditor value={body} onChange={setBody} lang={languageFromMime(format)} theme={theme} />
+                    {syntaxProblem(body,languageFromMime(format))&&<div className="pp-inline-validation"><AlertTriangle size={14}/><span>{syntaxProblem(body,languageFromMime(format))?.message}</span></div>}
+                  </div>}
+                  {(bodyFormat(format).mode==='urlencoded'||bodyFormat(format).mode==='multipart')&&<>
+                    <div className="pp-form-caption"><span>{bodyFormat(format).mode==='multipart'?'MULTIPART FORM DATA':'URL ENCODED DATA'}</span><span>Up to 5 MB</span></div>
+                    <div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE / FILE</span><span/></div>
+                    {formFields.map((r,i)=><div className="pp-keyvalue-row pp-form-data-row" key={i}>
+                      <input placeholder="key" value={r.key} onChange={e=>setFormFields(v=>v.map((x,j)=>j===i?{...x,key:e.target.value}:x))}/>
+                      {r.fileBase64?<div className="pp-file-name"><FileUp size={14}/>{r.fileName}<button title="Detach file" onClick={()=>setFormFields(v=>v.map((x,j)=>j===i?{key:x.key,value:''}:x))}><X size={12}/></button></div>
+                        :<input placeholder="value or {{variable}}" value={r.value||''} onChange={e=>setFormFields(v=>v.map((x,j)=>j===i?{...x,value:e.target.value}:x))}/>}
+                      <div className="pp-field-actions">
+                        {bodyFormat(format).mode==='multipart'&&<label title="Attach file"><FileUp size={15}/><input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{const value=await encodeFile(file);setFormFields(v=>v.map((x,j)=>j===i?{...x,value:'',fileName:file.name,fileBase64:value,contentType:file.type}:x))}catch(err){setNotice(err.message)}}}/></label>}
+                        <IconButton icon={X} label="Remove field" onClick={()=>setFormFields(v=>v.filter((_,j)=>j!==i))}/>
+                      </div>
+                    </div>)}
+                    <button className="pp-inline-add" onClick={()=>setFormFields(v=>[...v,{key:'',value:''}])}><Plus size={14}/> Add field</button>
+                  </>}
+                  {bodyFormat(format).mode==='binary'&&<div className="pp-binary-picker"><FileUp size={22}/><span>{binaryFile.name||'Select a binary file (up to 5 MB)'}</span><label>Choose file<input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{setBinaryFile({name:file.name,base64:await encodeFile(file)})}catch(err){setNotice(err.message)}}}/></label></div>}
+                </div>}
                 {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Only applied to outgoing request</span></div><div className="pp-auth-form"><label>Auth type<select value={authType} onChange={e => setAuthType(e.target.value)}><option value="none">No Auth</option><option value="bearer">Bearer Token</option></select></label>{authType === 'bearer' && <label>Token<input type="password" autoComplete="off" placeholder="Paste bearer token" value={bearerToken} onChange={e => setBearerToken(e.target.value)}/></label>}<p>Use Headers for API keys, basic authentication, or custom authorization headers. Authorization values are not saved in request history.</p></div></>}
+                {reqTab === 'scripts'&&<div className="pp-script-panel">
+                  <div className="pp-script-label"><strong>Pre-request script</strong><span>Runs before resolving and sending HTTP request</span></div>
+                  <TextEditor value={preScript} onChange={setPreScript} lang="javascript" theme={theme} minHeight="180px" lint={false}/>
+                  <div className="pp-script-label"><strong>Post-response script</strong><span>Runs after receiving the HTTP response</span></div>
+                  <TextEditor value={postScript} onChange={setPostScript} lang="javascript" theme={theme} minHeight="180px" lint={false}/>
+                  <p className="pp-script-note">Postman-compatible subset: require('crypto-js'), pm.request.url.path, pm.request.body.raw, pm.variables.get/set, pm.environment.get/set, pm.response.json(), pm.test(), console.log().
+                  Scripts run in an isolated, time-limited QuickJS worker. External npm import is not enabled yet.</p>
+                  {(scriptLog.length>0||scriptTests.length>0||scriptError)&&<div className="pp-script-console"><strong>Script results</strong>
+                    {scriptLog.map((l,i)=><pre key={i}>{l}</pre>)}
+                    {scriptTests.map((t,i)=><div key={i} className={t.passed?'pp-test-pass':'pp-test-fail'}>{t.passed?'✓':'✕'} {t.name}{t.error&&` — ${t.error}`}</div>)}
+                    {scriptError&&<div className="pp-inline-validation">{scriptError}</div>}
+                  </div>}
+                </div>}
               </div>
               <div className="pp-pane-footer"><ShieldCheck size={14}/><span>Public API tester · No sign-in needed</span><span className="pp-footer-tail">Proxy protected</span></div>
             </section>
             <div role="separator" aria-label="Resize request and response panels" aria-orientation={split === 'vertical' ? 'vertical' : 'horizontal'} className="pp-splitter" onPointerDown={e => { draggingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={onSplitterMove} onPointerUp={onSplitterEnd} onPointerCancel={onSplitterEnd}><span className="pp-splitter-handle"/></div>
             <section className="pp-response-pane">
               <div className="pp-pane-heading pp-response-heading"><span className="pp-pane-title"><Bolt size={15}/> Response</span>{result && !result.error ? <div className="pp-response-metrics"><span className={`pp-status ${result.statusCode < 400 ? 'good' : 'bad'}`}><span className="pp-status-dot"/>{result.statusCode} {result.reasonPhrase}</span><span><Clock3 size={13}/> {result.elapsedMs} ms</span><span><ArrowDownToLine size={13}/> {new Blob([result.body || '']).size.toLocaleString()} B</span></div> : <span className="pp-pane-meta">Awaiting response</span>}</div>
-              <div className="pp-panel-tabs"><button className={resTab === 'body' ? 'active' : ''} onClick={()=>setResTab('body')}>Body</button><button className={resTab === 'headers' ? 'active' : ''} onClick={()=>setResTab('headers')}>Headers{result && !result.error && <span className="pp-tiny-count">{Object.keys(result.headers || {}).length}</span>}</button><div className="pp-panel-tabs-spacer"/><button className="pp-copy-response" title="Copy response" disabled={!result || !!result.error} onClick={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}><Copy size={14}/> Copy</button></div>
+              <div className="pp-panel-tabs"><button className={resTab === 'body' ? 'active' : ''} onClick={()=>setResTab('body')}>Body</button><button className={resTab === 'headers' ? 'active' : ''} onClick={()=>setResTab('headers')}>Headers{result && !result.error && <span className="pp-tiny-count">{Object.keys(result.headers || {}).length}</span>}</button><div className="pp-panel-tabs-spacer"/><button className="pp-copy-response" disabled={!result||!!result.error} onClick={beautifyResult} title="Beautify response"><WandSparkles size={14}/> Beautify</button><button className="pp-copy-response" disabled={!result||!!result.error} onClick={()=>setResponsePretty(v=>!v)} title="Toggle raw/pretty">{responsePretty?'Pretty':'Raw'}</button><button className="pp-copy-response" title="Copy response" disabled={!result || !!result.error} onClick={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}><Copy size={14}/> Copy</button></div>
               <div className="pp-panel-body pp-response-body">
-                {!result ? <div className="pp-response-empty"><div className="pp-response-empty-symbol"><Terminal size={28}/></div><strong>{loading ? 'Sending request…' : 'Ready to send a request'}</strong><p>{loading ? 'The server is processing your request.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p><span>⌘ / Ctrl + Enter</span></div> : result.error ? <div className="pp-response-error"><div><X size={18}/></div><strong>Request failed</strong><p>{result.error}</p></div> : <><div className="pp-code-view"><div className="pp-line-numbers" aria-hidden="true">{responseText.split('\n').map((_,i)=><span key={i}>{i+1}</span>)}</div><pre className="pp-code-text">{responseText}</pre></div>{result.truncated && <div className="pp-response-warning">Output truncated to 1 MB.</div>}{result.isBinary && <div className="pp-response-warning">Binary content displayed as Base64.</div>}</>}
+                {!result ? <div className="pp-response-empty"><div className="pp-response-empty-symbol"><Terminal size={28}/></div><strong>{loading ? 'Sending request…' : 'Ready to send a request'}</strong><p>{loading ? 'The server is processing your request.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p><span>⌘ / Ctrl + Enter</span></div> : result.error ? <div className="pp-response-error"><div><X size={18}/></div><strong>Request failed</strong><p>{result.error}</p></div> : <><div className="pp-response-code"><TextEditor readOnly value={responseText} lang={resTab==='headers'?'json':languageFromMime(responseType)} theme={theme} minHeight="250px"/></div>{result.truncated && <div className="pp-response-warning">Output truncated to 1 MB.</div>}{result.isBinary && <div className="pp-response-warning">Binary content displayed as Base64.</div>}</>}
               </div>
               <div className="pp-pane-footer"><span>{result && !result.error ? `HTTP ${result.statusCode}` : 'No response yet'}</span><span className="pp-footer-tail">{result?.truncated ? 'Truncated' : 'Raw / JSON preview'}</span></div>
             </section>
@@ -431,6 +630,8 @@ export default function App() {
     <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">Guest testing enabled · Private addresses blocked by proxy</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
     {notice && <div className="pp-toast"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>}
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="pp-muted-small pp-center">Google SSO can be added later.</p></form></Dialog>}
+    {envOpen && <EnvironmentDialog items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onClose={()=>setEnvOpen(false)} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/>}
+    {codeOpen && <CodeGenerator request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={theme} onClose={()=>setCodeOpen(false)}/>}
     {saveOpen && <Dialog title="Save to collection" subtitle="Saved requests are private to members of your workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}><label>Request name<input required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label><label>Workspace<select value={saveWs} onChange={e=>setSaveWs(e.target.value)}>{workspaces.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label><label>Collection<select required value={saveCollection} onChange={e=>setSaveCollection(e.target.value)}>{saveCols.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>{!saveCols.length && <div className="form-error">Create a workspace and collection first.</div>}<button className="pp-modal-submit" type="submit" disabled={!saveCollection || busyAction}><Save size={16}/> Save request</button></form></Dialog>}
   </div>;
 }

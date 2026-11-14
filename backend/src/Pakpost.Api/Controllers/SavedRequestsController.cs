@@ -8,13 +8,14 @@ namespace Pakpost.Api.Controllers;
 [Route("api/workspaces/{workspaceId:guid}/collections/{collectionId:guid}/requests")]
 public sealed class SavedRequestsController(ISender sender):ControllerBase
 {
-    public sealed record SaveRequestBody(string Name,string Method,string Url,string HeadersJson,string Body);
+    public sealed record SaveRequestBody(string Name,string Method,string Url,string HeadersJson,string Body,
+    string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript="");
     [HttpGet]
     public async Task<IActionResult> List(Guid workspaceId,Guid collectionId,CancellationToken ct)
         =>Ok(await sender.Send(new ListSavedRequestsQuery(User.GetUserId(),workspaceId,collectionId),ct));
     [HttpPost]
     public async Task<IActionResult> Save(Guid workspaceId,Guid collectionId,SaveRequestBody body,CancellationToken ct)
-        =>Ok(await sender.Send(new SaveRequestCommand(User.GetUserId(),workspaceId,collectionId,body.Name,body.Method,body.Url,body.HeadersJson,body.Body),ct));
+        =>Ok(await sender.Send(new SaveRequestCommand(User.GetUserId(),workspaceId,collectionId,body.Name,body.Method,body.Url,body.HeadersJson,body.Body,body.BodyMode,body.ContentType,body.FormFieldsJson,body.PreRequestScript,body.PostResponseScript),ct));
     [HttpDelete("{requestId:guid}")]
     public async Task<IActionResult> Delete(Guid workspaceId,Guid collectionId,Guid requestId,CancellationToken ct)
     { await sender.Send(new DeleteSavedRequestCommand(User.GetUserId(),workspaceId,collectionId,requestId),ct);return NoContent(); }

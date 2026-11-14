@@ -51,6 +51,60 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("collections", "collection");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("request_environments", "organization");
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironmentVariable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EnvironmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsSecret")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("StoredValue")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnvironmentId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("request_environment_variables", "organization");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.SavedRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -61,11 +115,31 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("BodyMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("raw");
+
                     b.Property<Guid>("CollectionId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasDefaultValue("application/json");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FormFieldsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
 
                     b.Property<string>("HeadersJson")
                         .IsRequired()
@@ -80,6 +154,18 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
+
+                    b.Property<string>("PostResponseScript")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("PreRequestScript")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -243,6 +329,24 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironment", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironmentVariable", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.RequestEnvironment", null)
+                        .WithMany("Variables")
+                        .HasForeignKey("EnvironmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.SavedRequest", b =>
                 {
                     b.HasOne("Pakpost.Domain.Entities.Collection", null)
@@ -304,6 +408,11 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironment", b =>
+                {
+                    b.Navigation("Variables");
                 });
 #pragma warning restore 612, 618
         }

@@ -12,6 +12,8 @@ public sealed class PakpostDbContext(DbContextOptions<PakpostDbContext> options)
     public DbSet<SavedRequest> SavedRequests => Set<SavedRequest>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<RequestEnvironment> RequestEnvironments => Set<RequestEnvironment>();
+    public DbSet<RequestEnvironmentVariable> RequestEnvironmentVariables => Set<RequestEnvironmentVariable>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
