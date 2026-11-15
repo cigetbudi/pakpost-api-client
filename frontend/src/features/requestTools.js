@@ -43,7 +43,7 @@ export function resolveVars(text, vars, strict = true) {
   return { value, unresolved: [...unresolved] };
 }
 export function resolveRows(rows, vars) {
-  return (rows || []).filter(r=>r.key?.trim()).map(r=>({ key: resolveVars(r.key.trim(),vars).value, value: resolveVars(r.value || '', vars).value, ...('file' in r ? {file:r.file}: {}) }));
+  return (rows || []).filter(r=>r?.enabled!==false&&r.key?.trim()).map(r=>({ key: resolveVars(r.key.trim(),vars).value, value: resolveVars(r.value || '', vars).value, ...('file' in r ? {file:r.file}: {}) }));
 }
 export function syntaxProblem(text, lang) {
   if (!String(text||'').trim()) return null;
@@ -106,8 +106,12 @@ export function buildCommand({method,url,headers,body,format,fields=[],fileBase6
   };
   if (fmt.mode==='raw') {
     prepared.body = resolveVars(body||'',vars).value;
+    const chosen=Object.keys(prepared.headers).find(x=>x.toLowerCase()==='content-type');
+    const disabled=(headers||[]).some(r=>r.key?.trim().toLowerCase()==='content-type'&&r.enabled===false);
+    const mime=disabled?null:chosen?prepared.headers[chosen]:fmt.mime;
     Object.keys(prepared.headers).filter(x=>x.toLowerCase()==='content-type').forEach(x=>delete prepared.headers[x]);
-    if (prepared.body) prepared.headers['Content-Type'] = fmt.mime;
+    prepared.contentType=mime;
+    if (prepared.body&&mime) prepared.headers['Content-Type'] = mime;
   }
   if (fmt.mode==='urlencoded' || fmt.mode==='multipart') {
     prepared.formFields = fields.filter(f=>f.key?.trim()).map(f=>({

@@ -1,9 +1,9 @@
 /** Portable import/export helpers. No shell commands or imported scripts execute here. */
-const EMPTY = () => ({key:'',value:''});
+const EMPTY = () => ({key:'',value:'',description:'',enabled:true});
 const safeString = (x) => String(x ?? '');
-const sanitizeRows = (rows) => Array.isArray(rows) ? rows.filter(x=>x&&typeof x==='object').slice(0,400).map(x=>({key:safeString(x.key),value:safeString(x.value),...(x.fileName?{fileName:safeString(x.fileName)}:{})})) : [];
+const sanitizeRows = (rows) => Array.isArray(rows) ? rows.filter(x=>x&&typeof x==='object').slice(0,400).map(x=>({key:safeString(x.key),value:safeString(x.value),description:safeString(x.description),enabled:x.enabled!==false,...(x.fileName?{fileName:safeString(x.fileName)}:{})})) : [];
 const named = (key) => /^(authorization|proxy-authorization|x-api-key|api-key|cookie|set-cookie|x-signature|x-access-token|x-auth-token|x-client-secret)$/i.test(key);
-export const blankDraft = () => ({ method:'GET',url:'',rows:[EMPTY()],body:'',format:'application/json',formFields:[EMPTY()],binaryFile:{name:'',base64:''},preScript:'',postScript:'',reqTab:'params',resTab:'body',result:null,params:[EMPTY()],authType:'none',bearerToken:'',scriptLog:[],scriptTests:[],scriptError:'' });
+export const blankDraft = () => ({ method:'GET',url:'',rows:[EMPTY()],body:'',format:'application/json',formFields:[EMPTY()],binaryFile:{name:'',base64:''},preScript:'',postScript:'',documentation:'',reqTab:'params',resTab:'body',result:null,params:[EMPTY()],authType:'none',bearerToken:'',scriptLog:[],scriptTests:[],scriptError:'' });
 
 /** Tokenizer for pasted cURL commands, never invokes a shell. */
 export function shellWords(text) {
@@ -110,15 +110,15 @@ export function parsePostmanCollection(doc){
       draft.method=safeString(req.method||'GET').toUpperCase();
       const rawUrl=pmUrl(req.url);
       const clean=splitQuery(rawUrl);draft.url=clean.url;
-      draft.params=Array.isArray(req.url?.query)?req.url.query.filter(q=>!q.disabled).map(q=>({key:safeString(q.key),value:safeString(q.value)})):(clean.params||[EMPTY()]);
+      draft.params=Array.isArray(req.url?.query)?req.url.query.map(q=>({key:safeString(q.key),value:safeString(q.value),description:safeString(q.description),enabled:q.disabled!==true})):(clean.params||[EMPTY()]);
       let headerArr=Array.isArray(req.header)?req.header:typeof req.header==='string'?req.header.split(/\r?\n/).filter(Boolean).map(x=>({key:x.split(':')[0],value:x.slice(x.indexOf(':')+1)})):[];
-      draft.rows=[...sanitizeRows(headerArr.filter(x=>!x.disabled)),EMPTY()];
+      draft.rows=[...sanitizeRows(headerArr.map(x=>({...x,enabled:x.disabled!==true}))),EMPTY()];
       pmBody(req.body,draft);
       const auth=req.auth===undefined?parentAuth:req.auth;
       if(auth?.type==='bearer'){
         draft.authType='bearer';draft.bearerToken=safeString((auth.bearer||[]).find?.(x=>x.key==='token')?.value||auth.bearer?.token||'');
       }
-      draft.preScript=pmScript(item.event,'prerequest');draft.postScript=pmScript(item.event,'test');
+      draft.preScript=pmScript(item.event,'prerequest');draft.postScript=pmScript(item.event,'test');draft.documentation=safeString(req.description||item.description);
       result.push(draft);
       if(result.length>200)throw Error('Import limit: maximum 200 requests.');
     }
@@ -136,7 +136,8 @@ export function safeExportDraft(draft,includeSecrets=false){
 export function createPostmanCollection(drafts,{includeSecrets=false,name='Pakpost requests'}={}){
   const items=drafts.map(d=>{
     const r=safeExportDraft(d,includeSecrets);
-    const request={method:r.method||'GET',header:r.rows.filter(x=>x.key).map(x=>({key:x.key,value:x.value,type:'text'})),url:{raw:r.url+(r.params.filter(x=>x.key).length?(r.url.includes('?')?'&':'?')+new URLSearchParams(r.params.filter(x=>x.key).map(x=>[x.key,x.value])).toString():'') ,query:r.params.filter(x=>x.key).map(x=>({key:x.key,value:x.value}))},description:'Exported from Pakpost'};
+    const enabledParams=r.params.filter(x=>x.key&&x.enabled!==false);
+    const request={method:r.method||'GET',header:r.rows.filter(x=>x.key).map(x=>({key:x.key,value:x.value,type:'text',description:x.description||'',disabled:x.enabled===false})),url:{raw:r.url+(enabledParams.length?(r.url.includes('?')?'&':'?')+new URLSearchParams(enabledParams.map(x=>[x.key,x.value])).toString():'') ,query:r.params.filter(x=>x.key).map(x=>({key:x.key,value:x.value,description:x.description||'',disabled:x.enabled===false}))},description:r.documentation||'Exported from Pakpost'};
     if(r.authType==='bearer'&&r.bearerToken)request.auth={type:'bearer',bearer:[{key:'token',value:r.bearerToken,type:'string'}]};
     if(r.format==='multipart/form-data')request.body={mode:'formdata',formdata:r.formFields.filter(x=>x.key).map(x=>({key:x.key,...(x.fileName?{type:'file',src:x.fileName}:{type:'text',value:x.value})}))};
     else if(r.format==='application/x-www-form-urlencoded')request.body={mode:'urlencoded',urlencoded:r.formFields.filter(x=>x.key).map(x=>({key:x.key,value:x.value,type:'text'}))};
@@ -158,23 +159,35 @@ export function parseImportText(text){
   if(isCurl(text))return {requests:[parseCurl(text)],environments:[],kind:'curl'};
   let data;try{data=JSON.parse(text);}catch{throw Error('Invalid JSON. Paste cURL or choose a Pakpost/Postman JSON export.');}
   if(data?.format==='pakpost-workbench-session')return {...parseSession(data),kind:'pakpost'};
-  if(Array.isArray(data?.item)){const requests=parsePostmanCollection(data);return {requests,environments:[],kind:'postman',collections:[{name:safeString(data.info?.name||'Imported collection'),requests}]};}
+  if(Array.isArray(data?.item)){const requests=parsePostmanCollection(data);return {requests,environments:[],kind:'postman',collections:[{name:safeString(data.info?.name||'Imported collection'),documentation:safeString(data.info?.description),folderDocs:postmanFolderDocs(data.item),requests}]};}
   if(Array.isArray(data?.values))return {requests:[],environments:[{name:data.name||'Imported environment',variables:data.values.filter(v=>v.enabled!==false).map(v=>({key:safeString(v.key),value:safeString(v.value),isSecret:v.type==='secret'}))}],kind:'environment'};
   throw Error('Unsupported file. Use a Postman v2.1 collection, Postman environment, Pakpost session, or cURL.');
+}
+
+/** Extract folder-level description into stable relative-path keys. */
+export function postmanFolderDocs(items,base=[],out={}){
+  for(const node of items||[]){
+    if(!Array.isArray(node?.item))continue;
+    const path=[...base,safeString(node.name)];
+    if(node.description)out[JSON.stringify(path)]=safeString(node.description);
+    postmanFolderDocs(node.item,path,out);
+  }
+  return out;
 }
 
 /** Preserve nested imported Postman folders when exporting local collections. */
 export function createLocalPostmanExport(collections,{includeSecrets=false}={}){
   const root=createPostmanCollection([],{name:'Pakpost local collections',includeSecrets});
   for(const col of collections||[]){
-    const parent={name:col.name,item:[]};root.item.push(parent);
+    const parent={name:col.name,description:col.documentation||'',item:[]};root.item.push(parent);
     for(const draft of col.requests||[]){
       const exported=createPostmanCollection([draft],{includeSecrets}).item[0];
       exported.name=draft.requestName||draft.name||'Request';
       let target=parent;
-      for(const segment of draft.folderPath||[]){
+      const segments=[];for(const segment of draft.folderPath||[]){
+        segments.push(segment);
         let folder=target.item.find(x=>Array.isArray(x.item)&&x.name===segment);
-        if(!folder){folder={name:segment,item:[]};target.item.push(folder);}
+        if(!folder){folder={name:segment,item:[],description:col.folderDocs?.[JSON.stringify(segments)]||''};target.item.push(folder);}
         target=folder;
       }
       target.item.push(exported);

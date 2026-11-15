@@ -4,6 +4,10 @@ import {
   ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
 import { TextEditor } from './features/Editors';
+import { KeyValueEditor } from './features/KeyValueEditor';
+import { DocumentationEditor } from './features/DocumentationEditor';
+import { emptyRow, isEnabled, encodeStoredHeaders, decodeStoredHeaders } from './features/requestMetadata';
+import {readWorkspaceCollectionDocs,writeWorkspaceCollectionDocs,workspaceDocKey} from './features/documentationStore';
 import { RetroSelect } from './features/RetroSelect';
 import { VariableUrlInput } from './features/VariableUrlInput';
 import { FastTooltip } from './features/FastTooltip';
@@ -31,7 +35,7 @@ import { postmanRequestSnapshot } from './features/postmanCompat';
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-const EMPTY_HEADER = { key: '', value: '' };
+const EMPTY_HEADER = { key: '', value: '', description: '', enabled: true };
 const storedToken = () => sessionStorage.getItem('pakpost_token') || '';
 const getMessage = (e) => e?.message || 'Something went wrong';
 
@@ -103,6 +107,7 @@ export default function App() {
   const [url, setUrl] = useState(RECOVERED.url ?? 'https://httpbin.org/get');
   const [rows, setRows] = useState(RECOVERED.rows || [{ ...EMPTY_HEADER }]);
   const [body, setBody] = useState(RECOVERED.body || '');
+  const [documentation,setDocumentation]=useState(RECOVERED.documentation||'');
   const [format, setFormat] = useState(RECOVERED.format || 'application/json');
   const [formFields, setFormFields] = useState(RECOVERED.formFields || [{key:'',value:''}]);
   const [binaryFile, setBinaryFile] = useState({name:RECOVERED.binaryFile?.name || '',base64:''});
@@ -146,6 +151,9 @@ export default function App() {
   const [actionDialog,setActionDialog] = useState(null);
   const [actionName,setActionName] = useState('');
   const [workspaceMenu,setWorkspaceMenu] = useState(null);
+  const [documentationTarget,setDocumentationTarget]=useState(null);
+  const [docBusy,setDocBusy]=useState(false);
+  const [workspaceCollectionDocs,setWorkspaceCollectionDocs]=useState(()=>readWorkspaceCollectionDocs(localStorage));
   const [workspaceSorted,setWorkspaceSorted]=useState(()=>{try{return JSON.parse(localStorage.getItem('pakpost_workspace_sort')||'{}')}catch{return {}}});
   const tabDragRef=useRef(null);
   const [saveName, setSaveName] = useState('New request');
@@ -230,9 +238,9 @@ export default function App() {
     setEditingRequestName(false);
   }
 
-  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
+  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
   function restoreDraft(next) {
-    setMethod(next.method||'GET');setUrl(next.url||'');setRows(next.rows||[{...EMPTY_HEADER}]);setBody(next.body||'');
+    setMethod(next.method||'GET');setUrl(next.url||'');setRows(next.rows||[{...EMPTY_HEADER}]);setBody(next.body||'');setDocumentation(next.documentation||'');
     setFormat(next.format||'application/json');setFormFields(next.formFields||[{key:'',value:''}]);
     setBinaryFile(next.binaryFile||{name:'',base64:''});
     setPreScript(next.preScript||'');setPostScript(next.postScript||'');
@@ -242,6 +250,7 @@ export default function App() {
   }
   function stashActive() { draftsRef.current[activeTabRef.current] = snapshot(); }
   useEffect(()=>writeLocalCollections(localCollections),[localCollections]);
+  useEffect(()=>writeWorkspaceCollectionDocs(localStorage,workspaceCollectionDocs),[workspaceCollectionDocs]);
   useEffect(()=>{localStorage.setItem('pakpost_v14_global_collection_sort',collectionSort)},[collectionSort]);
   useEffect(()=>{localStorage.setItem('pakpost_v14_right_width',String(rightWidth))},[rightWidth]);
   function openContext(view){setExplorerTab(view);setSidebarCollapsed(false);setPage('tester');}
@@ -270,7 +279,7 @@ export default function App() {
     const timer=setTimeout(persist,600);
     window.addEventListener('beforeunload',persist);
     return ()=>{clearTimeout(timer);window.removeEventListener('beforeunload',persist)};
-  },[method,url,rows,body,format,formFields,binaryFile,preScript,postScript,scriptLog,scriptTests,scriptError,
+  },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,scriptLog,scriptTests,scriptError,
     reqTab,resTab,result,params,authType,bearerToken,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope]);
   function selectTab(id) {
     setEditingRequestName(false);
@@ -321,6 +330,53 @@ export default function App() {
       setEnvScope('local');setActiveEnvId(added[0].id);
     }
   }
+  function openDocumentation(target){
+    let initial='';
+    if(target.scope==='local'){
+      const collection=localCollections.find(c=>c.id===target.collectionId);
+      if(target.type==='collection')initial=collection?.documentation||'';
+      if(target.type==='folder')initial=collection?.folderDocs?.[JSON.stringify(target.folderPath||[])]||'';
+      if(target.type==='request')initial=collection?.requests?.find(r=>r.id===target.requestId)?.documentation||'';
+    }else if(target.type==='collection'){
+      initial=workspaceCollectionDocs[workspaceDocKey(selectedWs,target.collectionId)]||'';
+    }else{
+      const request=(workspaceRequestLists[workspaceCollectionKey(selectedWs,target.collectionId)]||savedRequests).find(r=>r.id===target.requestId);
+      initial=decodeStoredHeaders(request?.headersJson).documentation||'';
+    }
+    setDocumentationTarget({...target,workspaceId:selectedWs,initial});
+  }
+  async function saveDocumentation(text){
+    if(!documentationTarget)return;
+    const target=documentationTarget;const value=String(text||'').slice(0,16000);
+    setDocBusy(true);
+    try{
+      if(target.scope==='local'){
+        setLocalCollections(old=>applyLocalAction(old,{type:'saveDocumentation',collectionId:target.collectionId,requestId:target.requestId,folderPath:target.folderPath,documentation:value}));
+      }else if(target.type==='collection'){
+        // Current Neon collection DTO has no description property. Persist browser-locally.
+        setWorkspaceCollectionDocs(old=>({...old,[workspaceDocKey(target.workspaceId,target.collectionId)]:value}));
+      }else{
+        const base=`/api/workspaces/${target.workspaceId}/collections/${target.collectionId}/requests`;
+        const requests=await api(base,'GET',undefined,token);
+        const request=requests.find(r=>r.id===target.requestId);
+        if(!request)throw Error('Saved request was not found');
+        const meta=decodeStoredHeaders(request.headersJson);
+        const saved=await api(`${base}/${target.requestId}`,'PUT',{
+          ...request,headersJson:encodeStoredHeaders(meta.headers,meta.params,value)
+        },token);
+        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(target.workspaceId,target.collectionId)]:requests.map(r=>r.id===saved.id?saved:r)}));
+        if(selectedCol===target.collectionId)setSavedRequests(requests.map(r=>r.id===saved.id?saved:r));
+      }
+      if(target.type==='request'){
+        // Keep open tab's draft metadata in sync so later Save doesn't erase docs.
+        for(const tab of openTabs){if(tab.source?.scope===target.scope&&tab.source?.collectionId===target.collectionId&&tab.source?.requestId===target.requestId){
+          if(draftsRef.current[tab.id])draftsRef.current[tab.id]={...draftsRef.current[tab.id],documentation:value};
+          if(tab.id===activeTabRef.current)setDocumentation(value);
+        }}
+      }
+      setDocumentationTarget(null);setNotice('Documentation saved');
+    }catch(e){setNotice(`Cannot save documentation: ${getMessage(e)}`)}finally{setDocBusy(false)}
+  }
   function createLocalCollection(e){
     e.preventDefault();
     const name=localCollectionName.trim();if(!name)return;
@@ -368,6 +424,7 @@ export default function App() {
     const collection=localCollections.find(c=>c.id===collectionId);
     if(!collection)return;
     if(action==='exportCollection'){openExportChoice({kind:'collection',scope:'local',collectionId,name:collection.name});return;}
+    if(action==='documentation'){openDocumentation({scope:'local',type:requestId?'request':folderPath?.length?'folder':'collection',collectionId,requestId,folderPath,name:item.name||collection.name});return;}
     if(action==='newRequest'){
       createCollectionDraft('local',collectionId,folderPath||[]);
       return;
@@ -422,16 +479,17 @@ export default function App() {
   function showWorkspaceMenu(e,item){
     e.preventDefault();e.stopPropagation();
     const rect=e.currentTarget.getBoundingClientRect();
-    setWorkspaceMenu({...item,x:Math.max(8,Math.min(e.clientX||rect.right,window.innerWidth-245)),y:Math.max(8,Math.min(e.clientY||rect.bottom,window.innerHeight-282))});
+    setWorkspaceMenu({...item,x:Math.max(8,Math.min(e.clientX||rect.right,window.innerWidth-245)),y:Math.max(8,Math.min(e.clientY||rect.bottom,window.innerHeight-365))});
   }
   function workspaceDraft(item){
-    let headers={};try{headers=JSON.parse(item.headersJson||'{}')}catch{}
+    const saved=decodeStoredHeaders(item.headersJson);
     let fields=[];try{fields=JSON.parse(item.formFieldsJson||'[]')}catch{}
-    return {...blankDraft(),...item,rows:[...toRows(headers),{...EMPTY_HEADER}],format:item.contentType||'application/json',
+    return {...blankDraft(),...item,rows:[...saved.headers,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,format:item.contentType||'application/json',
       formFields:fields,preScript:item.preRequestScript||'',postScript:item.postResponseScript||''};
   }
   async function handleWorkspaceMenu(action,item){
     setWorkspaceMenu(null);
+    if(action==='documentation'){openDocumentation({scope:'workspace',type:item.type==='request'?'request':'collection',collectionId:item.collectionId,requestId:item.requestId,name:item.name});return;}
     if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
     }
@@ -453,6 +511,7 @@ export default function App() {
         if(list.length>100)throw Error('Duplicate limit: 100 saved requests');
         const source=collections.find(c=>c.id===item.collectionId);
         const destination=await api(base,'POST',{name:`${source?.name||'Collection'} (copy)`},token);
+        setWorkspaceCollectionDocs(old=>({...old,[workspaceDocKey(selectedWs,destination.id)]:old[workspaceDocKey(selectedWs,item.collectionId)]||''}));
         for(const req of list)await api(`${base}/${destination.id}/requests`,'POST',
           {name:req.name,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
         setCollections(await api(base,'GET',undefined,token));return;
@@ -573,11 +632,11 @@ export default function App() {
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
   function loadSavedRequest(item) {
-    let savedRows;
-    try { savedRows = toRows(JSON.parse(item.headersJson || '{}')); } catch { savedRows = []; }
+    const saved=decodeStoredHeaders(item.headersJson);
+    const savedRows=saved.headers;
     let formFields = [];
     try { formFields = JSON.parse(item.formFieldsJson||'[]'); }catch{}
-    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
+    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
       {scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId||selectedCol,requestId:item.id});
   }
 
@@ -633,7 +692,8 @@ export default function App() {
           const list=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
           drafts=list.map(workspaceDraft);
         }
-        const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection});
+        const documentation=scope==='workspace'?workspaceCollectionDocs[workspaceDocKey(selectedWs,collectionId)]||'':'';
+        const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection,documentation});
         downloadJson(output,exportFileName(name,exportFormat));
       }
       setNotice(`Exported ${name} as ${exportFormat==='openapi'?'OpenAPI':'Postman'}`);setExportChoice(null);
@@ -692,10 +752,10 @@ export default function App() {
   }
   function codePreviewRequest(){
     const fmt=bodyFormat(format);
-    const query=params.filter(x=>x.key.trim()).map(x=>`${encodeURIComponent(x.key)}=${encodeURIComponent(x.value||'')}`).join('&');
+    const query=params.filter(x=>x.key.trim()&&isEnabled(x)).map(x=>`${encodeURIComponent(x.key)}=${encodeURIComponent(x.value||'')}`).join('&');
     const target=url+(query?(url.includes('?')?'&':'?')+query:'');
     const headers={...requestHeaderObject()};
-    if(fmt.mode==='raw'&&body&&!Object.keys(headers).some(x=>x.toLowerCase()==='content-type'))headers['Content-Type']=fmt.mime;
+    if(fmt.mode==='raw'&&body&&!rows.some(x=>x.key?.trim().toLowerCase()==='content-type'&&x.enabled===false)&&!Object.keys(headers).some(x=>x.toLowerCase()==='content-type'))headers['Content-Type']=fmt.mime;
     return {method,url:target,headers:maskSensitiveHeaders({headers}).headers,body:languageFromMime(format)==='json'?stripJsonComments(body):body,bodyMode:fmt.mode,contentType:format,
       formFields:formFields.map(x=>({key:x.key,value:x.value,fileName:x.fileName,base64:x.fileBase64})),fileName:binaryFile.name};
   }
@@ -807,7 +867,7 @@ export default function App() {
     const onKeyboard = e => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if(page === 'tester' && !busyAction && !saveOpen && !actionDialog)saveCurrent();
+        if(page === 'tester' && !busyAction && !saveOpen && !actionDialog && !documentationTarget)saveCurrent();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && page === 'tester') {
@@ -817,12 +877,12 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyboard);
     return () => window.removeEventListener('keydown', onKeyboard);
-  }, [page, loading, method, url, rows, body, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,actionDialog]);
+  }, [page, loading, method, url, rows, body, documentation, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,actionDialog,documentationTarget]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
   const activeTeam = teams.find(x => x.id === selectedTeam);
-  const headerCount = rows.filter(x => x.key.trim()).length;
-  const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()).map(x => [x.key.trim(), x.value]));
+  const headerCount = rows.filter(x => x.key.trim()&&isEnabled(x)).length;
+  const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()&&isEnabled(x)).map(x => [x.key.trim(), x.value]));
   async function sendRequest() {
     if(!url.trim()){setNotice('Enter a request URL first');return;}
     if(loading)return;
@@ -880,7 +940,7 @@ export default function App() {
   }
 
   const activeSource=()=>openTabs.find(t=>t.id===activeTabRef.current)?.source;
-  const currentSavePayload=(name)=>({name,method,url,headersJson:JSON.stringify(requestHeaderObject()),body,
+  const currentSavePayload=(name)=>({name,method,url,headersJson:encodeStoredHeaders(rows,params,documentation),body,
     bodyMode:bodyFormat(format).mode,contentType:format,
     formFieldsJson:JSON.stringify(formFields.map(({key,value,fileName,contentType})=>({key,value,fileName,contentType}))),
     preRequestScript:preScript,postResponseScript:postScript});
@@ -1092,8 +1152,8 @@ export default function App() {
         </div>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
-            ['newRequest','New request'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
-          ]:[['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
+            ['newRequest','New request'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
+          ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
             <MenuActionItem key={id} action={id} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
@@ -1130,8 +1190,8 @@ export default function App() {
                 {[[ 'params','Params' ],[ 'headers','Headers' ],[ 'body','Body' ],[ 'auth','Authorization' ],[ 'scripts','Scripts' ]].map(([id, name]) => <button key={id} className={reqTab === id ? 'active' : ''} onClick={() => setReqTab(id)}>{name}{id === 'headers' && headerCount > 0 && <span className="pp-tiny-count">{headerCount}</span>}</button>)}
               </div>
               <div className="pp-panel-body pp-request-body">
-                {reqTab === 'params' && <><div className="pp-form-caption"><span>QUERY PARAMETERS</span><span>Added to URL when you send</span></div><div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE</span><span/></div>{params.map((r,i) => <div className="pp-keyvalue-row" key={i}><input placeholder="parameter" aria-label="Query key" value={r.key} onChange={e => setParams(v => v.map((x,j)=> j === i ? {...x, key:e.target.value}:x))}/><input placeholder="value" aria-label="Query value" value={r.value} onChange={e => setParams(v => v.map((x,j)=> j === i ? {...x, value:e.target.value}:x))}/><IconButton icon={X} label="Remove query parameter" onClick={() => setParams(v => v.filter((_,j)=>j!==i))}/></div>)}<button className="pp-inline-add" onClick={() => setParams(v => [...v, { ...EMPTY_HEADER }])}><Plus size={14}/> Add parameter</button></>}
-                {reqTab === 'headers' && <><div className="pp-form-caption"><span>REQUEST HEADERS</span><span>Custom key-value pairs</span></div><div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE</span><span/></div>{rows.map((r,i) => <div className="pp-keyvalue-row" key={i}><input value={r.key} spellCheck="false" placeholder="Content-Type" aria-label="Header key" onChange={e => setRows(v => v.map((x,j)=>j===i?{...x,key:e.target.value}:x))}/><input value={r.value} spellCheck="false" placeholder="application/json" aria-label="Header value" onChange={e => setRows(v => v.map((x,j)=>j===i?{...x,value:e.target.value}:x))}/><IconButton icon={X} label="Remove header" onClick={() => setRows(v => v.filter((_,j)=>j!==i))}/></div>)}<button className="pp-inline-add" onClick={() => setRows(v => [...v, { ...EMPTY_HEADER }])}><Plus size={14}/> Add header</button></>}
+                {reqTab === 'params' && <KeyValueEditor kind="params" rows={params} onChange={setParams}/>}
+                {reqTab === 'headers' && <KeyValueEditor kind="headers" rows={rows} onChange={setRows}/>}
                 {reqTab === 'body' && <div className="pp-body-composer">
                   <div className="pp-body-toolbar"><div className="pp-body-format-label"><span>Body type</span><RetroSelect ariaLabel="Body type" className="pp-body-format-select" value={format} onChange={selectFormat} options={BODY_FORMATS.map(f=>({value:f.mime,label:f.label,group:f.group}))}/></div>
                     {bodyFormat(format).mode==='raw'&&<button title="Beautify request body" onClick={beautifyBody}><WandSparkles size={15}/> Beautify</button>}
@@ -1201,6 +1261,7 @@ export default function App() {
     <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">Guest testing enabled · Private addresses blocked by proxy</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
     {commandOpen && <div className="pp-command-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCommandOpen(false);}}><section className="pp-command-dialog" role="dialog" aria-modal="true" aria-label="Quick search and commands"><div className="pp-command-input-wrap"><Search size={18}/><input autoFocus aria-label="Search commands" value={commandQuery} onChange={e=>{setCommandQuery(e.target.value);setCommandIndex(0);}} onKeyDown={e=>{if(e.key==='ArrowDown'){e.preventDefault();setCommandIndex(i=>Math.min(visibleCommandItems.length-1,i+1));}else if(e.key==='ArrowUp'){e.preventDefault();setCommandIndex(i=>Math.max(0,i-1));}else if(e.key==='Enter'&&visibleCommandItems.length){e.preventDefault();setCommandOpen(false);visibleCommandItems[Math.min(commandIndex,visibleCommandItems.length-1)].run();}}} placeholder="Find a request or run a command..."/><kbd>Esc</kbd></div><div className="pp-command-results" role="listbox">{visibleCommandItems.length?visibleCommandItems.map((item,i)=><button type="button" role="option" aria-selected={commandIndex===i} onMouseEnter={()=>setCommandIndex(i)} key={item.key} onClick={()=>{setCommandOpen(false);item.run();}}>{item.method?<span className={`pp-http-label ${item.method.toLowerCase()}`}>{item.method}</span>:<Code2 size={15}/>}<span><strong>{item.title}</strong><small>{item.subtitle}</small></span><ArrowRight size={14}/></button>):<div className="pp-command-empty">No matching requests or commands.</div>}</div></section></div>}
     {notice && createPortal(<div className="pp-toast pp-toast-v17" role="status" aria-live="polite"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
+    {documentationTarget&&<Dialog title={`Documentation · ${documentationTarget.type}`} subtitle="Write Markdown notes for OpenAPI/Postman exports." onClose={()=>setDocumentationTarget(null)}><DocumentationEditor key={`${documentationTarget.scope}:${documentationTarget.collectionId}:${documentationTarget.requestId||JSON.stringify(documentationTarget.folderPath||[])}`} title={documentationTarget.name||'Item'} initial={documentationTarget.initial} busy={docBusy} onCancel={()=>setDocumentationTarget(null)} onSave={saveDocumentation}/></Dialog>}
     {exportChoice&&<Dialog title={`Export ${exportChoice.kind}`} subtitle={`Export “${exportChoice.name}” as a downloadable JSON file.`} onClose={()=>setExportChoice(null)}>
       <div className="pp-v17-export-options">
         <p>Format</p><div className="pp-v17-export-choices">

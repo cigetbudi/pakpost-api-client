@@ -9,7 +9,7 @@ export function freshRequest(name='New Request') {
 }
 export function requestFingerprint(draft={},name='') {
   const rows=(value)=>Array.isArray(value)?value.map(row=>({
-    key:row.key||'',value:row.value||'',fileName:row.fileName||'',contentType:row.contentType||'',fileBase64:row.fileBase64||''
+    key:row.key||'',value:row.value||'',description:row.description||'',enabled:row.enabled!==false,fileName:row.fileName||'',contentType:row.contentType||'',fileBase64:row.fileBase64||''
   })):[];
   const serialized=JSON.stringify({
     method:draft.method||'GET',url:draft.url||'',headers:rows(draft.rows),
@@ -17,7 +17,7 @@ export function requestFingerprint(draft={},name='') {
     formFields:rows(draft.formFields),binaryFileName:draft.binaryFile?.name||'',
     binaryFileBase64:draft.binaryFile?.base64||'',
     authType:draft.authType||'none',bearerToken:draft.bearerToken||'',
-    preScript:draft.preScript||'',postScript:draft.postScript||''
+    preScript:draft.preScript||'',postScript:draft.postScript||'',documentation:draft.documentation||''
   });
   // The fingerprint is cached locally; never persist raw Authorization headers or secrets in it.
   let first=0x811c9dc5,second=0x9e3779b1;

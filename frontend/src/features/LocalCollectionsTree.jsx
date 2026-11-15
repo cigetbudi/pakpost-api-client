@@ -6,15 +6,15 @@ import {collectLocalExpansionKeys} from './collectionExpansion';
 import {MenuActionItem} from './MenuActionItem';
 
 const menus={
-  collection:[['newRequest','New request'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
-  folder:[['newRequest','New request here'],['renameFolder','Rename folder'],['duplicateFolder','Duplicate folder'],['sortFolder','Sort folder'],['deleteFolder','Delete folder']],
-  request:[['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]
+  collection:[['newRequest','New request'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
+  folder:[['newRequest','New request here'],['documentation','Documentation'],['renameFolder','Rename folder'],['duplicateFolder','Duplicate folder'],['sortFolder','Sort folder'],['deleteFolder','Delete folder']],
+  request:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]
 };
 const DRAG_MIME='application/x-pakpost-local-request';
 function popupAt(event,setMenu,context){event.preventDefault();event.stopPropagation();
   const rect=event.currentTarget.getBoundingClientRect();
   const x=event.clientX||rect.right,y=event.clientY||rect.bottom;
-  setMenu({...context,x:Math.min(x,window.innerWidth-245),y:Math.min(y,window.innerHeight-270)});
+  setMenu({...context,x:Math.min(x,window.innerWidth-245),y:Math.min(y,window.innerHeight-345)});
 }
 function Branch({node,collectionId,path=[],depth=0,search,onOpen,onMenu,expanded,toggle,onMove,pendingTabs,onOpenPending}){
   return <>

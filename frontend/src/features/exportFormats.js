@@ -35,8 +35,8 @@ function splitUrl(raw){
 }
 function contentType(draft){return draft.format||draft.contentType||'application/json'}
 /** OpenAPI represents endpoint contracts, not executable Postman scripts or crypto hooks. */
-export function exportOpenApiCollection(drafts,{name='Pakpost collection',includeSecrets=false}={}){
-  const doc={openapi:'3.1.0',info:{title:name,version:'1.0.0',description:'Exported from Pakpost. Pre/post scripts and file bytes are not translated to OpenAPI.'},paths:{}};
+export function exportOpenApiCollection(drafts,{name='Pakpost collection',includeSecrets=false,documentation='',folderDocs={}}={}){
+  const doc={openapi:'3.1.0',info:{title:name,version:'1.0.0',description:documentation||'Exported from Pakpost. Pre/post scripts and file bytes are not translated to OpenAPI.'},paths:{}};
   const servers=new Map();let hasAuth=false;
   for(let i=0;i<(drafts||[]).length;i++){
     const request=safeExportDraft(drafts[i],includeSecrets);
@@ -45,12 +45,15 @@ export function exportOpenApiCollection(drafts,{name='Pakpost collection',includ
     const target=splitUrl(request.url);const pathname=target.path||'/';
     if(target.server)servers.set(JSON.stringify(target.server),target.server);
     const operation={summary:request.requestName||request.name||`${method.toUpperCase()} ${pathname}`,
+      ...(request.documentation?{description:request.documentation}:{}),
       operationId:`pakpost_${method}_${i+1}`,responses:{default:{description:'Response'}}};
+    if(request.folderPath?.length){const tag=request.folderPath.join(' / ');operation.tags=[tag];if(!doc.tags)doc.tags=[];if(!doc.tags.some(t=>t.name===tag))doc.tags.push({name:tag,description:folderDocs[JSON.stringify(request.folderPath)]||''});}
     const pathVars=[...pathname.matchAll(/\{([\w.-]+)\}/g)].map(m=>m[1]);
     const params=pathVars.map(key=>({name:key,in:'path',required:true,schema:{type:'string'}}));
-    const queryMap=new Map((request.params||[]).filter(v=>v.key).map(v=>[v.key,v.value]));
-    for(const [key,value] of new URLSearchParams(target.query))if(!queryMap.has(key))queryMap.set(key,value);
-    for(const [key] of queryMap)params.push({name:key,in:'query',required:false,schema:{type:'string'}});
+    const queryMap=new Map((request.params||[]).filter(v=>v.key&&v.enabled!==false).map(v=>[v.key,{value:v.value,description:v.description||''}]));
+    for(const [key,value] of new URLSearchParams(target.query))if(!queryMap.has(key))queryMap.set(key,{value,description:''});
+    for(const [key,data] of queryMap)params.push({name:key,in:'query',required:false,schema:{type:'string'},...(data.description?{description:data.description}:{})});
+    for(const header of request.rows||[]){if(!header.key||header.enabled===false||/^(content-type|authorization)$/i.test(header.key))continue;params.push({name:header.key,in:'header',required:false,schema:{type:'string'},...(header.description?{description:header.description}:{})});}
     if(params.length)operation.parameters=params;
     if(request.authType==='bearer'){hasAuth=true;operation.security=[{bearerAuth:[]}];}
     const mode=contentType(request);
@@ -71,10 +74,11 @@ export function exportOpenApiCollection(drafts,{name='Pakpost collection',includ
   if(hasAuth)doc.components={securitySchemes:{bearerAuth:{type:'http',scheme:'bearer'}}};
   return doc;
 }
-export function exportCollectionByFormat(drafts,{name='Pakpost collection',format='postman',includeSecrets=false,localCollection=null}={}){
-  if(format==='openapi')return exportOpenApiCollection(drafts,{name,includeSecrets});
-  if(localCollection){const doc=createLocalPostmanExport([localCollection],{includeSecrets});return {...doc,info:{...doc.info,name},item:doc.item[0]?.item||[]};}
-  return createPostmanCollection(drafts,{name,includeSecrets});
+export function exportCollectionByFormat(drafts,{name='Pakpost collection',format='postman',includeSecrets=false,localCollection=null,documentation='',folderDocs={}}={}){
+  const doc=localCollection?.documentation??documentation;const folders=localCollection?.folderDocs??folderDocs;
+  if(format==='openapi')return exportOpenApiCollection(drafts,{name,includeSecrets,documentation:doc,folderDocs:folders});
+  if(localCollection){const doc=createLocalPostmanExport([localCollection],{includeSecrets});return {...doc,info:{...doc.info,name,description:localCollection.documentation||doc.info.description},item:doc.item[0]?.item||[]};}
+  const exported=createPostmanCollection(drafts,{name,includeSecrets});return {...exported,info:{...exported.info,description:doc||exported.info.description}};
 }
 export function exportEnvironmentByFormat(env,{format='postman',includeSecrets=false}={}){
   return format==='openapi'?exportOpenApiEnvironment(env,{includeSecrets}):exportPostmanEnvironment(env,{includeSecrets});

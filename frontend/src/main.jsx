@@ -18,3 +18,5 @@ import './v17-environment-branding.css';
 import './v18-menu-consistency.css';
 
 import './v19-inline-name.css';
+
+import './v21-documentation-headers.css';
