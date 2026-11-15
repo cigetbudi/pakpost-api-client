@@ -982,7 +982,7 @@ export default function App() {
 
   return <div className="pp-app">
     <header className="pp-top">
-      <div className="pp-logo pp-branding-v17" aria-label="Pakpost"><img src={isDarkAppearance(theme)?"/branding/pakpost-dark.webp":"/branding/pakpost-light.webp"} alt="Pakpost" width="155" height="48" decoding="async"/></div>
+      <div className="pp-logo pp-branding-v17" aria-label="Pakpost"><img src={isDarkAppearance(theme)?"/branding/pakpost-logo-dark.svg":"/branding/pakpost-logo-light.svg"} alt="Pakpost" width="155" height="48" decoding="async"/></div>
       <button className="pp-top-search" type="button" aria-label="Search requests and commands" onClick={()=>{setCommandQuery('');setCommandIndex(0);setCommandOpen(true);}}><Search size={15}/><span>Search requests and commands</span><kbd>Ctrl K</kbd></button>
       <div className="pp-top-right">
         <div className="pp-env-top"><span>ENV</span>

@@ -309,3 +309,8 @@ button{border:0;background:none}h1,h2,h3,p{margin:0}
 .pp-collection-motion-inner{min-height:0;overflow:hidden;transform:translateY(-5px);transition:transform 160ms cubic-bezier(.2,.7,.25,1)}
 .pp-collection-motion.is-open>.pp-collection-motion-inner{transform:translateY(0)}
 @media (prefers-reduced-motion:reduce){.pp-collection-motion,.pp-collection-motion-inner,.pp-collection-expand-controls button{transition:none!important;transform:none!important}}
+
+/* JSONC comment lines: CodeMirror's JSON parser highlights values correctly;
+   only comment-only lines need this light, viewport-scoped override. */
+.pp-cm-editor .pp-jsonc-comment,
+.pp-cm-editor .pp-jsonc-comment * {color:var(--muted)!important;font-style:italic}

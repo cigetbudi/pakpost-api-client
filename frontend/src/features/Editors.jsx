@@ -7,16 +7,43 @@ import {javascript} from '@codemirror/lang-javascript';
 import {linter} from '@codemirror/lint';
 import {syntaxProblem} from './requestTools';
 import {extraCodeLanguage} from './extraCodeLanguages';
-import {keymap} from '@codemirror/view';
+import {keymap, ViewPlugin, Decoration} from '@codemirror/view';
 import {toggleLineComment} from './commentEditing';
 import {MessageSquareText} from 'lucide-react';
+
+// JSONC drafts use the JSON grammar so property names, values and numbers are
+// colored exactly like the read-only JSON response editor. CodeMirror's JSON
+// grammar doesn't tokenize comments; decorate only visible comment-only lines.
+function visibleJsoncComments(view) {
+  const ranges=[];
+  for(const {from,to} of view.visibleRanges) {
+    let pos=from;
+    while(pos<=to) {
+      const line=view.state.doc.lineAt(pos);
+      const indent=line.text.length-line.text.trimStart().length;
+      if(line.text.startsWith('//',indent) && line.from+indent<line.to) {
+        ranges.push(Decoration.mark({class:'pp-jsonc-comment'}).range(line.from+indent,line.to));
+      }
+      pos=line.to+1;
+    }
+  }
+  return Decoration.set(ranges,true);
+}
+const jsoncCommentHighlight=ViewPlugin.fromClass(class {
+  constructor(view) {this.decorations=visibleJsoncComments(view);}
+  update(update) {
+    if(update.docChanged||update.viewportChanged) {
+      this.decorations=visibleJsoncComments(update.view);
+    }
+  }
+},{decorations:plugin=>plugin.decorations});
 
 export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false}) {
   const editorView=useRef(null);
   const extensions=useMemo(()=>{
     const ex=[];
-    if(lang==='json')ex.push(json());
-    if(lang==='jsonc')ex.push(javascript());
+    if(lang==='json'||lang==='jsonc')ex.push(json());
+    if(lang==='jsonc')ex.push(jsoncCommentHighlight);
     if(lang==='xml')ex.push(xml());
     if(lang==='html')ex.push(html());
     if(lang==='javascript')ex.push(javascript());
