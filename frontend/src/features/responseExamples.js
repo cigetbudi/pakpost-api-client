@@ -117,3 +117,15 @@ export function upsertResponseExample(list,example){
   else next.unshift(example);
   return sanitizeResponseExamples(next);
 }
+
+/** Rename only the example's display label; preserve status, response body and stable ID. */
+export function renameResponseExample(examples,exampleId,name){
+  const next=sanitizeResponseExamples(examples);
+  const trimmed=String(name||'').trim();
+  if(!trimmed)throw Error('Example name is required');
+  if(trimmed.length>140)throw Error('Example name cannot exceed 140 characters');
+  if(!next.some(example=>example.id===exampleId))throw Error('Example not found');
+  if(next.some(example=>example.id!==exampleId&&example.name.toLocaleLowerCase()===trimmed.toLocaleLowerCase()))
+    throw Error('An example with this name already exists');
+  return next.map(example=>example.id===exampleId?{...example,name:trimmed}:example);
+}

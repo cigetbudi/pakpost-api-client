@@ -10,7 +10,7 @@ const menus={
   collection:[['newRequest','New request'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
   folder:[['newRequest','New request here'],['documentation','Documentation'],['renameFolder','Rename folder'],['duplicateFolder','Duplicate folder'],['sortFolder','Sort folder'],['deleteFolder','Delete folder']],
   request:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']],
-  example:[['deleteExample','Delete example']]
+  example:[['renameExample','Rename example'],['deleteExample','Delete example']]
 };
 const DRAG_MIME='application/x-pakpost-local-request';
 function popupAt(event,setMenu,context){event.preventDefault();event.stopPropagation();
@@ -36,7 +36,7 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
       </React.Fragment>;
     })}
     {(pendingTabs||[]).filter(t=>t.source?.collectionId===collectionId && JSON.stringify(t.source?.folderPath||[])===JSON.stringify(path) && (!search||t.name.toLowerCase().includes(search.toLowerCase()))).map(t=>
-      <button key={t.id} type="button" className="pp-tree-request pp-draft-request" style={{paddingLeft:26+depth*14}} title="Unsaved draft — click to edit" onClick={()=>onOpenPending(t.id)}>
+      <button key={t.id} type="button" className="pp-tree-request pp-draft-request" style={{paddingLeft:32+depth*14}} title="Unsaved draft — click to edit" onClick={()=>onOpenPending(t.id)}>
         <span className={`pp-http-label ${(t.method||'GET').toLowerCase()}`}>{t.method||'GET'}</span><span>{t.name}</span><span className="pp-unsaved-dot" title="Not saved"/>
       </button>)}
     {node.requests.map(r=>{
@@ -45,13 +45,13 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
       const examples=(r.responseExamples||[]).filter(example=>!term||requestLabel.includes(term)||`${example.name} ${example.statusCode} ${example.reasonPhrase||''}`.toLowerCase().includes(term));
       return <React.Fragment key={r.id}>
         <div className="pp-tree-item-container" draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(DRAG_MIME,JSON.stringify({collectionId,requestId:r.id}));}} onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(DRAG_MIME))e.preventDefault()}} onDrop={e=>{e.preventDefault();e.stopPropagation();onMove(e,collectionId,path,r.id)}}>
-          <button type="button" className="pp-tree-request pp-local-request" style={{paddingLeft:26+(depth*14)}} title={r.url} onClick={()=>onOpen(r,collectionId)} onContextMenu={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}>
+          <button type="button" className="pp-tree-request pp-local-request" style={{paddingLeft:12+depth*14}} title={r.url} onClick={()=>onOpen(r,collectionId)} onContextMenu={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}>
             <GripVertical className="pp-drag-grip" size={12}/><span className={`pp-http-label ${(r.method||'GET').toLowerCase()}`}>{r.method||'GET'}</span><span>{r.requestName||r.name}</span>
           </button>
           <button type="button" className="pp-tree-action" aria-label={`Actions for request ${r.requestName||r.name}`} onClick={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}><Ellipsis size={15}/></button>
         </div>
         {examples.map(example=><div className="pp-tree-item-container" key={`${r.id}:${example.id}`}>
-          <button type="button" className="pp-tree-example" style={{paddingLeft:40+(depth*14)}} onClick={()=>onOpenExample(r,collectionId,example)} onContextMenu={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})} title={example.description||example.name}>
+          <button type="button" className="pp-tree-example" style={{paddingLeft:58+depth*14}} onClick={()=>onOpenExample(r,collectionId,example)} onContextMenu={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})} title={example.description||example.name}>
             <span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span>{example.name}</span>
           </button>
           <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})}><Ellipsis size={15}/></button>

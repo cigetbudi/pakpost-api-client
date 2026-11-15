@@ -1,5 +1,6 @@
 /** Portable import/export helpers. No shell commands or imported scripts execute here. */
 import {sanitizeResponseExamples} from './responseExamples.js';
+import {parseOpenApiCollection,parseInsomniaV4} from './portableFormats.js';
 const EMPTY = () => ({key:'',value:'',description:'',enabled:true});
 const safeString = (x) => String(x ?? '');
 const sanitizeRows = (rows) => Array.isArray(rows) ? rows.filter(x=>x&&typeof x==='object').slice(0,400).map(x=>({key:safeString(x.key),value:safeString(x.value),description:safeString(x.description),enabled:x.enabled!==false,...(x.fileName?{fileName:safeString(x.fileName)}:{})})) : [];
@@ -184,11 +185,16 @@ export function createSessionExport(drafts,environments,{includeSecrets=false}={
 }
 export function parseImportText(text){
   if(isCurl(text))return {requests:[parseCurl(text)],environments:[],kind:'curl'};
-  let data;try{data=JSON.parse(text);}catch{throw Error('Invalid JSON. Paste cURL or choose a Pakpost/Postman JSON export.');}
+  let data;try{data=JSON.parse(text);}catch{
+    if(/^\s*(?:openapi:|type:\s*collection\.insomnia\.rest\/5\.0)/m.test(text))throw Error('YAML detected. Import OpenAPI 3.1 JSON or Insomnia v4 JSON. YAML is not supported in this lightweight importer yet.');
+    throw Error('Invalid JSON. Paste cURL or choose OpenAPI 3.1, Insomnia v4, Postman, or Pakpost JSON.');
+  }
   if(data?.format==='pakpost-workbench-session')return {...parseSession(data),kind:'pakpost'};
+  if(data?.openapi)return parseOpenApiCollection(data);
+  if(data?.__export_format===4&&Array.isArray(data.resources))return parseInsomniaV4(data);
   if(Array.isArray(data?.item)){const requests=parsePostmanCollection(data);return {requests,environments:[],kind:'postman',collections:[{name:safeString(data.info?.name||'Imported collection'),documentation:safeString(data.info?.description),folderDocs:postmanFolderDocs(data.item),requests}]};}
   if(Array.isArray(data?.values))return {requests:[],environments:[{name:data.name||'Imported environment',variables:data.values.filter(v=>v.enabled!==false).map(v=>({key:safeString(v.key),value:safeString(v.value),isSecret:v.type==='secret'}))}],kind:'environment'};
-  throw Error('Unsupported file. Use a Postman v2.1 collection, Postman environment, Pakpost session, or cURL.');
+  throw Error('Unsupported file. Use OpenAPI 3.1 JSON, Insomnia v4 JSON, Postman v2.1, Pakpost session, or cURL.');
 }
 
 /** Extract folder-level description into stable relative-path keys. */

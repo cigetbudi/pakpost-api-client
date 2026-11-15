@@ -31,7 +31,7 @@ import { isDarkAppearance, normalizeAppearance, readAppearance } from './feature
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
 import { runSandbox } from './features/runScript';
 import { postmanRequestSnapshot } from './features/postmanCompat';
-import {createResponseExample,exampleToResult,sanitizeResponseExamples,statusTone,suggestExampleName,upsertResponseExample} from './features/responseExamples';
+import {createResponseExample,exampleToResult,renameResponseExample,sanitizeResponseExamples,statusTone,suggestExampleName,upsertResponseExample} from './features/responseExamples';
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -311,7 +311,7 @@ export default function App() {
   }
   function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]}) {
     if(requests.length>200)throw Error('Import limit: maximum 200 requests.');
-    if(kind==='postman'||kind==='curl'){
+    if(['postman','curl','openapi','insomnia'].includes(kind)){
       const sources=kind==='curl'?[{name:'Imported cURL',requests}]:incoming.length?incoming:[{name:'Imported collection',requests}];
       const next=validateLibrary([...localCollections,...sources.map(c=>toLocalCollection(c))]);
       setLocalCollections(next);
@@ -466,6 +466,9 @@ export default function App() {
       createCollectionDraft('local',collectionId,folderPath||[]);
       return;
     }
+    if(action==='renameExample'){
+      setActionName(item.name||'');setActionDialog({scope:'local',...item});return;
+    }
     const immediate={duplicateCollection:'duplicateCollection',duplicateFolder:'duplicateFolder',duplicateRequest:'duplicateRequest',sortCollection:'sortCollection',sortMethod:'sortCollection',sortFolder:'sortFolder',deleteExample:'deleteExample'};
     if(immediate[action]){updateLocal({...item,type:immediate[action],sort:action==='sortMethod'?'method':'name'});return;}
     setActionName(item.name||'');setActionDialog({scope:'local',...item});
@@ -526,7 +529,9 @@ export default function App() {
   }
   async function handleWorkspaceMenu(action,item){
     setWorkspaceMenu(null);
-    if(action==='deleteExample'){setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;}
+    if(action==='renameExample'||action==='deleteExample'){
+      setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
+    }
     if(action==='documentation'){openDocumentation({scope:'workspace',type:item.type==='request'?'request':'collection',collectionId:item.collectionId,requestId:item.requestId,name:item.name});return;}
     if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
@@ -567,11 +572,58 @@ export default function App() {
       }
     });
   }
+  function synchronizeSavedExamples(scope,workspaceId,collectionId,requestId,examples){
+    // Editing an example must not discard unsaved edits to the parent request.
+    for(const tab of openTabs){
+      if(tab.source?.scope!==scope||tab.source.collectionId!==collectionId||tab.source.requestId!==requestId)continue;
+      if(scope==='workspace'&&tab.source.workspaceId!==workspaceId)continue;
+      const previous=tab.id===activeTabRef.current?snapshot():draftsRef.current[tab.id];
+      if(previous)draftsRef.current[tab.id]={...previous,responseExamples:examples};
+      if(tab.id===activeTabRef.current)setResponseExamples(examples);
+    }
+  }
+  async function renameSavedExample(target,name){
+    const {scope,collectionId,requestId,exampleId}=target;
+    if(scope==='local'){
+      const collection=localCollections.find(col=>col.id===collectionId);
+      const request=collection?.requests.find(item=>item.id===requestId);
+      if(!request)throw Error('Saved request not found');
+      const examples=renameResponseExample(request.responseExamples,exampleId,name);
+      // Dedicated action only touches saved response examples, not draft request fields.
+      const next=applyLocalAction(localCollections,{type:'renameExample',collectionId,requestId,exampleId,name});
+      setLocalCollections(next);
+      synchronizeSavedExamples(scope,'',collectionId,requestId,examples);
+      return;
+    }
+    if(!token)throw Error('Sign in to rename workspace examples');
+    const workspaceId=selectedWs;
+    const base=`/api/workspaces/${workspaceId}/collections/${collectionId}/requests`;
+    const latest=await api(base,'GET',undefined,token);
+    const request=latest.find(item=>item.id===requestId);
+    if(!request)throw Error('Saved request not found');
+    const metadata=decodeStoredHeaders(request.headersJson);
+    const examples=renameResponseExample(metadata.responseExamples,exampleId,name);
+    const saved=await api(`${base}/${requestId}`,'PUT',{
+      ...request,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples)
+    },token);
+    const updated=latest.map(item=>item.id===requestId?saved:item);
+    setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(workspaceId,collectionId)]:updated}));
+    if(selectedCol===collectionId)setSavedRequests(updated);
+    synchronizeSavedExamples(scope,workspaceId,collectionId,requestId,examples);
+  }
   async function executeActionDialog(e){
     e.preventDefault();if(!actionDialog)return;
     const {scope,action,collectionId,requestId,folderPath}=actionDialog;
     const name=actionName.trim();
     if(action.startsWith('rename')&&!name)return;
+    if(action==='renameExample'){
+      const success=await doAction(async()=>{
+        await renameSavedExample(actionDialog,name);
+        setNotice(`Renamed example to ${name}`);
+      });
+      if(success)setActionDialog(null);
+      return;
+    }
     if(scope==='local')updateLocal({type:action,collectionId,requestId,folderPath,name});
     else { const success=await doAction(async()=>{
       const base=`/api/workspaces/${selectedWs}/collections/${collectionId}`;
@@ -752,7 +804,7 @@ export default function App() {
         const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection,documentation});
         downloadJson(output,exportFileName(name,exportFormat));
       }
-      setNotice(`Exported ${name} as ${exportFormat==='openapi'?'OpenAPI':'Postman'}`);setExportChoice(null);
+      setNotice(`Exported ${name} as ${exportFormat==='openapi'?'OpenAPI 3.1':exportFormat==='insomnia'?'Insomnia v4':'Postman'}`);setExportChoice(null);
     }catch(e){setNotice(`Export failed: ${getMessage(e)}`);}
   }
   async function persistEnvironment(env){
@@ -1262,7 +1314,7 @@ export default function App() {
           {(workspaceMenu.type==='collection'?[
             ['newRequest','New request'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
           ]:workspaceMenu.type==='example'?[
-            ['deleteExample','Delete example']
+            ['renameExample','Rename example'],['deleteExample','Delete example']
           ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
             <MenuActionItem key={id} action={id} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
@@ -1377,10 +1429,11 @@ export default function App() {
         <p>Format</p><div className="pp-v17-export-choices">
           <button className={exportFormat==='postman'?'active':''} onClick={()=>setExportFormat('postman')}><FileJson size={17}/><span><strong>Postman JSON</strong><small>{exportChoice.kind==='environment'?'Postman environment':'Postman Collection v2.1'}</small></span></button>
           <button className={exportFormat==='openapi'?'active':''} onClick={()=>setExportFormat('openapi')}><Braces size={17}/><span><strong>OpenAPI 3.1</strong><small>{exportChoice.kind==='environment'?'Vendor-extension environment metadata':'API endpoint description'}</small></span></button>
+          <button className={exportFormat==='insomnia'?'active':''} onClick={()=>setExportFormat('insomnia')}><FileJson size={17}/><span><strong>Insomnia v4 JSON</strong><small>Legacy portable format · imports in current Insomnia</small></span></button>
         </div>
         <label className="pp-v17-export-secret"><input type="checkbox" checked={exportIncludeSecrets} onChange={e=>setExportIncludeSecrets(e.target.checked)}/> Include secret variable values / known sensitive headers</label>
         {exportIncludeSecrets&&<p className="pp-v17-export-warning">The exported JSON may contain credentials. Store it securely.</p>}
-        <p className="pp-v17-export-note">OpenAPI describes APIs, not executable Postman scripts. Environment export uses the nonstandard x-pakpost-environment extension. Review exported bodies and scripts for credentials before sharing.</p>
+        <p className="pp-v17-export-note">OpenAPI cannot execute Postman scripts; Insomnia v4 JSON is a legacy interchange format, not Insomnia v5 YAML. Environment OpenAPI export uses an x-pakpost-environment extension. Always check payloads/examples for credentials.</p>
         <div className="pp-action-dialog-buttons"><button onClick={()=>setExportChoice(null)}>Cancel</button><button className="pp-modal-submit" onClick={confirmExport}><ArrowDownToLine size={15}/> Export JSON</button></div>
       </div>
     </Dialog>}
@@ -1411,9 +1464,9 @@ export default function App() {
       {!(saveScope==='local'?localCollections.length:saveCols.length)&&<div className="form-error">Create a collection first.</div>}
       <button className="pp-modal-submit" type="submit" disabled={!(saveScope==='local'?saveLocalCollection:saveCollection)||busyAction}><Save size={16}/> Save new request</button>
     </form></Dialog>}
-    {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder',deleteExample:'Delete example'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
-      <form className="modal-form" onSubmit={executeActionDialog}>
-        {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required maxLength={120} value={actionName} onChange={e=>setActionName(e.target.value)}/></label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}
+    {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder',renameExample:'Rename example',deleteExample:'Delete example'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
+      <form className="modal-form" onSubmit={executeActionDialog} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setActionDialog(null);}}}>
+        {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required maxLength={actionDialog.action==='renameExample'?140:120} value={actionName} onChange={e=>setActionName(e.target.value)}/></label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}
         <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
       </form>
     </Dialog>}

@@ -1,6 +1,7 @@
 /** Pure local collection operations. Never mutates the browser's cached collection state. */
 import {toLocalCollection,validateLibrary} from './localCollections.js';
 import {createLocalPostmanExport} from './importExport.js';
+import {renameResponseExample} from './responseExamples.js';
 
 const uid=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():`local-${Math.random().toString(36).slice(2)}`;
 const nameOf=r=>String(r.requestName||r.name||'Request');
@@ -66,6 +67,11 @@ export function applyLocalAction(collections,action,idFactory=uid){
     case 'saveExamples': {
       if(!request)throw Error('Request not found');
       request.responseExamples=(action.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}}));
+      break;
+    }
+    case 'renameExample': {
+      if(!request)throw Error('Request not found');
+      request.responseExamples=renameResponseExample(request.responseExamples,action.exampleId,action.name);
       break;
     }
     case 'deleteExample': {

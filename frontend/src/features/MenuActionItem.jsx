@@ -17,6 +17,8 @@ const actionIcons = {
   sortFolder: ArrowDownUp,
   deleteFolder: Trash2,
   renameRequest: Pencil,
+  renameExample: Pencil,
+  deleteExample: Trash2,
   duplicateRequest: Copy,
   deleteRequest: Trash2,
   editVariables: Pencil,
