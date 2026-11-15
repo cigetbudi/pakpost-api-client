@@ -1,0 +1,19 @@
+/* v16 — Drafts stay in their parent collection until explicitly saved. */
+.pp-tree-actions {position:absolute;right:3px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:3px;z-index:1}
+.pp-tree-actions>.pp-tree-action {position:static;transform:none;flex:0 0 25px}
+.pp-tree-item-container:has(>.pp-tree-actions)>.pp-tree-row {padding-right:65px}
+.pp-tree-item-container:hover>.pp-tree-actions>.pp-tree-action,
+.pp-tree-item-container:focus-within>.pp-tree-actions>.pp-tree-action {opacity:1}
+.pp-draft-request {display:flex;align-items:center;gap:8px;min-height:31px;width:100%;text-align:left;padding-right:12px;color:var(--text2);border-radius:5px}
+.pp-draft-request:hover,.pp-draft-request:focus-visible {background:var(--hover);color:var(--text)}
+.pp-draft-request>span:nth-child(2) {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-draft-request .pp-unsaved-dot {margin-left:2px}
+.pp-unsaved-dot {display:inline-block;flex:0 0 6px;width:6px;height:6px;min-width:6px;background:#e8ad5d;border-radius:50%;box-shadow:0 0 0 1px color-mix(in srgb,#e8ad5d 40%,transparent)}
+.pp-open-tab .pp-unsaved-dot{margin-right:0}
+.pp-unsaved-confirm{color:var(--text2);font-size:12px;line-height:1.6}
+.pp-unsaved-confirm ul{padding:9px 14px;margin:10px 0 14px;max-height:160px;overflow:auto;background:var(--editor);border:1px solid var(--border);border-radius:6px}
+.pp-unsaved-confirm li{padding:2px 0;list-style:disc inside;word-break:break-word}
+.pp-action-dialog-buttons .pp-destructive-confirm{background:var(--red);color:white;border-color:var(--red);font-weight:700}
+.pp-action-dialog-buttons .pp-destructive-confirm:hover{filter:brightness(.93)}
+@media(max-width:850px){.pp-tree-actions>.pp-tree-action{opacity:.68}}
+@media(prefers-reduced-motion:reduce){.pp-tree-actions>.pp-tree-action,.pp-draft-request{animation:none!important;transition:none!important}}

@@ -10,6 +10,7 @@ import './v11-retro-controls.css';
 import './v12-collection-workflow.css';
 import './v13-horizon-workbench.css';
 import './v14-right-context.css';
+import './v16-draft-requests.css';
 import { readAppearance } from './features/appearance.js';
 document.documentElement.dataset.theme = readAppearance(window.localStorage);
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);

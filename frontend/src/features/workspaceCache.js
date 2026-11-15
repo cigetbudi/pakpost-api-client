@@ -32,7 +32,7 @@ export function readWorkbenchCache(){
 }
 export function writeWorkbenchCache({openTabs,activeTabId,drafts,active,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope}){
   try{
-    const tabList=openTabs.slice(0,100).map(t=>({id:t.id,name:t.name,method:t.method,status:t.status,source:t.source||null}));
+    const tabList=openTabs.slice(0,100).map(t=>({id:t.id,name:t.name,method:t.method,status:t.status,source:t.source||null,pendingCopy:!!t.pendingCopy,savedFingerprint:t.savedFingerprint??null}));
     const all={...drafts,[activeTabId]:active};
     const clean=Object.fromEntries(tabList.map(t=>[t.id,normalizeDraft(all[t.id]) ]));
     const base={version:1,openTabs:tabList,activeTabId,drafts:clean,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,recent:(recent||[]).slice(0,30)};

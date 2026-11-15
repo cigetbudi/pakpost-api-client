@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2,
+  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
 import { TextEditor } from './features/Editors';
 import { RetroSelect } from './features/RetroSelect';
@@ -9,6 +9,7 @@ import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentExplorer } from './features/EnvironmentExplorer';
 import { WorkbenchSettings } from './features/WorkbenchSettings';
 import {sortCollectionRoots} from './features/collectionSort';
+import {isWorkspaceCollectionOpen, toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from './features/collectionExpansion';
 import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
 import { blankDraft, parseCurl, isCurl } from './features/importExport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
@@ -18,6 +19,7 @@ import {applyLocalAction,exportLocalCollection,updateLocalRequest,createLocalSav
 import {createPostmanCollection} from './features/importExport';
 import {stripJsonComments,hasJsonComments} from './features/jsonComments';
 import {findBoundTab} from './features/sourceTabs';
+import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, hasUnsavedMarker, tabSaved} from './features/draftLifecycle';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from './features/appearance';
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
@@ -38,7 +40,12 @@ async function api(path, method = 'GET', body, token = '') {
   const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   let data;
   try { data = await res.json(); } catch { data = null; }
-  if (!res.ok) throw new Error(data?.message || (data?.errors?.map(e => e.message).join(', ')) || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const messages=Array.isArray(data?.errors)?data.errors.map(e=>e.message||String(e)):
+      data?.errors&&typeof data.errors==='object'?Object.entries(data.errors).flatMap(([key,items])=>
+        (Array.isArray(items)?items:[items]).map(message=>`${key}: ${message}`)):[];
+    throw new Error(data?.message||data?.detail||messages.join(', ')||data?.title||`HTTP ${res.status}`);
+  }
   return data;
 }
 const toRows = (headers = {}) => Object.entries(headers).map(([key, value]) => ({ key, value }));
@@ -150,11 +157,25 @@ export default function App() {
   const resizingRight=useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(CACHED?.sidebarCollapsed || false);
   const [expandedCollections, setExpandedCollections] = useState({});
+  const [localExpandAllSignal, setLocalExpandAllSignal] = useState(null);
+  const [revealLocalDraft,setRevealLocalDraft] = useState(null);
+  const [workspaceRequestLists, setWorkspaceRequestLists] = useState({});
+  const workspaceRequestsPending = useRef(new Set());
+  const workspaceFetchEpoch = useRef(0);
+  useEffect(()=>{
+    // Clear cached private workspace data after switching accounts or workspaces.
+    workspaceFetchEpoch.current+=1;
+    workspaceRequestsPending.current.clear();
+    setWorkspaceRequestLists({});
+  },[selectedWs,token]);
   const [params, setParams] = useState(RECOVERED.params || [{ ...EMPTY_HEADER }]);
   const [authType, setAuthType] = useState(RECOVERED.authType || 'none');
   const [bearerToken, setBearerToken] = useState(RECOVERED.bearerToken || '');
-  const [openTabs, setOpenTabs] = useState(CACHED?.openTabs || [{ id: 't1', name: 'Untitled Request', method: 'GET' }]);
+  const [openTabs, setOpenTabs] = useState(() => (CACHED?.openTabs || [{ id: 't1', name: 'Untitled Request', method: 'GET' }]).map(t=>({
+    ...t,savedFingerprint:t.savedFingerprint ?? requestFingerprint(CACHED?.drafts?.[t.id] || freshRequest(t.name),t.name)
+  })));
   const [tabMenu, setTabMenu] = useState(null);
+  const [closeConfirmation, setCloseConfirmation] = useState(null);
   const [activeTabId, setActiveTabId] = useState(CACHED?.activeTabId || 't1');
   const activeTabRef = useRef(CACHED?.activeTabId || 't1');
   const tabSequence = useRef(Math.max(1,...(CACHED?.openTabs || []).map(t=>Number(String(t.id).replace(/^t/,'')) || 0)));
@@ -229,12 +250,12 @@ export default function App() {
   function addTab(request, source = null) {
     stashActive();
     const id = `t${++tabSequence.current}`;
-    const draft = { ...blankDraft(), ...request, binaryFile:{name:request?.binaryFile?.name||'',base64:''},
+    const draft = { ...freshRequest(request?.name || 'Untitled Request'), ...request, binaryFile:{name:request?.binaryFile?.name||'',base64:''},
       params:request?.params||[{...EMPTY_HEADER}],rows:request?.rows||[{...EMPTY_HEADER}],
       formFields:request?.formFields||[{...EMPTY_HEADER}],result:null,scriptLog:[],scriptTests:[],scriptError:''};
     draftsRef.current[id] = draft; activeTabRef.current = id;
     const name = request?.name || 'Untitled Request';
-    setOpenTabs(t => [...t, { id, name, method: draft.method, source }]);
+    setOpenTabs(t => [...t, { id, name, method: draft.method, source, savedFingerprint:requestFingerprint(draft,name) }]);
     setActiveTabId(id); restoreDraft(draft); setPage('tester');
   }
   function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]}) {
@@ -290,6 +311,21 @@ export default function App() {
       if(action.type==='deleteRequest'||action.type==='deleteCollection')setNotice('Deleted from local collection. Open drafts are preserved.');
     }catch(e){setNotice(getMessage(e));}
   }
+  function createCollectionDraft(scope,collectionId,folderPath=[]){
+    const draft=freshRequest('New Request');
+    const source=pendingSource(scope,collectionId,{
+      workspaceId:scope==='workspace'?selectedWs:'',folderPath,
+      pendingId:typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function'
+        ?crypto.randomUUID():`draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    });
+    addTab(draft,source);
+    setExplorerTab('collections');setSidebarCollapsed(false);
+    if(scope==='workspace'){
+      setSelectedCol(collectionId);
+      setExpandedCollections(previous=>({...previous,[workspaceCollectionKey(selectedWs,collectionId)]:true}));
+    }else setRevealLocalDraft({collectionId,folderPath,nonce:Date.now()});
+    setNotice('Draft created in collection. Save to persist it.');
+  }
   function handleLocalMenu(item){
     const {action,collectionId,requestId,folderPath}=item;
     const collection=localCollections.find(c=>c.id===collectionId);
@@ -298,16 +334,28 @@ export default function App() {
       downloadJson(exportLocalCollection(collection),`${collection.name.replace(/[^a-z0-9_-]/gi,'_')}.postman_collection.json`);return;
     }
     if(action==='newRequest'){
-      const draft={...blankDraft(),name:'New Request',requestName:'New Request',folderPath:folderPath||[]};
-      try{
-        const next=createLocalSavedRequest(localCollections,collectionId,draft);
-        setLocalCollections(next.collections);openLocalRequest(next.request,collectionId);
-      }catch(e){setNotice(getMessage(e));}
+      createCollectionDraft('local',collectionId,folderPath||[]);
       return;
     }
     const immediate={duplicateCollection:'duplicateCollection',duplicateFolder:'duplicateFolder',duplicateRequest:'duplicateRequest',sortCollection:'sortCollection',sortMethod:'sortCollection',sortFolder:'sortFolder'};
     if(immediate[action]){updateLocal({...item,type:immediate[action],sort:action==='sortMethod'?'method':'name'});return;}
     setActionName(item.name||'');setActionDialog({scope:'local',...item});
+  }
+  function expandOrCollapseAllCollections(open) {
+    setLocalExpandAllSignal(previous => ({open, nonce: (previous?.nonce||0)+1}));
+    if(token && selectedWs)
+      setExpandedCollections(previous => setAllWorkspaceCollections(previous,selectedWs,collections.map(c=>c.id),open));
+  }
+  function toggleWorkspaceCollectionById(id) {
+    setExpandedCollections(previous => toggleWorkspaceCollection(previous,selectedWs,id,selectedCol));
+    setSelectedCol(id);
+  }
+  function invalidateWorkspaceRequestLists(workspaceId,ids) {
+    setWorkspaceRequestLists(previous => {
+      const next={...previous};
+      for(const id of ids)delete next[workspaceCollectionKey(workspaceId,id)];
+      return next;
+    });
   }
   function moveLocalRequest({collectionId,requestId,targetCollectionId,targetFolderPath,beforeRequestId}){
     updateLocal({type:'moveRequest',collectionId,requestId,targetCollectionId,targetFolderPath,beforeRequestId});
@@ -327,8 +375,12 @@ export default function App() {
         {targetCollectionId},token);
       setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.requestId===requestId?
         {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
-      if(selectedCol===collectionId)
-        setSavedRequests(await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token));
+      invalidateWorkspaceRequestLists(selectedWs,[collectionId,targetCollectionId]);
+      if(selectedCol===collectionId){
+        const latest=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
+        setSavedRequests(latest);
+        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:latest}));
+      }
       setNotice('Request moved to workspace collection');
     }catch(err){setNotice(getMessage(err));}
   }
@@ -348,12 +400,12 @@ export default function App() {
     if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
     }
+    if(action==='newRequest'){
+      createCollectionDraft('workspace',item.collectionId);
+      return;
+    }
     const base=`/api/workspaces/${selectedWs}/collections`;
     await doAction(async()=>{
-      if(action==='newRequest'){
-        addTab({...blankDraft(),name:'New Request'});
-        openSaveAs({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId});setSaveName('New Request');return;
-      }
       if(action==='sortCollection'){
         setWorkspaceSorted(old=>({...old,[item.collectionId]:'name'}));
         return;
@@ -375,7 +427,12 @@ export default function App() {
         const req=list.find(x=>x.id===item.requestId);if(!req)return;
         await api(`${base}/${item.collectionId}/requests`,'POST',
           {name:`${req.name} (copy)`,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
-        if(selectedCol===item.collectionId)setSavedRequests(await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token));
+        invalidateWorkspaceRequestLists(selectedWs,[item.collectionId]);
+        if(selectedCol===item.collectionId){
+          const latest=await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token);
+          setSavedRequests(latest);
+          setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,item.collectionId)]:latest}));
+        }
       }
     });
   }
@@ -394,14 +451,16 @@ export default function App() {
         setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.collectionId===collectionId&&t.source.workspaceId===selectedWs?{...t,source:null}:t));
         if(selectedCol===collectionId)setSelectedCol('');
       }else if(action==='renameRequest'){
-        const item=savedRequests.find(x=>x.id===requestId);if(!item)return;
+        const item=(workspaceRequestLists[workspaceCollectionKey(selectedWs,collectionId)]||savedRequests).find(x=>x.id===requestId);if(!item)return;
         await api(`${base}/requests/${requestId}`,'PUT',{...item,name},token);
         setSavedRequests(old=>old.map(x=>x.id===requestId?{...x,name}:x));
+        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:(old[workspaceCollectionKey(selectedWs,collectionId)]||[]).map(x=>x.id===requestId?{...x,name}:x)}));
         setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,name}:t));
       }else if(action==='deleteRequest'){
         await api(`${base}/requests/${requestId}`,'DELETE',undefined,token);
         setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,source:null}:t));
         setSavedRequests(old=>old.filter(x=>x.id!==requestId));
+        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:(old[workspaceCollectionKey(selectedWs,collectionId)]||[]).filter(x=>x.id!==requestId)}));
       }
     }); if(!success)return; }
     setActionDialog(null);
@@ -418,7 +477,7 @@ export default function App() {
     }catch(e){setNotice(`cURL import failed: ${getMessage(e)}`);}
   }
   function closeTab(id){performTabAction('close',id);}
-  function performTabAction(action,id){
+  function performTabAction(action,id,confirmed=false){
     setTabMenu(null);
     if(action==='duplicate'){
       stashActive();const source=draftsRef.current[id];if(!source)return;
@@ -427,15 +486,24 @@ export default function App() {
       draftsRef.current[newId]={...cloned,binaryFile:{name:cloned.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
       const sourceTab=openTabs.find(t=>t.id===id);
       const index=openTabs.findIndex(t=>t.id===id);
-      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:`${sourceTab?.name||'Request'} (copy)`,method:cloned.method,source:null},...t.slice(index+1)]);
+      const copyName=`${sourceTab?.name||'Request'} (copy)`;
+      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:copyName,method:cloned.method,source:null,pendingCopy:true,savedFingerprint:requestFingerprint(cloned,copyName)},...t.slice(index+1)]);
       selectTabFromDraft(newId);return;
     }
     stashActive();
     const plan=planTabClose(openTabs,id,activeTabRef.current,action);
+    if(!confirmed){
+      const unsaved=plan.removedIds.filter(tabId=>{
+        const tab=openTabs.find(t=>t.id===tabId);
+        return needsCloseConfirmation(tab,draftsRef.current[tabId]);
+      });
+      if(unsaved.length){setCloseConfirmation({action,id,unsaved});return;}
+    }
+    setCloseConfirmation(null);
     if(plan.reset){
-      const blank={...blankDraft()};const blankId=id;
+      const blank=freshRequest('Untitled Request');const blankId=id;
       draftsRef.current={[blankId]:blank};
-      setOpenTabs([{id:blankId,name:'Untitled Request',method:'GET'}]);
+      setOpenTabs([{id:blankId,name:'Untitled Request',method:'GET',savedFingerprint:requestFingerprint(blank,'Untitled Request')}]);
       selectTabFromDraft(blankId);return;
     }
     const removed=new Set(plan.removedIds);
@@ -627,9 +695,33 @@ export default function App() {
   }, [selectedWs, token]);
   useEffect(() => {
     if (!token || !selectedWs || !selectedCol) { setSavedRequests([]); return; }
+    let cancelled=false;
+    const key=workspaceCollectionKey(selectedWs,selectedCol);
+    const epoch=workspaceFetchEpoch.current;
+    setSavedRequests(workspaceRequestLists[key]||[]);
     api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests`, 'GET', undefined, token)
-      .then(setSavedRequests).catch(e => setNotice(getMessage(e)));
+      .then(items=>{if(cancelled||epoch!==workspaceFetchEpoch.current)return;setSavedRequests(items);setWorkspaceRequestLists(old=>({...old,[key]:items}));})
+      .catch(e=>{if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
+    return ()=>{cancelled=true;};
   }, [selectedWs, selectedCol, token]);
+  // Fetch children for *every* expanded Neon collection, not only the selected one.
+  // Fetch at most four new lists per render to avoid flooding the backend on Expand all.
+  useEffect(()=>{
+    if(!token||!selectedWs||explorerTab!=='collections')return;
+    const next=collections.filter(col=>col.id!==selectedCol
+      && isWorkspaceCollectionOpen(expandedCollections,selectedWs,col.id,selectedCol)
+      && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,col.id))
+      && !workspaceRequestsPending.current.has(workspaceCollectionKey(selectedWs,col.id))).slice(0,4);
+    for(const col of next){
+      const key=workspaceCollectionKey(selectedWs,col.id);
+      workspaceRequestsPending.current.add(key);
+      const epoch=workspaceFetchEpoch.current;
+      api(`/api/workspaces/${selectedWs}/collections/${col.id}/requests`,'GET',undefined,token)
+        .then(items=>{if(epoch===workspaceFetchEpoch.current)setWorkspaceRequestLists(old=>({...old,[key]:items}));})
+        .catch(e=>{if(epoch!==workspaceFetchEpoch.current)return;setNotice(`Cannot load ${col.name}: ${getMessage(e)}`);setWorkspaceRequestLists(old=>({...old,[key]:[]}));})
+        .finally(()=>workspaceRequestsPending.current.delete(key));
+    }
+  },[token,selectedWs,selectedCol,collections,explorerTab,expandedCollections,workspaceRequestLists]);
   useEffect(() => {
     if (!token || !selectedWs || !selectedTeam) { setTeamMembers([]); return; }
     api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`, 'GET', undefined, token)
@@ -737,43 +829,71 @@ export default function App() {
     if(!origin){openSaveAs();return;}
     const name=activeRequestName;
     const tabId=activeTabRef.current;
+    const savedDraft=snapshot();
+    const savedPayload=currentSavePayload(name);
     await doAction(async()=>{
+      let savedSource={...origin};
       if(origin.scope==='local'){
-        setLocalCollections(updateLocalRequest(localCollections,origin.collectionId,origin.requestId,{...snapshot(),name}));
+        if(origin.pending){
+          const next=createLocalSavedRequest(localCollections,origin.collectionId,
+            {...savedDraft,name,folderPath:origin.folderPath||[]});
+          setLocalCollections(next.collections);
+          savedSource={scope:'local',collectionId:origin.collectionId,requestId:next.request.id};
+        }else setLocalCollections(updateLocalRequest(localCollections,origin.collectionId,origin.requestId,{...savedDraft,name}));
       }else{
-        if(!token)throw Error('Sign in to update workspace requests');
-        await api(`/api/workspaces/${origin.workspaceId}/collections/${origin.collectionId}/requests/${origin.requestId}`,'PUT',currentSavePayload(name),token);
-        if(origin.workspaceId===selectedWs&&origin.collectionId===selectedCol)
-          setSavedRequests(await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests`,'GET',undefined,token));
+        if(!token)throw Error('Sign in to save workspace requests');
+        const base=`/api/workspaces/${origin.workspaceId}/collections/${origin.collectionId}/requests`;
+        if(!url.trim())throw Error('Request URL is required. Please enter a URL before saving.');
+        if(origin.pending){
+          const saved=await api(base,'POST',savedPayload,token);
+          savedSource={scope:'workspace',workspaceId:origin.workspaceId,collectionId:origin.collectionId,requestId:saved.id};
+        }else await api(`${base}/${origin.requestId}`,'PUT',savedPayload,token);
+        invalidateWorkspaceRequestLists(origin.workspaceId,[origin.collectionId]);
+        if(origin.workspaceId===selectedWs){
+          // Saving has already completed; a list refresh failure must not turn it into an unsaved draft.
+          try {
+            const latest=await api(base,'GET',undefined,token);
+            setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(origin.workspaceId,origin.collectionId)]:latest}));
+            if(origin.collectionId===selectedCol)setSavedRequests(latest);
+          }catch{ /* The next explorer fetch can retry. */ }
+        }
       }
-      // Keep saved draft (response state remains in-memory, never copied to collection).
-      draftsRef.current[tabId]={...snapshot()};
-      setNotice(`Saved changes to ${name}`);
+      // The request now belongs to a real saved entity; later Save calls update that same ID.
+      setOpenTabs(tabs=>tabs.map(t=>t.id===tabId?tabSaved(t,savedSource,savedDraft,name):t));
+      setNotice(origin.pending?`Created ${name} in collection`:`Saved changes to ${name}`);
     });
   }
   async function saveRequest(e){
     e.preventDefault();
     if(!saveName.trim())return;
+    const savedDraft=snapshot();
+    const savedPayload=currentSavePayload(saveName);
+    const tabId=activeTabRef.current;
     await doAction(async()=>{
       let source;
       if(saveScope==='local'){
-        const next=createLocalSavedRequest(localCollections,saveLocalCollection,{...snapshot(),name:saveName});
+        const next=createLocalSavedRequest(localCollections,saveLocalCollection,{...savedDraft,name:saveName});
         setLocalCollections(next.collections);
         source={scope:'local',collectionId:saveLocalCollection,requestId:next.request.id};
       }else{
         if(!token)throw Error('Sign in to save to workspace');
-        const saved=await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`,'POST',currentSavePayload(saveName),token);
+        const saved=await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`,'POST',savedPayload,token);
         source={scope:'workspace',workspaceId:saveWs,collectionId:saveCollection,requestId:saved.id};
-        if(saveWs===selectedWs&&saveCollection===selectedCol)
-          setSavedRequests(await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests`,'GET',undefined,token));
+        invalidateWorkspaceRequestLists(saveWs,[saveCollection]);
+        if(saveWs===selectedWs){
+          try {
+            const latest=await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`,'GET',undefined,token);
+            setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(saveWs,saveCollection)]:latest}));
+            if(saveCollection===selectedCol)setSavedRequests(latest);
+          }catch{ /* Save succeeded; keep the source ID and retry the list later. */ }
+        }
       }
-      const id=activeTabRef.current;
-      setOpenTabs(ts=>ts.map(t=>t.id===id?{...t,name:saveName,source}:t));
+      setOpenTabs(ts=>ts.map(t=>t.id===tabId?tabSaved(t,source,savedDraft,saveName):t));
       setSaveOpen(false);setNotice(`Saved ${saveName}`);
     });
   }
 
-  const visibleCollections = sortCollectionRoots(collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (c.id === selectedCol && savedRequests.some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())))),collectionSort);
+  const visibleCollections = sortCollectionRoots(collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (workspaceRequestLists[workspaceCollectionKey(selectedWs,c.id)]||[]).some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase()))),collectionSort);
   const visibleLocalCollections = sortCollectionRoots(localCollections,collectionSort);
   const activeRequestName = openTabs.find(t => t.id === activeTabId)?.name || 'Untitled Request';
   const responseType = result && !result.error ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain') : 'text/plain';
@@ -837,27 +957,45 @@ export default function App() {
           {token && <button className="pp-link-row" onClick={() => navigate('workspace')}><Settings2 size={14}/> Manage workspace <ChevronRight size={13}/></button>}
           <div className="pp-explorer-search"><Search size={14}/><input placeholder="Search collections" aria-label="Search collections" value={explorerSearch} onChange={e => setExplorerSearch(e.target.value)}/></div>
           <div className="pp-global-collection-sort"><span>Sort all collections</span><RetroSelect ariaLabel="Sort all collections" value={collectionSort} onChange={setCollectionSort} options={[{value:'manual',label:'Manual order'},{value:'name-asc',label:'Name A–Z'},{value:'name-desc',label:'Name Z–A'},{value:'newest',label:'Recently updated'}]}/></div>
+          <div className="pp-collection-expand-controls" role="group" aria-label="Expand or collapse collections">
+            <button type="button" title="Expand all collections and folders" onClick={()=>expandOrCollapseAllCollections(true)}><ChevronsUpDown size={14}/> Expand all</button>
+            <button type="button" title="Collapse all collections and folders" onClick={()=>expandOrCollapseAllCollections(false)}><ChevronsDownUp size={14}/> Collapse all</button>
+          </div>
           <div className="pp-side-subhead"><span>COLLECTIONS</span><button title="Create local collection" onClick={()=>setCreatingLocalCollection(true)}><Plus size={16}/></button></div>
           {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createLocalCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder="Collection name"/><button type="submit" title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
           <div className="pp-side-scroll">
             {localCollections.length>0&&<><div className="pp-local-subhead">LOCAL · BROWSER <span>{localCollections.length}</span></div>
-              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onAction={handleLocalMenu} onMove={moveLocalRequest}/>
+              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onAction={handleLocalMenu} onMove={moveLocalRequest} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
             </>}
             {token && selectedWs ? <>
               <div className="pp-local-subhead">WORKSPACE · NEON</div>
-              {visibleCollections.map(c => <div key={c.id}>
+              {visibleCollections.map(c => {
+                const opened=isWorkspaceCollectionOpen(expandedCollections,selectedWs,c.id,selectedCol);
+                const requests=workspaceRequestLists[workspaceCollectionKey(selectedWs,c.id)]||[];
+                return <div key={c.id}>
                 <div className="pp-tree-item-container" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(WORKSPACE_DRAG))e.preventDefault()}} onDrop={e=>moveWorkspaceRequest(e,c.id)}>
-                  <button className={`pp-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => { setSelectedCol(c.id); setExpandedCollections(v => ({ ...v, [c.id]: !(v[c.id] ?? true) })); }}>
-                    {(expandedCollections[c.id] ?? true) && selectedCol === c.id ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                  <button type="button" aria-expanded={opened} className={`pp-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => toggleWorkspaceCollectionById(c.id)}>
+                    {opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
                     <FolderClosed size={15}/><span>{c.name}</span>
                   </button>
-                  <button className="pp-tree-action" title="Collection actions" aria-label={`Actions for ${c.name}`} onClick={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})}><Settings2 size={14}/></button>
+                  <div className="pp-tree-actions">
+                    <button className="pp-tree-action" type="button" title="New request in collection" aria-label={`New request in ${c.name}`} onClick={e=>{e.stopPropagation();createCollectionDraft('workspace',c.id)}}><Plus size={15}/></button>
+                    <button className="pp-tree-action" type="button" title="Collection actions" aria-label={`Actions for ${c.name}`} onClick={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})}><Settings2 size={14}/></button>
+                  </div>
                 </div>
-                {(expandedCollections[c.id] ?? true) && selectedCol === c.id && [...savedRequests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => <div className="pp-tree-item-container" key={r.id} draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
-                  <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest(r)}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
+                <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}><div className="pp-collection-motion-inner">
+                {[...requests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => <div className="pp-tree-item-container" key={r.id} draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
+                  <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest({...r,collectionId:c.id})}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
                   <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
                 </div>)}
-              </div>)}
+                {openTabs.filter(t=>t.source?.pending&&t.source.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.collectionId===c.id)
+                  .filter(t=>t.name.toLowerCase().includes(explorerSearch.toLowerCase()))
+                  .map(t=><button key={t.id} type="button" className="pp-tree-request pp-draft-request" onClick={()=>selectTab(t.id)} title="Unsaved draft — click to edit">
+                    <span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span>{t.name}</span><span className="pp-unsaved-dot" title="Not saved"/>
+                  </button>)}
+                {opened && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,c.id)) && <div className="pp-tree-hint">Loading requests…</div>}
+                </div></div>
+              </div>})}
               {!collections.length && <div className="pp-tree-hint">No collections yet. Start by creating one.</div>}
               <button className="pp-add-side" onClick={() => { navigate('workspace'); setWsTab('collections'); }}><Plus size={14}/> New collection</button>
             </> : <>
@@ -876,9 +1014,9 @@ export default function App() {
         {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} split={split} onSplitChange={setSplit} onBack={()=>setPage('tester')}/>}
         <div className="pp-tabs-bar">
           <div className="pp-open-tabs" role="tablist" aria-label="Open requests">
-            {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const from=tabDragRef.current;if(from)setOpenTabs(ts=>reorderTabs(ts,from,t.id));tabDragRef.current=null;}} onDragEnd={()=>{tabDragRef.current=null;}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
+            {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const from=tabDragRef.current;if(from)setOpenTabs(ts=>reorderTabs(ts,from,t.id));tabDragRef.current=null;}} onDragEnd={()=>{tabDragRef.current=null;}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{hasUnsavedMarker(t,t.id===activeTabId?snapshot():draftsRef.current[t.id]) && <span className="pp-unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"/>}{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
-            <button className="pp-new-tab" title="New request tab" onClick={() => addTab()}><Plus size={17}/></button>
+            <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
           </div>
           <div className="pp-tabs-actions"><span><span className="pp-working-dot"/> {token ? 'Synced' : 'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
         </div>
@@ -900,7 +1038,7 @@ export default function App() {
 
         {page === 'tester' ? <div key={activeTabId} className="pp-tester pp-fade-content">
           <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
-          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} variables={varsFromEnv()} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} title="Save changes (Ctrl/Cmd+S)"><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
+          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} variables={varsFromEnv()} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} disabled={busyAction} title="Save changes (Ctrl/Cmd+S)"><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
               <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
@@ -980,6 +1118,17 @@ export default function App() {
     {commandOpen && <div className="pp-command-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCommandOpen(false);}}><section className="pp-command-dialog" role="dialog" aria-modal="true" aria-label="Quick search and commands"><div className="pp-command-input-wrap"><Search size={18}/><input autoFocus aria-label="Search commands" value={commandQuery} onChange={e=>{setCommandQuery(e.target.value);setCommandIndex(0);}} onKeyDown={e=>{if(e.key==='ArrowDown'){e.preventDefault();setCommandIndex(i=>Math.min(visibleCommandItems.length-1,i+1));}else if(e.key==='ArrowUp'){e.preventDefault();setCommandIndex(i=>Math.max(0,i-1));}else if(e.key==='Enter'&&visibleCommandItems.length){e.preventDefault();setCommandOpen(false);visibleCommandItems[Math.min(commandIndex,visibleCommandItems.length-1)].run();}}} placeholder="Find a request or run a command..."/><kbd>Esc</kbd></div><div className="pp-command-results" role="listbox">{visibleCommandItems.length?visibleCommandItems.map((item,i)=><button type="button" role="option" aria-selected={commandIndex===i} onMouseEnter={()=>setCommandIndex(i)} key={item.key} onClick={()=>{setCommandOpen(false);item.run();}}>{item.method?<span className={`pp-http-label ${item.method.toLowerCase()}`}>{item.method}</span>:<Code2 size={15}/>}<span><strong>{item.title}</strong><small>{item.subtitle}</small></span><ArrowRight size={14}/></button>):<div className="pp-command-empty">No matching requests or commands.</div>}</div></section></div>}
     {notice && <div className="pp-toast"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>}
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="pp-muted-small pp-center">Google SSO can be added later.</p></form></Dialog>}
+    {closeConfirmation&&<Dialog title="Unsaved changes" subtitle="Changes in these tabs have not been saved to their collections." onClose={()=>setCloseConfirmation(null)}>
+      <div className="pp-unsaved-confirm">
+        <p>{closeConfirmation.unsaved.length===1?'This request has unsaved changes:':`${closeConfirmation.unsaved.length} requests have unsaved changes:`}</p>
+        <ul>{closeConfirmation.unsaved.map(id=><li key={id}>{openTabs.find(t=>t.id===id)?.name||'Request'}</li>)}</ul>
+        <p>Discard these changes and close {closeConfirmation.action==='close'?'the tab':'the selected tabs'}?</p>
+        <div className="pp-action-dialog-buttons">
+          <button type="button" onClick={()=>setCloseConfirmation(null)}>Keep editing</button>
+          <button className="pp-destructive-confirm" type="button" onClick={()=>performTabAction(closeConfirmation.action,closeConfirmation.id,true)}>Discard & close</button>
+        </div>
+      </div>
+    </Dialog>}
     {saveOpen && <Dialog title="Save as new request" subtitle="Keep an independent copy in a local collection or a signed-in workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}>
       <label>Request name<input autoFocus required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label>
       <div className="pp-modal-select-label"><span>Destination</span><RetroSelect ariaLabel="Save scope" value={saveScope} onChange={setSaveScope} options={[{value:'local',label:'Local browser'},...(token?[{value:'workspace',label:'Workspace · Neon'}]:[])]}/></div>
