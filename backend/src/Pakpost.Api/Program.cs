@@ -39,11 +39,38 @@ builder.Services.AddRateLimiter(o=>
 });
 var origins=builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()??["http://localhost:5173"];
 builder.Services.AddCors(o=>o.AddPolicy("Frontend",p=>p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod()));
+// In-process limit on simultaneous anonymous outbound requests, in addition to per-IP rate limits.
+// A multi-replica deployment also needs an ingress/distributed limit and egress firewall.
+var proxyConcurrencyLimit=Math.Clamp(builder.Configuration.GetValue("Proxy:MaxConcurrentRequests",8),1,64);
+using var proxySlots=new SemaphoreSlim(proxyConcurrencyLimit,proxyConcurrencyLimit);
 var app=builder.Build();
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseRouting();
 app.UseCors("Frontend");
 app.UseRateLimiter();
+app.Use(async (context,next)=>
+{
+    // Private API responses must not be cached by intermediaries or HTTP caches.
+    if(context.Request.Path.StartsWithSegments("/api/workspaces") ||
+       context.Request.Path.StartsWithSegments("/api/auth"))
+    {
+        context.Response.Headers.CacheControl="no-store, private";
+        context.Response.Headers.Pragma="no-cache";
+    }
+    if(!string.Equals(context.Request.Path.Value,"/api/proxy/send",StringComparison.OrdinalIgnoreCase))
+    {
+        await next();return;
+    }
+    // Nonblocking acquisition is intentional: do not queue memory-intensive public proxy calls.
+    if(!proxySlots.Wait(0))
+    {
+        context.Response.StatusCode=429;
+        await context.Response.WriteAsJsonAsync(new {message="Proxy is busy; retry shortly"});
+        return;
+    }
+    try{await next();}
+    finally{proxySlots.Release();}
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

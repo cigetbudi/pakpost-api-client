@@ -5,7 +5,7 @@ using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
 namespace Pakpost.Application.Internal.Environments;
-public sealed record EnvironmentVariableDto(string Key,string Value,bool IsSecret);
+public sealed record EnvironmentVariableDto(string Key,string Value,bool IsSecret,bool IsRedacted=false);
 public sealed record RequestEnvironmentDto(Guid Id,string Name,IReadOnlyList<EnvironmentVariableDto> Variables);
 public sealed record ListEnvironmentsQuery(Guid ActorId,Guid WorkspaceId):IRequest<IReadOnlyList<RequestEnvironmentDto>>;
 public sealed record CreateEnvironmentCommand(Guid ActorId,Guid WorkspaceId,string Name):IRequest<RequestEnvironmentDto>;
@@ -30,22 +30,28 @@ public sealed class UpdateEnvironmentValidator:AbstractValidator<UpdateEnvironme
 }
 public static class EnvironmentAccess
 {
-    public static async Task Verify(IWorkspaceRepository workspaces,Guid ws,Guid actor,bool write,CancellationToken ct)
+    public static async Task<WorkspaceRole> Verify(IWorkspaceRepository workspaces,Guid ws,Guid actor,bool write,CancellationToken ct)
     {
         var member=await workspaces.FindMemberAsync(ws,actor,ct);
         if(member is null || (write && member.Role is not WorkspaceRole.Owner and not WorkspaceRole.Admin))
             throw AppException.Forbidden();
+        return member.Role;
     }
-    public static RequestEnvironmentDto ToDto(RequestEnvironment env,IEnvironmentValueCipher cipher)
-        => new(env.Id,env.Name,env.Variables.Select(v=>new EnvironmentVariableDto(v.Key,v.IsSecret?cipher.Unprotect(v.StoredValue):v.StoredValue,v.IsSecret)).ToArray());
+    // Never decrypt a workspace secret for a read-only Member.
+    // The optional DTO flag lets clients distinguish a redacted value from an empty one.
+    public static RequestEnvironmentDto ToDto(RequestEnvironment env,IEnvironmentValueCipher cipher,bool canReadSecrets)
+        => new(env.Id,env.Name,env.Variables.Select(v=>new EnvironmentVariableDto(
+            v.Key,v.IsSecret?(canReadSecrets?cipher.Unprotect(v.StoredValue):string.Empty):v.StoredValue,
+            v.IsSecret,v.IsSecret&&!canReadSecrets)).ToArray());
 }
 public sealed class ListEnvironmentsHandler(IWorkspaceRepository workspaces,IRequestEnvironmentRepository environments,IEnvironmentValueCipher cipher)
     :IRequestHandler<ListEnvironmentsQuery,IReadOnlyList<RequestEnvironmentDto>>
 {
     public async Task<IReadOnlyList<RequestEnvironmentDto>> Handle(ListEnvironmentsQuery q,CancellationToken ct)
     {
-        await EnvironmentAccess.Verify(workspaces,q.WorkspaceId,q.ActorId,false,ct);
-        return (await environments.ListAsync(q.WorkspaceId,ct)).Select(e=>EnvironmentAccess.ToDto(e,cipher)).ToArray();
+        var role=await EnvironmentAccess.Verify(workspaces,q.WorkspaceId,q.ActorId,false,ct);
+        bool canReadSecrets=role is WorkspaceRole.Owner or WorkspaceRole.Admin;
+        return (await environments.ListAsync(q.WorkspaceId,ct)).Select(e=>EnvironmentAccess.ToDto(e,cipher,canReadSecrets)).ToArray();
     }
 }
 public sealed class CreateEnvironmentHandler(IWorkspaceRepository workspaces,IRequestEnvironmentRepository environments,IUnitOfWork uow)
@@ -70,7 +76,7 @@ public sealed class UpdateEnvironmentHandler(IWorkspaceRepository workspaces,IRe
         environment.Update(c.Name);
         environment.ReplaceVariables(c.Variables.Select(v=>new RequestEnvironmentVariable(environment.Id,v.Key,v.IsSecret?cipher.Protect(v.Value):v.Value,v.IsSecret)));
         await uow.SaveChangesAsync(ct);
-        return EnvironmentAccess.ToDto(environment,cipher);
+        return EnvironmentAccess.ToDto(environment,cipher,canReadSecrets:true);
     }
 }
 public sealed class DeleteEnvironmentHandler(IWorkspaceRepository workspaces,IRequestEnvironmentRepository environments,IUnitOfWork uow)

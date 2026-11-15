@@ -1,0 +1,160 @@
+using System.Text.Json;
+using Pakpost.Application.Common.Exceptions;
+using Pakpost.Application.Common.Interfaces;
+using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Collections;
+using Pakpost.Application.Internal.Environments;
+using Pakpost.Domain.Entities;
+using Pakpost.Domain.Enums;
+
+var cases=new (string Name,Func<Task> Test)[]
+{
+    ("Safe Authorization placeholders remain saveable",()=>{
+        Assert(SavedHeaderPolicy.ContainsNoLiteralCredentials("""{"Authorization":"Bearer {{token}}","X-API-Key":"{{api_key}}"}"""));
+        return Task.CompletedTask;
+    }),
+    ("Literal Authorization headers cannot be persisted",()=>{
+        Assert(!SavedHeaderPolicy.ContainsNoLiteralCredentials("""{"Authorization":"Bearer secret-test-not-a-real-token"}"""));
+        return Task.CompletedTask;
+    }),
+    ("Header whitespace cannot bypass the saved-secret policy",()=>{
+        Assert(!SavedHeaderPolicy.ContainsNoLiteralCredentials("""{" Authorization ":"Bearer sample-token"}"""));
+        return Task.CompletedTask;
+    }),
+    ("Disabled metadata header rows cannot persist secrets",()=>{
+        Assert(!SavedHeaderPolicy.ContainsNoLiteralCredentials("""{"__pakpost_request_meta_v1__":{"version":1,"headers":[{"key":"X-API-Key","value":"plaintext-secret","enabled":false}]}}"""));
+        return Task.CompletedTask;
+    }),
+    ("Legacy header credentials are cleared in API read DTO",()=>{
+        var source="""{"Authorization":"Bearer old-test-value","Accept":"application/json","__pakpost_request_meta_v1__":{"headers":[{"key":"Cookie","value":"session=legacy-value","enabled":true}]}}""";
+        var cleaned=SavedHeaderPolicy.RedactLegacyCredentials(source);
+        using var parsed=JsonDocument.Parse(cleaned);
+        Assert(parsed.RootElement.GetProperty("Authorization").GetString()=="");
+        Assert(parsed.RootElement.GetProperty("Accept").GetString()=="application/json");
+        Assert(parsed.RootElement.GetProperty("__pakpost_request_meta_v1__").GetProperty("headers")[0].GetProperty("value").GetString()=="");
+        Assert(!cleaned.Contains("legacy-value"));
+        return Task.CompletedTask;
+    }),
+    ("Save validator rejects raw credentials but allows placeholders",()=>{
+        var validator=new SaveRequestValidator();
+        var ws=Guid.NewGuid();var actor=Guid.NewGuid();var col=Guid.NewGuid();
+        var unsafeCommand=new SaveRequestCommand(actor,ws,col,"Example","GET","https://example.com","""{"Authorization":"Bearer static-token"}""","");
+        var safeCommand=unsafeCommand with {HeadersJson="""{"Authorization":"Bearer {{token}}"}"""};
+        Assert(!validator.Validate(unsafeCommand).IsValid);
+        Assert(validator.Validate(safeCommand).IsValid);
+        return Task.CompletedTask;
+    }),
+    ("Member sees redacted environment secret with no decryption",()=>{
+        var env=new RequestEnvironment(Guid.NewGuid(),"DEV");
+        env.ReplaceVariables([new RequestEnvironmentVariable(env.Id,"secret_key","sealed-payload",true),new RequestEnvironmentVariable(env.Id,"baseUrl","https://example.com",false)]);
+        var cipher=new FakeCipher();
+        var dto=EnvironmentAccess.ToDto(env,cipher,canReadSecrets:false);
+        Assert(dto.Variables[0].Value=="" && dto.Variables[0].IsRedacted);
+        Assert(dto.Variables[1].Value=="https://example.com");
+        Assert(cipher.UnprotectCalls==0);
+        Assert(EnvironmentAccess.ToDto(env,cipher,canReadSecrets:true).Variables[0].Value=="test-secret");
+        Assert(cipher.UnprotectCalls==1);
+        return Task.CompletedTask;
+    }),
+    ("Member list endpoint does not expose environment secret",async()=>{
+        var ws=Guid.NewGuid();var memberId=Guid.NewGuid();var repo=new FakeWorkspaces(ws,memberId,WorkspaceRole.Member);
+        var env=new RequestEnvironment(ws,"DEV");
+        env.ReplaceVariables([new RequestEnvironmentVariable(env.Id,"apiKey","sealed-payload",true)]);
+        var cipher=new FakeCipher();
+        var handler=new ListEnvironmentsHandler(repo,new FakeEnvironments(env),cipher);
+        var list=await handler.Handle(new ListEnvironmentsQuery(memberId,ws),CancellationToken.None);
+        Assert(list.Count==1 && list[0].Variables[0].IsRedacted && list[0].Variables[0].Value=="");
+        Assert(cipher.UnprotectCalls==0);
+    }),
+    ("Member cannot administer workspace resources",async()=>{
+        var ws=Guid.NewGuid();var memberId=Guid.NewGuid();var repo=new FakeWorkspaces(ws,memberId,WorkspaceRole.Member);
+        await WorkspacePermissions.RequireMemberAsync(repo,ws,memberId,CancellationToken.None);
+        await MustBeForbidden(()=>WorkspacePermissions.RequireManagerAsync(repo,ws,memberId,CancellationToken.None));
+        await MustBeForbidden(async()=>{await EnvironmentAccess.Verify(repo,ws,memberId,true,CancellationToken.None);});
+    }),
+    ("Owner/Admin can administer resources and outsiders are forbidden",async()=>{
+        var ws=Guid.NewGuid();var id=Guid.NewGuid();
+        foreach(var role in new[]{WorkspaceRole.Owner,WorkspaceRole.Admin})
+            await WorkspacePermissions.RequireManagerAsync(new FakeWorkspaces(ws,id,role),ws,id,CancellationToken.None);
+        await MustBeForbidden(()=>WorkspacePermissions.RequireMemberAsync(new FakeWorkspaces(ws,id,WorkspaceRole.Member),ws,Guid.NewGuid(),CancellationToken.None));
+    }),
+    ("Collection rename and delete reject ordinary Members",async()=>{
+        var ws=Guid.NewGuid();var id=Guid.NewGuid();var collections=new FakeCollections();
+        var repo=new FakeWorkspaces(ws,id,WorkspaceRole.Member);var uow=new FakeUnitOfWork();
+        await MustBeForbidden(async()=>{await new RenameCollectionHandler(collections,repo,uow)
+            .Handle(new RenameCollectionCommand(id,ws,Guid.NewGuid(),"Renamed"),CancellationToken.None);});
+        await MustBeForbidden(async()=>{await new DeleteCollectionHandler(collections,repo,uow)
+            .Handle(new DeleteCollectionCommand(id,ws,Guid.NewGuid()),CancellationToken.None);});
+    }),
+    ("Saved request delete and move reject ordinary Members",async()=>{
+        var ws=Guid.NewGuid();var id=Guid.NewGuid();var collections=new FakeCollections();
+        var repo=new FakeWorkspaces(ws,id,WorkspaceRole.Member);var requests=new FakeSavedRequests();var uow=new FakeUnitOfWork();
+        await MustBeForbidden(async()=>{await new DeleteSavedRequestHandler(repo,collections,requests,uow)
+            .Handle(new DeleteSavedRequestCommand(id,ws,Guid.NewGuid(),Guid.NewGuid()),CancellationToken.None);});
+        await MustBeForbidden(async()=>{await new MoveSavedRequestHandler(repo,collections,requests,uow)
+            .Handle(new MoveSavedRequestCommand(id,ws,Guid.NewGuid(),Guid.NewGuid(),Guid.NewGuid()),CancellationToken.None);});
+    })
+};
+
+var failed=0;
+foreach(var (name,test) in cases)
+{
+    try{await test();Console.WriteLine($"PASS {name}");}
+    catch(Exception ex){failed++;Console.Error.WriteLine($"FAIL {name}: {ex.Message}");}
+}
+Console.WriteLine($"Security checks: {cases.Length-failed}/{cases.Length} passed");
+if(failed>0)Environment.ExitCode=1;
+
+static void Assert(bool value){if(!value)throw new InvalidOperationException("Assertion failed");}
+static async Task MustBeForbidden(Func<Task> run)
+{
+    try{await run();}catch(AppException ex) when(ex.StatusCode==403){return;}
+    throw new InvalidOperationException("Expected HTTP 403");
+}
+sealed class FakeCipher:IEnvironmentValueCipher
+{
+    public int UnprotectCalls {get;private set;}
+    public string Protect(string clear)=>"sealed-payload";
+    public string Unprotect(string encrypted){UnprotectCalls++;return "test-secret";}
+}
+sealed class FakeEnvironments(RequestEnvironment environment):IRequestEnvironmentRepository
+{
+    public Task<IReadOnlyList<RequestEnvironment>> ListAsync(Guid workspaceId,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<RequestEnvironment>>([environment]);
+    public Task<RequestEnvironment?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<RequestEnvironment?>(environment.Id==id?environment:null);
+    public void Add(RequestEnvironment value){}
+    public void Remove(RequestEnvironment value){}
+}
+sealed class FakeWorkspaces(Guid workspaceId,Guid userId,WorkspaceRole role):IWorkspaceRepository
+{
+    public Task<WorkspaceMember?> FindMemberAsync(Guid ws,Guid actor,CancellationToken ct)
+        =>Task.FromResult<WorkspaceMember?>(ws==workspaceId&&actor==userId?new WorkspaceMember(ws,actor,role):null);
+    public Task<Workspace?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<Workspace?>(null);
+    public Task<IReadOnlyList<Workspace>> ListForUserAsync(Guid id,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<Workspace>>([]);
+    public Task<IReadOnlyList<WorkspaceMember>> ListMembersAsync(Guid id,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<WorkspaceMember>>([]);
+    public void Add(Workspace value){}
+    public void AddMember(WorkspaceMember value){}
+}
+
+sealed class FakeCollections:ICollectionRepository
+{
+    public Task<Collection?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<Collection?>(null);
+    public Task<IReadOnlyList<Collection>> ListAsync(Guid ws,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<Collection>>([]);
+    public void Add(Collection value){}
+    public void Remove(Collection value){}
+}
+sealed class FakeSavedRequests:ISavedRequestRepository
+{
+    public Task<SavedRequest?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<SavedRequest?>(null);
+    public Task<IReadOnlyList<SavedRequest>> ListAsync(Guid id,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<SavedRequest>>([]);
+    public void Add(SavedRequest value){}
+    public void Remove(SavedRequest value){}
+}
+sealed class FakeUnitOfWork:IUnitOfWork
+{
+    public Task<int> SaveChangesAsync(CancellationToken ct)=>Task.FromResult(0);
+}

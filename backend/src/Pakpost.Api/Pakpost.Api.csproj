@@ -2,7 +2,7 @@
   <ItemGroup>
     <ProjectReference Include="../Pakpost.Application/Pakpost.Application.csproj" />
     <ProjectReference Include="../Pakpost.Infrastructure/Pakpost.Infrastructure.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" PrivateAssets="all" />
   </ItemGroup>
 </Project>

@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
+using Pakpost.Application.Common.Security;
 using Pakpost.Domain.Entities;
 
 namespace Pakpost.Application.Internal.Collections;
@@ -46,7 +47,7 @@ public sealed class RenameCollectionHandler(ICollectionRepository collections,IW
 {
     public async Task<CollectionDto> Handle(RenameCollectionCommand cmd,CancellationToken ct)
     {
-        if(await workspaces.FindMemberAsync(cmd.WorkspaceId,cmd.ActorId,ct) is null)throw AppException.Forbidden();
+        await WorkspacePermissions.RequireManagerAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,ct);
         var item=await collections.FindAsync(cmd.CollectionId,ct);
         if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
         item.Rename(cmd.Name);await uow.SaveChangesAsync(ct);
@@ -58,7 +59,7 @@ public sealed class DeleteCollectionHandler(ICollectionRepository collections,IW
 {
     public async Task Handle(DeleteCollectionCommand cmd,CancellationToken ct)
     {
-        if(await workspaces.FindMemberAsync(cmd.WorkspaceId,cmd.ActorId,ct) is null)throw AppException.Forbidden();
+        await WorkspacePermissions.RequireManagerAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,ct);
         var item=await collections.FindAsync(cmd.CollectionId,ct);
         if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
         collections.Remove(item);await uow.SaveChangesAsync(ct);

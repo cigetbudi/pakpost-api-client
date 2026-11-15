@@ -655,7 +655,8 @@ export default function App() {
   },[envScope,token,selectedWs]);
   const currentEnvironments=envScope==='workspace'?workspaceEnvironments:localEnvironments;
   const activeEnvironment=currentEnvironments.find(e=>e.id===activeEnvId);
-  const varsFromEnv=(allowSecrets=true)=>Object.fromEntries((activeEnvironment?.variables||[]).map(v=>[v.key,v.isSecret&&!allowSecrets?'[REDACTED]':v.value]));
+  // Restricted workspace secrets must remain unresolved, never silently become empty credentials.
+  const varsFromEnv=(allowSecrets=true)=>Object.fromEntries((activeEnvironment?.variables||[]).filter(v=>!v.isRedacted).map(v=>[v.key,v.isSecret&&!allowSecrets?'[REDACTED]':v.value]));
   function updateEnvScope(scope){setEnvScope(scope);setActiveEnvId('');}
   async function createEnvironment(name){
     if(envScope==='workspace'){
