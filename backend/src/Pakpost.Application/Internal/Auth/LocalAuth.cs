@@ -1,5 +1,5 @@
 using FluentValidation;
-using MediatR;
+using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
@@ -29,7 +29,7 @@ public sealed class LoginValidator : AbstractValidator<LoginCommand>
 public sealed class RegisterHandler(IUserRepository users, IPasswordHasher passwords, IJwtTokenService tokens, IUnitOfWork uow)
     : IRequestHandler<RegisterCommand, LoginResult>
 {
-    public async Task<LoginResult> Handle(RegisterCommand cmd, CancellationToken ct)
+    public async ValueTask<LoginResult> Handle(RegisterCommand cmd, CancellationToken ct)
     {
         var email = cmd.Email.Trim().ToLowerInvariant();
         if (await users.FindByEmailAsync(email,ct) is not null) throw AppException.Conflict("Email already registered");
@@ -43,7 +43,7 @@ public sealed class RegisterHandler(IUserRepository users, IPasswordHasher passw
 public sealed class LoginHandler(IUserRepository users, IPasswordHasher passwords, IJwtTokenService tokens)
     : IRequestHandler<LoginCommand, LoginResult>
 {
-    public async Task<LoginResult> Handle(LoginCommand cmd, CancellationToken ct)
+    public async ValueTask<LoginResult> Handle(LoginCommand cmd, CancellationToken ct)
     {
         var user = await users.FindByEmailAsync(cmd.Email.Trim().ToLowerInvariant(),ct);
         // Avoid account enumeration using identical messages.
@@ -55,7 +55,7 @@ public sealed class LoginHandler(IUserRepository users, IPasswordHasher password
 }
 public sealed class GetMeHandler(IUserRepository users) : IRequestHandler<GetMeQuery, UserProfile>
 {
-    public async Task<UserProfile> Handle(GetMeQuery q,CancellationToken ct)
+    public async ValueTask<UserProfile> Handle(GetMeQuery q,CancellationToken ct)
     {
         var user=await users.FindByIdAsync(q.UserId,ct) ?? throw AppException.Unauthorized();
         return new(user.Id,user.Email,user.DisplayName);

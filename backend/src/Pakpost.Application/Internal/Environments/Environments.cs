@@ -1,5 +1,5 @@
 using FluentValidation;
-using MediatR;
+using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
@@ -47,7 +47,7 @@ public static class EnvironmentAccess
 public sealed class ListEnvironmentsHandler(IWorkspaceRepository workspaces,IRequestEnvironmentRepository environments,IEnvironmentValueCipher cipher)
     :IRequestHandler<ListEnvironmentsQuery,IReadOnlyList<RequestEnvironmentDto>>
 {
-    public async Task<IReadOnlyList<RequestEnvironmentDto>> Handle(ListEnvironmentsQuery q,CancellationToken ct)
+    public async ValueTask<IReadOnlyList<RequestEnvironmentDto>> Handle(ListEnvironmentsQuery q,CancellationToken ct)
     {
         var role=await EnvironmentAccess.Verify(workspaces,q.WorkspaceId,q.ActorId,false,ct);
         bool canReadSecrets=role is WorkspaceRole.Owner or WorkspaceRole.Admin;
@@ -57,7 +57,7 @@ public sealed class ListEnvironmentsHandler(IWorkspaceRepository workspaces,IReq
 public sealed class CreateEnvironmentHandler(IWorkspaceRepository workspaces,IRequestEnvironmentRepository environments,IUnitOfWork uow)
     :IRequestHandler<CreateEnvironmentCommand,RequestEnvironmentDto>
 {
-    public async Task<RequestEnvironmentDto> Handle(CreateEnvironmentCommand c,CancellationToken ct)
+    public async ValueTask<RequestEnvironmentDto> Handle(CreateEnvironmentCommand c,CancellationToken ct)
     {
         await EnvironmentAccess.Verify(workspaces,c.WorkspaceId,c.ActorId,true,ct);
         var environment=new RequestEnvironment(c.WorkspaceId,c.Name);
@@ -68,7 +68,7 @@ public sealed class CreateEnvironmentHandler(IWorkspaceRepository workspaces,IRe
 public sealed class UpdateEnvironmentHandler(IWorkspaceRepository workspaces,IRequestEnvironmentRepository environments,IEnvironmentValueCipher cipher,IUnitOfWork uow)
     :IRequestHandler<UpdateEnvironmentCommand,RequestEnvironmentDto>
 {
-    public async Task<RequestEnvironmentDto> Handle(UpdateEnvironmentCommand c,CancellationToken ct)
+    public async ValueTask<RequestEnvironmentDto> Handle(UpdateEnvironmentCommand c,CancellationToken ct)
     {
         await EnvironmentAccess.Verify(workspaces,c.WorkspaceId,c.ActorId,true,ct);
         var environment=await environments.FindAsync(c.EnvironmentId,ct);
@@ -82,11 +82,12 @@ public sealed class UpdateEnvironmentHandler(IWorkspaceRepository workspaces,IRe
 public sealed class DeleteEnvironmentHandler(IWorkspaceRepository workspaces,IRequestEnvironmentRepository environments,IUnitOfWork uow)
     :IRequestHandler<DeleteEnvironmentCommand>
 {
-    public async Task Handle(DeleteEnvironmentCommand c,CancellationToken ct)
+    public async ValueTask<Unit> Handle(DeleteEnvironmentCommand c,CancellationToken ct)
     {
         await EnvironmentAccess.Verify(workspaces,c.WorkspaceId,c.ActorId,true,ct);
         var env=await environments.FindAsync(c.EnvironmentId,ct);
         if(env is null||env.WorkspaceId!=c.WorkspaceId)throw AppException.NotFound();
         environments.Remove(env);await uow.SaveChangesAsync(ct);
+        return Unit.Value;
     }
 }

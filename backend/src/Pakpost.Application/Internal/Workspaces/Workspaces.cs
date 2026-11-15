@@ -1,5 +1,5 @@
 using FluentValidation;
-using MediatR;
+using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
@@ -15,7 +15,7 @@ public sealed class CreateWorkspaceValidator : AbstractValidator<CreateWorkspace
 public sealed class CreateWorkspaceHandler(IWorkspaceRepository workspaces, IUnitOfWork uow)
     : IRequestHandler<CreateWorkspaceCommand, WorkspaceDto>
 {
-    public async Task<WorkspaceDto> Handle(CreateWorkspaceCommand request, CancellationToken ct)
+    public async ValueTask<WorkspaceDto> Handle(CreateWorkspaceCommand request, CancellationToken ct)
     {
         var workspace = new Workspace(request.Name, request.ActorId);
         workspaces.Add(workspace);
@@ -28,7 +28,7 @@ public sealed record ListWorkspacesQuery(Guid ActorId) : IRequest<IReadOnlyList<
 public sealed class ListWorkspacesHandler(IWorkspaceRepository workspaces)
     : IRequestHandler<ListWorkspacesQuery, IReadOnlyList<WorkspaceDto>>
 {
-    public async Task<IReadOnlyList<WorkspaceDto>> Handle(ListWorkspacesQuery request, CancellationToken ct)
+    public async ValueTask<IReadOnlyList<WorkspaceDto>> Handle(ListWorkspacesQuery request, CancellationToken ct)
         => (await workspaces.ListForUserAsync(request.ActorId, ct))
             .Select(x => new WorkspaceDto(x.Id, x.Name, x.OwnerUserId)).ToArray();
 }
@@ -38,7 +38,7 @@ public sealed record ListWorkspaceMembersQuery(Guid ActorId, Guid WorkspaceId) :
 public sealed class ListWorkspaceMembersHandler(IWorkspaceRepository workspaces, IUserRepository users)
     : IRequestHandler<ListWorkspaceMembersQuery, IReadOnlyList<MemberDto>>
 {
-    public async Task<IReadOnlyList<MemberDto>> Handle(ListWorkspaceMembersQuery query, CancellationToken ct)
+    public async ValueTask<IReadOnlyList<MemberDto>> Handle(ListWorkspaceMembersQuery query, CancellationToken ct)
     {
         if (await workspaces.FindMemberAsync(query.WorkspaceId, query.ActorId, ct) is null)
             throw AppException.Forbidden();
@@ -65,7 +65,7 @@ public sealed class AddWorkspaceMemberValidator : AbstractValidator<AddWorkspace
 public sealed class AddWorkspaceMemberHandler(IWorkspaceRepository workspaces, IUserRepository users, IUnitOfWork uow)
     : IRequestHandler<AddWorkspaceMemberCommand, MemberDto>
 {
-    public async Task<MemberDto> Handle(AddWorkspaceMemberCommand request, CancellationToken ct)
+    public async ValueTask<MemberDto> Handle(AddWorkspaceMemberCommand request, CancellationToken ct)
     {
         var actor = await workspaces.FindMemberAsync(request.WorkspaceId, request.ActorId, ct);
         if (actor is null || (actor.Role is not WorkspaceRole.Owner and not WorkspaceRole.Admin))

@@ -1,3 +1,6 @@
+using Mediator;
+using Pakpost.Application.Common.Behaviors;
+using Pakpost.Application.Internal.Auth;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -10,6 +13,14 @@ using Pakpost.Infrastructure;
 var builder=WebApplication.CreateBuilder(args);
 builder.Services.AddControllers().AddJsonOptions(o=>o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddApplication();
+// Generated at build time; scan Application for requests/handlers and register
+// the existing FluentValidation pipeline. Scoped handlers keep DbContext safe.
+builder.Services.AddMediator((MediatorOptions options) =>
+{
+    options.Assemblies = [typeof(RegisterCommand)];
+    options.ServiceLifetime = Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped;
+    options.PipelineBehaviors = [typeof(ValidationBehavior<,>)];
+});
 builder.Services.AddInfrastructure(builder.Configuration);
 var signingKey=builder.Configuration["Jwt:SigningKey"];
 if(string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKey)<32)

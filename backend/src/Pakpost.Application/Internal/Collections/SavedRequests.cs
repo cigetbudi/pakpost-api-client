@@ -1,6 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
-using MediatR;
+using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
@@ -46,14 +46,14 @@ public abstract class SavedRequestsAccess
 public sealed class ListSavedRequestsHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests)
     :SavedRequestsAccess,IRequestHandler<ListSavedRequestsQuery,IReadOnlyList<SavedRequestDto>>
 {
-    public async Task<IReadOnlyList<SavedRequestDto>> Handle(ListSavedRequestsQuery q,CancellationToken ct)
+    public async ValueTask<IReadOnlyList<SavedRequestDto>> Handle(ListSavedRequestsQuery q,CancellationToken ct)
     { await Check(q.ActorId,q.WorkspaceId,q.CollectionId,workspaces,collections,ct);
       return (await requests.ListAsync(q.CollectionId,ct)).Select(ToDto).ToArray(); }
 }
 public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<SaveRequestCommand,SavedRequestDto>
 {
-    public async Task<SavedRequestDto> Handle(SaveRequestCommand c,CancellationToken ct)
+    public async ValueTask<SavedRequestDto> Handle(SaveRequestCommand c,CancellationToken ct)
     { await Check(c.ActorId,c.WorkspaceId,c.CollectionId,workspaces,collections,ct);
       SavedHeaderPolicy.EnsureSafe(c.HeadersJson);
       var item=new SavedRequest(c.CollectionId,c.Name,c.Method,c.Url,c.HeadersJson,c.Body,c.BodyMode,c.ContentType,c.FormFieldsJson,c.PreRequestScript,c.PostResponseScript);
@@ -62,11 +62,13 @@ public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollecti
 public sealed class DeleteSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<DeleteSavedRequestCommand>
 {
-    public async Task Handle(DeleteSavedRequestCommand c,CancellationToken ct)
+    public async ValueTask<Unit> Handle(DeleteSavedRequestCommand c,CancellationToken ct)
     { await Check(c.ActorId,c.WorkspaceId,c.CollectionId,workspaces,collections,ct,destructive:true);
       var item=await requests.FindAsync(c.RequestId,ct);
       if(item is null || item.CollectionId!=c.CollectionId) throw AppException.NotFound();
-      requests.Remove(item);await uow.SaveChangesAsync(ct); }
+      requests.Remove(item);await uow.SaveChangesAsync(ct);
+        return Unit.Value;
+    }
 }
 
 public sealed record UpdateSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId,
@@ -94,7 +96,7 @@ public sealed class UpdateSavedRequestValidator:AbstractValidator<UpdateSavedReq
 public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<UpdateSavedRequestCommand,SavedRequestDto>
 {
-    public async Task<SavedRequestDto> Handle(UpdateSavedRequestCommand cmd,CancellationToken ct)
+    public async ValueTask<SavedRequestDto> Handle(UpdateSavedRequestCommand cmd,CancellationToken ct)
     {
         await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct);
         var item=await requests.FindAsync(cmd.RequestId,ct);
@@ -109,7 +111,7 @@ public sealed record MoveSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid 
 public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<MoveSavedRequestCommand,SavedRequestDto>
 {
-    public async Task<SavedRequestDto> Handle(MoveSavedRequestCommand cmd,CancellationToken ct)
+    public async ValueTask<SavedRequestDto> Handle(MoveSavedRequestCommand cmd,CancellationToken ct)
     {
         await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct,destructive:true);
         var destination=await collections.FindAsync(cmd.TargetCollectionId,ct);

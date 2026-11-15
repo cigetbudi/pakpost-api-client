@@ -1,5 +1,5 @@
 using FluentValidation;
-using MediatR;
+using Mediator;
 namespace Pakpost.Application.Internal.Requests;
 public sealed record HttpFormField(string Key,string? Value,string? FileName,string? Base64,string? ContentType);
 public sealed record SendHttpRequestCommand(
@@ -24,5 +24,5 @@ public sealed class SendHttpRequestValidator:AbstractValidator<SendHttpRequestCo
 }
 public sealed class SendHttpRequestHandler(IHttpRequestRunner runner):IRequestHandler<SendHttpRequestCommand,SendHttpResponse>
 {
-    public Task<SendHttpResponse> Handle(SendHttpRequestCommand cmd,CancellationToken ct)=>runner.ExecuteAsync(cmd,ct);
+    public ValueTask<SendHttpResponse> Handle(SendHttpRequestCommand cmd,CancellationToken ct) => new(runner.ExecuteAsync(cmd,ct));
 }
