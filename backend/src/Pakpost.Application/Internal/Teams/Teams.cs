@@ -1,5 +1,5 @@
 using FluentValidation;
-using MediatR;
+using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
@@ -17,13 +17,13 @@ public sealed class AddTeamMemberValidator:AbstractValidator<AddTeamMemberComman
 { public AddTeamMemberValidator()=>RuleFor(x=>x.Email).NotEmpty().EmailAddress(); }
 public sealed class ListTeamsHandler(IWorkspaceRepository w,ITeamRepository t):IRequestHandler<ListTeamsQuery,IReadOnlyList<TeamDto>>
 {
-    public async Task<IReadOnlyList<TeamDto>> Handle(ListTeamsQuery q,CancellationToken ct)
+    public async ValueTask<IReadOnlyList<TeamDto>> Handle(ListTeamsQuery q,CancellationToken ct)
     { if(await w.FindMemberAsync(q.WorkspaceId,q.ActorId,ct) is null) throw AppException.Forbidden();
       return (await t.ListAsync(q.WorkspaceId,ct)).Select(x=>new TeamDto(x.Id,x.WorkspaceId,x.Name)).ToArray(); }
 }
 public sealed class CreateTeamHandler(IWorkspaceRepository w,ITeamRepository t,IUnitOfWork uow):IRequestHandler<CreateTeamCommand,TeamDto>
 {
-    public async Task<TeamDto> Handle(CreateTeamCommand q,CancellationToken ct)
+    public async ValueTask<TeamDto> Handle(CreateTeamCommand q,CancellationToken ct)
     { var actor=await w.FindMemberAsync(q.WorkspaceId,q.ActorId,ct);
       if(actor is null || actor.Role is not (WorkspaceRole.Owner or WorkspaceRole.Admin))throw AppException.Forbidden();
       var team=new Team(q.WorkspaceId,q.ActorId,q.Name);t.Add(team);
@@ -32,7 +32,7 @@ public sealed class CreateTeamHandler(IWorkspaceRepository w,ITeamRepository t,I
 }
 public sealed class ListTeamMembersHandler(IWorkspaceRepository w,ITeamRepository t,IUserRepository users):IRequestHandler<ListTeamMembersQuery,IReadOnlyList<TeamMemberDto>>
 {
-    public async Task<IReadOnlyList<TeamMemberDto>> Handle(ListTeamMembersQuery q,CancellationToken ct)
+    public async ValueTask<IReadOnlyList<TeamMemberDto>> Handle(ListTeamMembersQuery q,CancellationToken ct)
     { if(await w.FindMemberAsync(q.WorkspaceId,q.ActorId,ct) is null)throw AppException.Forbidden();
       var team=await t.FindAsync(q.TeamId,ct);
       if(team is null || team.WorkspaceId!=q.WorkspaceId) throw AppException.NotFound();
@@ -43,7 +43,7 @@ public sealed class ListTeamMembersHandler(IWorkspaceRepository w,ITeamRepositor
 }
 public sealed class AddTeamMemberHandler(IWorkspaceRepository w,ITeamRepository t,IUserRepository users,IUnitOfWork uow):IRequestHandler<AddTeamMemberCommand,TeamMemberDto>
 {
-    public async Task<TeamMemberDto> Handle(AddTeamMemberCommand q,CancellationToken ct)
+    public async ValueTask<TeamMemberDto> Handle(AddTeamMemberCommand q,CancellationToken ct)
     { var actor=await w.FindMemberAsync(q.WorkspaceId,q.ActorId,ct);
       if(actor is null || actor.Role is not (WorkspaceRole.Owner or WorkspaceRole.Admin))throw AppException.Forbidden();
       var team=await t.FindAsync(q.TeamId,ct);

@@ -1,7 +1,8 @@
 using FluentValidation;
-using MediatR;
+using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
+using Pakpost.Application.Common.Security;
 using Pakpost.Domain.Entities;
 
 namespace Pakpost.Application.Internal.Collections;
@@ -10,7 +11,7 @@ public sealed record ListCollectionsQuery(Guid ActorId, Guid WorkspaceId) : IReq
 public sealed class ListCollectionsHandler(ICollectionRepository collections, IWorkspaceRepository workspaces)
     : IRequestHandler<ListCollectionsQuery, IReadOnlyList<CollectionDto>>
 {
-    public async Task<IReadOnlyList<CollectionDto>> Handle(ListCollectionsQuery query, CancellationToken ct)
+    public async ValueTask<IReadOnlyList<CollectionDto>> Handle(ListCollectionsQuery query, CancellationToken ct)
     {
         if (await workspaces.FindMemberAsync(query.WorkspaceId, query.ActorId, ct) is null)
             throw AppException.Forbidden();
@@ -26,7 +27,7 @@ public sealed class CreateCollectionValidator : AbstractValidator<CreateCollecti
 public sealed class CreateCollectionHandler(ICollectionRepository collections, IWorkspaceRepository workspaces, IUnitOfWork uow)
     : IRequestHandler<CreateCollectionCommand, CollectionDto>
 {
-    public async Task<CollectionDto> Handle(CreateCollectionCommand request, CancellationToken ct)
+    public async ValueTask<CollectionDto> Handle(CreateCollectionCommand request, CancellationToken ct)
     {
         if (await workspaces.FindMemberAsync(request.WorkspaceId, request.ActorId, ct) is null)
             throw AppException.Forbidden();
@@ -44,9 +45,9 @@ public sealed class RenameCollectionValidator:AbstractValidator<RenameCollection
 }
 public sealed class RenameCollectionHandler(ICollectionRepository collections,IWorkspaceRepository workspaces,IUnitOfWork uow):IRequestHandler<RenameCollectionCommand,CollectionDto>
 {
-    public async Task<CollectionDto> Handle(RenameCollectionCommand cmd,CancellationToken ct)
+    public async ValueTask<CollectionDto> Handle(RenameCollectionCommand cmd,CancellationToken ct)
     {
-        if(await workspaces.FindMemberAsync(cmd.WorkspaceId,cmd.ActorId,ct) is null)throw AppException.Forbidden();
+        await WorkspacePermissions.RequireManagerAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,ct);
         var item=await collections.FindAsync(cmd.CollectionId,ct);
         if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
         item.Rename(cmd.Name);await uow.SaveChangesAsync(ct);
@@ -56,11 +57,12 @@ public sealed class RenameCollectionHandler(ICollectionRepository collections,IW
 public sealed record DeleteCollectionCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId):IRequest;
 public sealed class DeleteCollectionHandler(ICollectionRepository collections,IWorkspaceRepository workspaces,IUnitOfWork uow):IRequestHandler<DeleteCollectionCommand>
 {
-    public async Task Handle(DeleteCollectionCommand cmd,CancellationToken ct)
+    public async ValueTask<Unit> Handle(DeleteCollectionCommand cmd,CancellationToken ct)
     {
-        if(await workspaces.FindMemberAsync(cmd.WorkspaceId,cmd.ActorId,ct) is null)throw AppException.Forbidden();
+        await WorkspacePermissions.RequireManagerAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,ct);
         var item=await collections.FindAsync(cmd.CollectionId,ct);
         if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
         collections.Remove(item);await uow.SaveChangesAsync(ct);
+        return Unit.Value;
     }
 }

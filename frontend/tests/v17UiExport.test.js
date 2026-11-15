@@ -43,5 +43,5 @@ test('v17 app connects export, environment dialog, branding, and global toast po
  assert.match(app,/createPortal\(<div className="pp-toast pp-toast-v17"/);
  assert.match(explorer,/pp-env-v17-modal-backdrop/);
  assert.match(explorer,/Export as/);
- for(const mode of ['light','dark'])assert.ok(existsSync(new URL(`../public/branding/pakpost-${mode}.webp`,import.meta.url)));
+ for(const mode of ['light','dark'])assert.ok(existsSync(new URL(`../public/branding/pakpost-logo-${mode}.svg`,import.meta.url)));
 });
