@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import {createPortal} from 'react-dom';
 import {
-  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
+  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
 import { TextEditor } from './features/Editors';
 import { RetroSelect } from './features/RetroSelect';
@@ -15,12 +16,13 @@ import { blankDraft, parseCurl, isCurl } from './features/importExport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
 import {planTabClose,reorderTabs} from './features/tabActions';
-import {applyLocalAction,exportLocalCollection,updateLocalRequest,createLocalSavedRequest} from './features/localCollectionActions';
-import {createPostmanCollection} from './features/importExport';
+import {applyLocalAction,updateLocalRequest,createLocalSavedRequest} from './features/localCollectionActions';
+import {exportCollectionByFormat,exportEnvironmentByFormat,exportFileName} from './features/exportFormats';
 import {stripJsonComments,hasJsonComments} from './features/jsonComments';
 import {findBoundTab} from './features/sourceTabs';
 import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, hasUnsavedMarker, tabSaved} from './features/draftLifecycle';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
+import {MenuActionItem} from './features/MenuActionItem';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from './features/appearance';
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
 import { runSandbox } from './features/runScript';
@@ -94,6 +96,9 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authForm, setAuthForm] = useState({ displayName: '', email: '', password: '' });
   const [notice, setNotice] = useState('');
+  const [exportChoice,setExportChoice] = useState(null);
+  const [exportFormat,setExportFormat] = useState('postman');
+  const [exportIncludeSecrets,setExportIncludeSecrets] = useState(false);
   const [method, setMethod] = useState(RECOVERED.method || 'GET');
   const [url, setUrl] = useState(RECOVERED.url ?? 'https://httpbin.org/get');
   const [rows, setRows] = useState(RECOVERED.rows || [{ ...EMPTY_HEADER }]);
@@ -172,9 +177,13 @@ export default function App() {
   const [authType, setAuthType] = useState(RECOVERED.authType || 'none');
   const [bearerToken, setBearerToken] = useState(RECOVERED.bearerToken || '');
   const [openTabs, setOpenTabs] = useState(() => (CACHED?.openTabs || [{ id: 't1', name: 'Untitled Request', method: 'GET' }]).map(t=>({
-    ...t,savedFingerprint:t.savedFingerprint ?? requestFingerprint(CACHED?.drafts?.[t.id] || freshRequest(t.name),t.name)
+    ...t,savedName:t.savedName ?? t.name,savedFingerprint:t.savedFingerprint ?? requestFingerprint(CACHED?.drafts?.[t.id] || freshRequest(t.name),t.name)
   })));
   const [tabMenu, setTabMenu] = useState(null);
+  const [editingRequestName, setEditingRequestName] = useState(false);
+  const requestNameInputRef = useRef(null);
+  const originalRequestNameRef = useRef('');
+  const cancelledRequestNameRef = useRef(false);
   const [closeConfirmation, setCloseConfirmation] = useState(null);
   const [activeTabId, setActiveTabId] = useState(CACHED?.activeTabId || 't1');
   const activeTabRef = useRef(CACHED?.activeTabId || 't1');
@@ -194,6 +203,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   const draggingRef = useRef(false);
+  useEffect(() => {
+    if (!editingRequestName || page !== 'tester') return;
+    const input=requestNameInputRef.current;
+    if (input) { input.focus(); input.select(); }
+  }, [editingRequestName, activeTabId, page]);
+  function beginRequestRename() {
+    const current=openTabs.find(tab=>tab.id===activeTabRef.current);
+    originalRequestNameRef.current=current?.name||'Untitled Request';
+    cancelledRequestNameRef.current=false;
+    setEditingRequestName(true);
+  }
+  function setCurrentRequestName(nextName) {
+    setOpenTabs(tabs=>tabs.map(tab=>tab.id===activeTabRef.current?{...tab,name:nextName}:tab));
+  }
+  function finishRequestRename() {
+    if(cancelledRequestNameRef.current){cancelledRequestNameRef.current=false;return;}
+    const current=openTabs.find(tab=>tab.id===activeTabRef.current);
+    const trimmed=(current?.name||'').trim();
+    setCurrentRequestName(trimmed||originalRequestNameRef.current||'Untitled Request');
+    setEditingRequestName(false);
+  }
+  function cancelRequestRename() {
+    cancelledRequestNameRef.current=true;
+    setCurrentRequestName(originalRequestNameRef.current);
+    setEditingRequestName(false);
+  }
 
   function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
   function restoreDraft(next) {
@@ -238,6 +273,7 @@ export default function App() {
   },[method,url,rows,body,format,formFields,binaryFile,preScript,postScript,scriptLog,scriptTests,scriptError,
     reqTab,resTab,result,params,authType,bearerToken,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope]);
   function selectTab(id) {
+    setEditingRequestName(false);
     if (id === activeTabRef.current) { setPage('tester'); return; }
     stashActive();
     const next = draftsRef.current[id];
@@ -247,7 +283,7 @@ export default function App() {
 
     setPage('tester');
   }
-  function addTab(request, source = null) {
+  function addTab(request, source = null, { focusName = false } = {}) {
     stashActive();
     const id = `t${++tabSequence.current}`;
     const draft = { ...freshRequest(request?.name || 'Untitled Request'), ...request, binaryFile:{name:request?.binaryFile?.name||'',base64:''},
@@ -255,7 +291,8 @@ export default function App() {
       formFields:request?.formFields||[{...EMPTY_HEADER}],result:null,scriptLog:[],scriptTests:[],scriptError:''};
     draftsRef.current[id] = draft; activeTabRef.current = id;
     const name = request?.name || 'Untitled Request';
-    setOpenTabs(t => [...t, { id, name, method: draft.method, source, savedFingerprint:requestFingerprint(draft,name) }]);
+    setOpenTabs(t => [...t, { id, name, savedName:name, method: draft.method, source, savedFingerprint:requestFingerprint(draft,name) }]);
+    originalRequestNameRef.current=name; cancelledRequestNameRef.current=false; setEditingRequestName(focusName);
     setActiveTabId(id); restoreDraft(draft); setPage('tester');
   }
   function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]}) {
@@ -307,7 +344,7 @@ export default function App() {
   function updateLocal(action){
     try{setLocalCollections(old=>applyLocalAction(old,action));
       if(action.type==='deleteRequest'||action.type==='deleteCollection')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&(action.type==='deleteCollection'?t.source.collectionId===action.collectionId:(t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId))?{...t,source:null}:t));
-      if(action.type==='renameRequest')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId?{...t,name:action.name}:t));
+      if(action.type==='renameRequest')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId?{...t,name:action.name,savedName:action.name}:t));
       if(action.type==='deleteRequest'||action.type==='deleteCollection')setNotice('Deleted from local collection. Open drafts are preserved.');
     }catch(e){setNotice(getMessage(e));}
   }
@@ -318,7 +355,7 @@ export default function App() {
       pendingId:typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function'
         ?crypto.randomUUID():`draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
     });
-    addTab(draft,source);
+    addTab(draft,source,{focusName:true});
     setExplorerTab('collections');setSidebarCollapsed(false);
     if(scope==='workspace'){
       setSelectedCol(collectionId);
@@ -330,9 +367,7 @@ export default function App() {
     const {action,collectionId,requestId,folderPath}=item;
     const collection=localCollections.find(c=>c.id===collectionId);
     if(!collection)return;
-    if(action==='exportCollection'){
-      downloadJson(exportLocalCollection(collection),`${collection.name.replace(/[^a-z0-9_-]/gi,'_')}.postman_collection.json`);return;
-    }
+    if(action==='exportCollection'){openExportChoice({kind:'collection',scope:'local',collectionId,name:collection.name});return;}
     if(action==='newRequest'){
       createCollectionDraft('local',collectionId,folderPath||[]);
       return;
@@ -387,7 +422,7 @@ export default function App() {
   function showWorkspaceMenu(e,item){
     e.preventDefault();e.stopPropagation();
     const rect=e.currentTarget.getBoundingClientRect();
-    setWorkspaceMenu({...item,x:Math.max(8,Math.min(e.clientX||rect.right,window.innerWidth-226)),y:Math.max(8,Math.min(e.clientY||rect.bottom,window.innerHeight-282))});
+    setWorkspaceMenu({...item,x:Math.max(8,Math.min(e.clientX||rect.right,window.innerWidth-245)),y:Math.max(8,Math.min(e.clientY||rect.bottom,window.innerHeight-282))});
   }
   function workspaceDraft(item){
     let headers={};try{headers=JSON.parse(item.headersJson||'{}')}catch{}
@@ -400,6 +435,9 @@ export default function App() {
     if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
     }
+    if(action==='exportCollection'){
+      openExportChoice({kind:'collection',scope:'workspace',collectionId:item.collectionId,name:collections.find(c=>c.id===item.collectionId)?.name||'Workspace collection'});return;
+    }
     if(action==='newRequest'){
       createCollectionDraft('workspace',item.collectionId);
       return;
@@ -411,10 +449,6 @@ export default function App() {
         return;
       }
       const list=await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token);
-      if(action==='exportCollection'){
-        const name=collections.find(c=>c.id===item.collectionId)?.name||'Workspace collection';
-        downloadJson(createPostmanCollection(list.map(workspaceDraft),{name}),`${name.replace(/[^a-z0-9_-]/gi,'_')}.postman_collection.json`);return;
-      }
       if(action==='duplicateCollection'){
         if(list.length>100)throw Error('Duplicate limit: 100 saved requests');
         const source=collections.find(c=>c.id===item.collectionId);
@@ -455,7 +489,7 @@ export default function App() {
         await api(`${base}/requests/${requestId}`,'PUT',{...item,name},token);
         setSavedRequests(old=>old.map(x=>x.id===requestId?{...x,name}:x));
         setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:(old[workspaceCollectionKey(selectedWs,collectionId)]||[]).map(x=>x.id===requestId?{...x,name}:x)}));
-        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,name}:t));
+        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,name,savedName:name}:t));
       }else if(action==='deleteRequest'){
         await api(`${base}/requests/${requestId}`,'DELETE',undefined,token);
         setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,source:null}:t));
@@ -487,7 +521,7 @@ export default function App() {
       const sourceTab=openTabs.find(t=>t.id===id);
       const index=openTabs.findIndex(t=>t.id===id);
       const copyName=`${sourceTab?.name||'Request'} (copy)`;
-      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:copyName,method:cloned.method,source:null,pendingCopy:true,savedFingerprint:requestFingerprint(cloned,copyName)},...t.slice(index+1)]);
+      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:copyName,savedName:copyName,method:cloned.method,source:null,pendingCopy:true,savedFingerprint:requestFingerprint(cloned,copyName)},...t.slice(index+1)]);
       selectTabFromDraft(newId);return;
     }
     stashActive();
@@ -503,7 +537,7 @@ export default function App() {
     if(plan.reset){
       const blank=freshRequest('Untitled Request');const blankId=id;
       draftsRef.current={[blankId]:blank};
-      setOpenTabs([{id:blankId,name:'Untitled Request',method:'GET',savedFingerprint:requestFingerprint(blank,'Untitled Request')}]);
+      setOpenTabs([{id:blankId,name:'Untitled Request',savedName:'Untitled Request',method:'GET',savedFingerprint:requestFingerprint(blank,'Untitled Request')}]);
       selectTabFromDraft(blankId);return;
     }
     const removed=new Set(plan.removedIds);
@@ -516,6 +550,7 @@ export default function App() {
     setTabMenu({id,x:Math.max(8,Math.min(e.clientX,window.innerWidth-224)),y:Math.max(8,Math.min(e.clientY,window.innerHeight-190))});
   }
   function selectTabFromDraft(id) {
+    setEditingRequestName(false);
     const next = draftsRef.current[id];
     if (!next) return;
     activeTabRef.current = id; setActiveTabId(id);
@@ -567,8 +602,42 @@ export default function App() {
     if(envScope==='workspace'){
       if(!selectedWs||!token)throw new Error('Sign in and choose a workspace');
       const env=await api(`/api/workspaces/${selectedWs}/environments`,'POST',{name},token);
-      setWorkspaceEnvironments(v=>[...v,env]);setActiveEnvId(env.id);
-    }else{const env={id:crypto.randomUUID(),name,variables:[]};setLocalEnvironments(v=>[...v,env]);setActiveEnvId(env.id)}
+      setWorkspaceEnvironments(v=>[...v,env]);setActiveEnvId(env.id);return env;
+    }else{const env={id:crypto.randomUUID(),name,variables:[]};setLocalEnvironments(v=>[...v,env]);setActiveEnvId(env.id);return env;}
+  }
+  async function duplicateEnvironment(source){
+    let nextName=`${source.name} (copy)`;let sequence=2;
+    while(currentEnvironments.some(x=>x.name.toLowerCase()===nextName.toLowerCase()))nextName=`${source.name} (copy ${sequence++})`;
+    const created=await createEnvironment(nextName);
+    // A failed update is not silently treated as a successful duplicate.
+    await persistEnvironment({...created,name:nextName,variables:(source.variables||[]).map(v=>({...v}))});
+    setNotice(`Duplicated ${source.name}`);
+    return created;
+  }
+  function openExportChoice(choice){
+    setExportFormat('postman');setExportIncludeSecrets(false);setExportChoice(choice);
+  }
+  async function confirmExport(){
+    if(!exportChoice)return;
+    try{
+      const {kind,scope,collectionId,environment,name}=exportChoice;
+      if(kind==='environment'){
+        downloadJson(exportEnvironmentByFormat(environment,{format:exportFormat,includeSecrets:exportIncludeSecrets}),exportFileName(name,exportFormat,'environment'));
+      }else{
+        let drafts,localCollection=null;
+        if(scope==='local'){
+          localCollection=localCollections.find(c=>c.id===collectionId);
+          if(!localCollection)throw new Error('Collection no longer exists');
+          drafts=localCollection.requests||[];
+        }else{
+          const list=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
+          drafts=list.map(workspaceDraft);
+        }
+        const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection});
+        downloadJson(output,exportFileName(name,exportFormat));
+      }
+      setNotice(`Exported ${name} as ${exportFormat==='openapi'?'OpenAPI':'Postman'}`);setExportChoice(null);
+    }catch(e){setNotice(`Export failed: ${getMessage(e)}`);}
   }
   async function persistEnvironment(env){
     if(envScope==='workspace'){
@@ -827,7 +896,8 @@ export default function App() {
   async function saveCurrent(){
     const origin=activeSource();
     if(!origin){openSaveAs();return;}
-    const name=activeRequestName;
+    const name=activeRequestName.trim();
+    if(!name){setNotice('Request name cannot be empty');return;}
     const tabId=activeTabRef.current;
     const savedDraft=snapshot();
     const savedPayload=currentSavePayload(name);
@@ -912,7 +982,7 @@ export default function App() {
 
   return <div className="pp-app">
     <header className="pp-top">
-      <div className="pp-logo"><div className="pp-logo-mark">p</div><span>pakpost</span><span className="pp-logo-sparkle" aria-hidden="true">✦</span></div>
+      <div className="pp-logo pp-branding-v17" aria-label="Pakpost"><img src={isDarkAppearance(theme)?"/branding/pakpost-dark.webp":"/branding/pakpost-light.webp"} alt="Pakpost" width="155" height="48" decoding="async"/></div>
       <button className="pp-top-search" type="button" aria-label="Search requests and commands" onClick={()=>{setCommandQuery('');setCommandIndex(0);setCommandOpen(true);}}><Search size={15}/><span>Search requests and commands</span><kbd>Ctrl K</kbd></button>
       <div className="pp-top-right">
         <div className="pp-env-top"><span>ENV</span>
@@ -940,7 +1010,7 @@ export default function App() {
 
       {page==='tester' && !sidebarCollapsed && <aside className="pp-explorer">
         <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Collections' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'environments' ? 'Environments' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
-        {explorerTab === 'environments' ? <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
+        {explorerTab === 'environments' ? <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
             environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
           <div className="pp-side-subhead"><span>RECENT REQUESTS</span><span>{recent.length}</span></div>
@@ -1011,7 +1081,7 @@ export default function App() {
       </aside>}
 
       <main className="pp-content">
-        {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} split={split} onSplitChange={setSplit} onBack={()=>setPage('tester')}/>}
+        {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} split={split} onSplitChange={setSplit} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
         <div className="pp-tabs-bar">
           <div className="pp-open-tabs" role="tablist" aria-label="Open requests">
             {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const from=tabDragRef.current;if(from)setOpenTabs(ts=>reorderTabs(ts,from,t.id));tabDragRef.current=null;}} onDragEnd={()=>{tabDragRef.current=null;}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{hasUnsavedMarker(t,t.id===activeTabId?snapshot():draftsRef.current[t.id]) && <span className="pp-unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"/>}{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
@@ -1024,7 +1094,7 @@ export default function App() {
           {(workspaceMenu.type==='collection'?[
             ['newRequest','New request'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
           ]:[['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <button key={id} role="menuitem" className={id.startsWith('delete')?'danger':''} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</button>)}
+            <MenuActionItem key={id} action={id} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
@@ -1037,7 +1107,21 @@ export default function App() {
         </div>}
 
         {page === 'tester' ? <div key={activeTabId} className="pp-tester pp-fade-content">
-          <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/><strong>{activeRequestName}</strong><span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
+          <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/>{editingRequestName ? <input
+            ref={requestNameInputRef}
+            className="pp-inline-request-name"
+            aria-label="Request name"
+            title="Press Enter to finish, Ctrl/Cmd+S to save, Escape to cancel"
+            value={activeRequestName}
+            maxLength={120}
+            spellCheck={false}
+            onChange={event=>setCurrentRequestName(event.target.value)}
+            onBlur={finishRequestRename}
+            onKeyDown={event=>{
+              if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur();}
+              if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancelRequestRename();}
+            }}
+          /> : <button type="button" className="pp-editable-request-name" onClick={beginRequestRename} title="Rename request" aria-label={`Rename ${activeRequestName}`}><span>{activeRequestName}</span><Pencil size={13}/></button>}<span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
           <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} variables={varsFromEnv()} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} disabled={busyAction} title="Save changes (Ctrl/Cmd+S)"><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
@@ -1116,7 +1200,19 @@ export default function App() {
     </div>
     <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">Guest testing enabled · Private addresses blocked by proxy</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
     {commandOpen && <div className="pp-command-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCommandOpen(false);}}><section className="pp-command-dialog" role="dialog" aria-modal="true" aria-label="Quick search and commands"><div className="pp-command-input-wrap"><Search size={18}/><input autoFocus aria-label="Search commands" value={commandQuery} onChange={e=>{setCommandQuery(e.target.value);setCommandIndex(0);}} onKeyDown={e=>{if(e.key==='ArrowDown'){e.preventDefault();setCommandIndex(i=>Math.min(visibleCommandItems.length-1,i+1));}else if(e.key==='ArrowUp'){e.preventDefault();setCommandIndex(i=>Math.max(0,i-1));}else if(e.key==='Enter'&&visibleCommandItems.length){e.preventDefault();setCommandOpen(false);visibleCommandItems[Math.min(commandIndex,visibleCommandItems.length-1)].run();}}} placeholder="Find a request or run a command..."/><kbd>Esc</kbd></div><div className="pp-command-results" role="listbox">{visibleCommandItems.length?visibleCommandItems.map((item,i)=><button type="button" role="option" aria-selected={commandIndex===i} onMouseEnter={()=>setCommandIndex(i)} key={item.key} onClick={()=>{setCommandOpen(false);item.run();}}>{item.method?<span className={`pp-http-label ${item.method.toLowerCase()}`}>{item.method}</span>:<Code2 size={15}/>}<span><strong>{item.title}</strong><small>{item.subtitle}</small></span><ArrowRight size={14}/></button>):<div className="pp-command-empty">No matching requests or commands.</div>}</div></section></div>}
-    {notice && <div className="pp-toast"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>}
+    {notice && createPortal(<div className="pp-toast pp-toast-v17" role="status" aria-live="polite"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
+    {exportChoice&&<Dialog title={`Export ${exportChoice.kind}`} subtitle={`Export “${exportChoice.name}” as a downloadable JSON file.`} onClose={()=>setExportChoice(null)}>
+      <div className="pp-v17-export-options">
+        <p>Format</p><div className="pp-v17-export-choices">
+          <button className={exportFormat==='postman'?'active':''} onClick={()=>setExportFormat('postman')}><FileJson size={17}/><span><strong>Postman JSON</strong><small>{exportChoice.kind==='environment'?'Postman environment':'Postman Collection v2.1'}</small></span></button>
+          <button className={exportFormat==='openapi'?'active':''} onClick={()=>setExportFormat('openapi')}><Braces size={17}/><span><strong>OpenAPI 3.1</strong><small>{exportChoice.kind==='environment'?'Vendor-extension environment metadata':'API endpoint description'}</small></span></button>
+        </div>
+        <label className="pp-v17-export-secret"><input type="checkbox" checked={exportIncludeSecrets} onChange={e=>setExportIncludeSecrets(e.target.checked)}/> Include secret variable values / known sensitive headers</label>
+        {exportIncludeSecrets&&<p className="pp-v17-export-warning">The exported JSON may contain credentials. Store it securely.</p>}
+        <p className="pp-v17-export-note">OpenAPI describes APIs, not executable Postman scripts. Environment export uses the nonstandard x-pakpost-environment extension. Review exported bodies and scripts for credentials before sharing.</p>
+        <div className="pp-action-dialog-buttons"><button onClick={()=>setExportChoice(null)}>Cancel</button><button className="pp-modal-submit" onClick={confirmExport}><ArrowDownToLine size={15}/> Export JSON</button></div>
+      </div>
+    </Dialog>}
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="pp-muted-small pp-center">Google SSO can be added later.</p></form></Dialog>}
     {closeConfirmation&&<Dialog title="Unsaved changes" subtitle="Changes in these tabs have not been saved to their collections." onClose={()=>setCloseConfirmation(null)}>
       <div className="pp-unsaved-confirm">

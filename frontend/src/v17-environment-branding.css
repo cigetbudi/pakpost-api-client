@@ -1,0 +1,70 @@
+/* v17 presentation only: dialog content is mounted lazily, no third-party component bundle. */
+.pp-branding-v17{width:155px;max-width:190px;overflow:hidden;min-width:0}
+.pp-branding-v17 picture{display:flex;align-items:center;height:100%;width:100%}
+.pp-branding-v17 img{display:block;width:155px;max-width:100%;height:auto;max-height:48px;object-fit:contain;object-position:left center}
+.pp-env-v17 .pp-env-list{flex:1 1 auto;max-height:none;min-height:0;overflow-y:auto;border-bottom:0;padding:8px 8px 2px}
+.pp-env-v17 .pp-env-toolbar{padding:12px}
+.pp-env-v17 .pp-env-v17-row{position:relative;display:flex;align-items:center;min-height:39px;gap:3px;border-radius:5px;color:var(--text2)}
+.pp-env-v17-row:hover,.pp-env-v17-row.active{background:var(--accent-soft)}
+.pp-env-v17-select{width:100%;min-width:0;display:flex;align-items:center;gap:9px;text-align:left;font-size:12px;padding:9px 8px;overflow:hidden}
+.pp-env-v17-row.active .pp-env-v17-select{color:var(--accent)}
+.pp-env-v17-actions{position:relative;flex:none;margin-right:4px}
+.pp-env-v17-actions .pp-env-more{display:grid;place-items:center;width:29px;height:30px;color:var(--muted);opacity:0;border-radius:4px}
+.pp-env-v17-row:hover .pp-env-more,.pp-env-v17-row:focus-within .pp-env-more,.pp-env-v17-actions .pp-env-more[aria-expanded=true]{opacity:1}
+.pp-env-v17-actions .pp-env-more:hover{color:var(--accent);background:var(--hover)}
+.pp-env-v17-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:40;min-width:183px;display:flex;flex-direction:column;gap:2px;padding:5px;background:var(--surface);border:1.5px solid var(--border);box-shadow:0 12px 30px rgba(0,0,0,.24);border-radius:6px;animation:pp-v17-enter 110ms ease-out}
+.pp-env-v17-menu button{display:flex;align-items:center;gap:10px;padding:9px;border-radius:4px;font-size:11px;white-space:nowrap;text-align:left}
+.pp-env-v17-menu button:hover{background:var(--hover)}
+.pp-env-v17-menu button.danger{color:var(--red)}
+.pp-env-v17-hint{padding:12px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);line-height:1.6;flex:none}
+.pp-env-v17-modal-backdrop{position:fixed;inset:0;z-index:28000;display:grid;place-items:center;background:rgba(3,6,13,.68);padding:14px;backdrop-filter:blur(3px);animation:pp-v17-enter 110ms ease-out}
+.pp-env-v17-modal,.pp-env-v17-confirm{width:min(710px,100%);max-height:min(87vh,850px);display:flex;flex-direction:column;min-height:0;overflow:hidden;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);box-shadow:0 22px 65px rgba(0,0,0,.38);animation:pp-v17-modal-in 130ms ease-out}
+.pp-env-v17-confirm{width:min(410px,100%);padding:23px;gap:17px}
+.pp-env-v17-confirm h2{font-size:17px}.pp-env-v17-confirm p{font-size:12px;color:var(--text2);line-height:1.6}
+.pp-env-v17-modal header{display:flex;justify-content:space-between;gap:14px;padding:20px 22px 15px;border-bottom:1px solid var(--border)}
+.pp-env-v17-modal header h2{font-size:18px;font-weight:750;letter-spacing:-.02em}
+.pp-env-v17-modal header p{font-size:11px;color:var(--muted);margin-top:6px}
+.pp-env-v17-modal header>button{color:var(--muted);width:30px;height:30px;display:grid;place-items:center;border-radius:5px}
+.pp-env-v17-modal form{overflow-y:auto;min-height:0;padding:18px 22px 0}
+.pp-env-v17-name{display:flex;flex-direction:column;gap:7px;font-size:11px;font-weight:700;color:var(--text2)}
+.pp-env-v17-name input,.pp-env-v17-variable input:not([type=checkbox]){width:100%;height:38px;min-width:0;background:var(--editor);color:var(--text);border:1.5px solid var(--border);border-radius:5px;padding:8px 10px;outline:0;font:12px 'DM Sans',sans-serif}
+.pp-env-v17-name input:focus,.pp-env-v17-variable input:not([type=checkbox]):focus{border-color:var(--accent)}
+.pp-env-v17-table-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 65px 29px;gap:8px;padding:17px 0 8px;color:var(--muted);font-size:10px;letter-spacing:.04em;font-weight:750}
+.pp-env-v17-variables{display:flex;flex-direction:column;gap:8px;max-height:min(38vh,360px);overflow-y:auto;padding:1px 2px 1px 0}
+.pp-env-v17-variable{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 65px 29px;gap:8px;align-items:center}
+.pp-env-v17-variable input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;justify-self:center}
+.pp-env-v17-variable button{width:29px;height:32px;display:grid;place-items:center;color:var(--muted)}
+.pp-env-v17-variable button:hover{color:var(--red)}
+.pp-env-v17-value{position:relative;min-width:0}
+.pp-env-v17-value>input{padding-right:38px!important}
+.pp-env-v17-value>button{position:absolute;right:2px;top:3px}
+.pp-env-v17-add{display:flex;align-items:center;gap:7px;color:var(--accent);padding:12px 1px;font-size:12px;font-weight:700}
+.pp-env-v17-modal footer,.pp-env-v17-confirm footer{position:sticky;bottom:0;background:var(--surface);padding:15px 0;display:flex;gap:9px;justify-content:flex-end;align-items:center;border-top:1px solid var(--border)}
+.pp-env-v17-modal footer button,.pp-env-v17-confirm footer button{min-height:36px;padding:8px 12px;border-radius:5px;border:1px solid var(--border);font-size:12px}
+.pp-env-v17-modal footer .pp-env-primary,.pp-env-v17-confirm footer button.danger{padding:8px 14px;border-color:var(--accent)}
+.pp-env-v17-confirm footer button.danger{background:var(--red);color:#fff;border-color:var(--red)}
+.pp-env-v17-modal .pp-env-error{padding:10px 0;color:var(--red);font-size:12px}
+.pp-toast-v17{position:fixed!important;z-index:2147483647!important;right:20px;bottom:20px;max-width:min(420px,calc(100vw - 40px));pointer-events:auto;isolation:isolate;filter:none!important;backdrop-filter:none!important;transform:none!important}
+.pp-v17-export-options{display:flex;flex-direction:column;gap:12px}
+.pp-v17-export-options>p:first-child{font-weight:700;font-size:12px}
+.pp-v17-export-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.pp-v17-export-choices>button{min-width:0;display:flex;text-align:left;align-items:flex-start;gap:9px;border:1.5px solid var(--border);border-radius:6px;padding:10px;color:var(--text2)}
+.pp-v17-export-choices>button.active{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
+.pp-v17-export-choices strong{display:block;font-size:12px}.pp-v17-export-choices small{display:block;font-size:10px;margin-top:4px;color:var(--muted)}
+.pp-v17-export-secret{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);line-height:1.5}
+.pp-v17-export-secret input{accent-color:var(--accent)}
+.pp-v17-export-warning{font-size:11px;color:var(--red)}
+.pp-v17-export-note{font-size:10px;line-height:1.6;color:var(--muted)}
+.pp-v17-export-options .pp-action-dialog-buttons{margin-top:4px}
+.pp-settings-v17 .pp-settings-categories button{display:flex;align-items:center;gap:12px;text-align:left;min-height:43px}
+.pp-settings-v17 .pp-settings-categories button svg{flex:none}
+.pp-settings-v17-link{display:flex;align-items:center;gap:10px;margin-top:20px;border:1px solid var(--border);border-radius:6px;padding:12px 15px;font-size:12px;color:var(--accent)}
+.pp-settings-v17-link:hover{background:var(--hover)}
+.pp-settings-v17 .pp-settings-heading>button{display:flex;align-items:center;gap:8px}
+@keyframes pp-v17-enter{from{opacity:0}to{opacity:1}}
+@keyframes pp-v17-modal-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:700px){.pp-env-v17-modal header{padding:15px}.pp-env-v17-modal form{padding:12px}.pp-env-v17-table-head,.pp-env-v17-variable{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 42px 24px;gap:5px}.pp-env-v17-variable input:not([type=checkbox]){font-size:11px;padding:6px}.pp-v17-export-choices{grid-template-columns:1fr}.pp-branding-v17,.pp-branding-v17 img{width:125px}}
+@media(prefers-reduced-motion:reduce){.pp-env-v17-menu,.pp-env-v17-modal-backdrop,.pp-env-v17-modal,.pp-env-v17-confirm{animation:none!important}}
+/* Portal the action menu so long environment lists cannot clip it. */
+.pp-env-v17-menu{position:fixed;z-index:22000}
+@media(hover:none){.pp-env-v17-actions .pp-env-more{opacity:1}}

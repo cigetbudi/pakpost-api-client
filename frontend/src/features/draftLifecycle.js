@@ -33,8 +33,9 @@ export function pendingSource(scope,collectionId,{workspaceId='',folderPath=[],p
 export function hasUnsavedChanges(tab,draft){
   if(!tab)return false;
   if(tab.source?.pending||tab.pendingCopy)return true;
+  if(tab.name !== (tab.savedName ?? tab.name))return true;
   return tab.savedFingerprint != null && tab.savedFingerprint!==requestFingerprint(draft,tab.name);
 }
 export function needsCloseConfirmation(tab,draft){return hasUnsavedChanges(tab,draft);}
 export function hasUnsavedMarker(tab,draft){return !!tab && (!!tab.source?.pending||!tab.source||hasUnsavedChanges(tab,draft));}
-export function tabSaved(tab,source,draft,name=tab.name){return {...tab,name,source,pendingCopy:false,savedFingerprint:requestFingerprint(draft,name)};}
+export function tabSaved(tab,source,draft,name=tab.name){return {...tab,name,savedName:name,source,pendingCopy:false,savedFingerprint:requestFingerprint(draft,name)};}

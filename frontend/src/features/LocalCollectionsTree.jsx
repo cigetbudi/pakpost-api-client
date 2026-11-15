@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import {ChevronDown,ChevronRight,FolderClosed,Ellipsis,GripVertical,Plus} from 'lucide-react';
 import {filterCollectionTree,makeCollectionTree} from './localCollections';
 import {collectLocalExpansionKeys} from './collectionExpansion';
+import {MenuActionItem} from './MenuActionItem';
 
 const menus={
   collection:[['newRequest','New request'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
@@ -13,7 +14,7 @@ const DRAG_MIME='application/x-pakpost-local-request';
 function popupAt(event,setMenu,context){event.preventDefault();event.stopPropagation();
   const rect=event.currentTarget.getBoundingClientRect();
   const x=event.clientX||rect.right,y=event.clientY||rect.bottom;
-  setMenu({...context,x:Math.min(x,window.innerWidth-225),y:Math.min(y,window.innerHeight-270)});
+  setMenu({...context,x:Math.min(x,window.innerWidth-245),y:Math.min(y,window.innerHeight-270)});
 }
 function Branch({node,collectionId,path=[],depth=0,search,onOpen,onMenu,expanded,toggle,onMove,pendingTabs,onOpenPending}){
   return <>
@@ -88,7 +89,7 @@ export function LocalCollectionsTree({collections,search='',onOpen,onAction,onMo
       </div>;
     })}
     {menu&&createPortal(<div role="menu" className="pp-collection-popup" style={{left:Math.max(8,menu.x),top:Math.max(8,menu.y)}}>
-      {menus[menu.type].map(([action,label])=><button type="button" role="menuitem" key={action} className={action.startsWith('delete')?'danger':''} onClick={()=>{onAction({...menu,action});setMenu(null);}}>{label}</button>)}
+      {menus[menu.type].map(([action,label])=><MenuActionItem key={action} action={action} danger={action.startsWith('delete')} onClick={()=>{onAction({...menu,action});setMenu(null);}}>{label}</MenuActionItem>)}
     </div>,document.body)}
   </div>;
 }

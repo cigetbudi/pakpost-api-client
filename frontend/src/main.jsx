@@ -14,3 +14,7 @@ import './v16-draft-requests.css';
 import { readAppearance } from './features/appearance.js';
 document.documentElement.dataset.theme = readAppearance(window.localStorage);
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
+import './v17-environment-branding.css';
+import './v18-menu-consistency.css';
+
+import './v19-inline-name.css';

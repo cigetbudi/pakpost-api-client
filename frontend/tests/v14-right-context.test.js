@@ -29,10 +29,11 @@ test('v14 has app modules separated from context modules',()=>{
  assert.match(app,/pp-view-settings/);
  assert.match(styles,/grid-template-columns:78px minmax\(0,1fr\) 54px/);
 });
-test('environment explorer is non-modal with search and sort',()=>{
+test('environment explorer list is non-modal, with a lazily opened editor dialog',()=>{
  assert.match(env,/aria-label="Search environments"/);
  assert.match(env,/ariaLabel="Sort environments"/);
- assert.doesNotMatch(env,/role="dialog"|className="overlay"/);
+ assert.match(env,/editor&&createPortal/);
+ assert.match(env,/pp-env-list/);
  assert.doesNotMatch(app,/\{envOpen &&/);
 });
 test('GET tab color is preserved when selected',()=>{

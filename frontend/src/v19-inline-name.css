@@ -1,0 +1,9 @@
+/* v19 - Request name is editable in-place, without remounting CodeMirror or its panels. */
+.pp-crumb .pp-editable-request-name{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:min(38vw,430px);padding:4px 6px;margin:-4px -6px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text);font:inherit;font-weight:650;cursor:text;text-align:left}
+.pp-crumb .pp-editable-request-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-crumb .pp-editable-request-name svg{flex-shrink:0;opacity:0;color:var(--muted);transition:opacity .12s ease}
+.pp-crumb .pp-editable-request-name:hover,.pp-crumb .pp-editable-request-name:focus-visible{border-color:var(--border);background:var(--hover)}
+.pp-crumb .pp-editable-request-name:hover svg,.pp-crumb .pp-editable-request-name:focus-visible svg{opacity:1}
+.pp-crumb .pp-inline-request-name{flex:0 1 400px;max-width:min(45vw,440px);min-width:140px;height:30px;padding:4px 9px;border:1.5px solid var(--accent);border-radius:5px;background:var(--editor);color:var(--text);font:inherit;font-weight:650;outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 15%,transparent)}
+@media(max-width:700px){.pp-crumb .pp-inline-request-name{min-width:110px;max-width:32vw}}
+@media(prefers-reduced-motion:reduce){.pp-crumb .pp-editable-request-name svg{transition:none}}
