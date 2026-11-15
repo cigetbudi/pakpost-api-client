@@ -1,9 +1,10 @@
 /** Portable import/export helpers. No shell commands or imported scripts execute here. */
+import {sanitizeResponseExamples} from './responseExamples.js';
 const EMPTY = () => ({key:'',value:'',description:'',enabled:true});
 const safeString = (x) => String(x ?? '');
 const sanitizeRows = (rows) => Array.isArray(rows) ? rows.filter(x=>x&&typeof x==='object').slice(0,400).map(x=>({key:safeString(x.key),value:safeString(x.value),description:safeString(x.description),enabled:x.enabled!==false,...(x.fileName?{fileName:safeString(x.fileName)}:{})})) : [];
 const named = (key) => /^(authorization|proxy-authorization|x-api-key|api-key|cookie|set-cookie|x-signature|x-access-token|x-auth-token|x-client-secret)$/i.test(key);
-export const blankDraft = () => ({ method:'GET',url:'',rows:[EMPTY()],body:'',format:'application/json',formFields:[EMPTY()],binaryFile:{name:'',base64:''},preScript:'',postScript:'',documentation:'',reqTab:'params',resTab:'body',result:null,params:[EMPTY()],authType:'none',bearerToken:'',scriptLog:[],scriptTests:[],scriptError:'' });
+export const blankDraft = () => ({ method:'GET',url:'',rows:[EMPTY()],body:'',format:'application/json',formFields:[EMPTY()],binaryFile:{name:'',base64:''},preScript:'',postScript:'',documentation:'',responseExamples:[],reqTab:'params',resTab:'body',result:null,params:[EMPTY()],authType:'none',bearerToken:'',scriptLog:[],scriptTests:[],scriptError:'' });
 
 /** Tokenizer for pasted cURL commands, never invokes a shell. */
 export function shellWords(text) {
@@ -118,7 +119,7 @@ export function parsePostmanCollection(doc){
       if(auth?.type==='bearer'){
         draft.authType='bearer';draft.bearerToken=safeString((auth.bearer||[]).find?.(x=>x.key==='token')?.value||auth.bearer?.token||'');
       }
-      draft.preScript=pmScript(item.event,'prerequest');draft.postScript=pmScript(item.event,'test');draft.documentation=safeString(req.description||item.description);
+      draft.preScript=pmScript(item.event,'prerequest');draft.postScript=pmScript(item.event,'test');draft.documentation=safeString(req.description||item.description);draft.responseExamples=parsePmResponses(item.response);
       result.push(draft);
       if(result.length>200)throw Error('Import limit: maximum 200 requests.');
     }
@@ -128,8 +129,34 @@ export function parsePostmanCollection(doc){
   return result;
 }
 function pmEvent(listen,code){return {listen,script:{type:'text/javascript',exec:code.split('\n')}};}
+function pmResponse(example){
+  return {
+    name:example.name||'Example',
+    status:example.reasonPhrase||'',
+    code:Number(example.statusCode||0)||0,
+    header:Object.entries(example.headers||{}).map(([key,value])=>({key,value:String(value??'')})),
+    body:String(example.body||''),
+    _postman_previewlanguage:String(example.contentType||'').includes('json')?'json':'text'
+  };
+}
+function parsePmResponses(list){
+  if(!Array.isArray(list))return [];
+  return sanitizeResponseExamples(list.map((item,index)=>({
+    id:`pm-${index}-${String(item?.name||'example').replace(/\s+/g,'-').toLowerCase()}`,
+    name:safeString(item?.name||item?.status||`Example ${index+1}`),
+    statusCode:Number(item?.code||0)||0,
+    reasonPhrase:safeString(item?.status||''),
+    headers:Array.isArray(item?.header)?Object.fromEntries(item.header.map(x=>[safeString(x.key),safeString(x.value)])): {},
+    body:safeString(item?.body||''),
+    contentType:Array.isArray(item?.header)?safeString(item.header.find(x=>String(x.key).toLowerCase()==='content-type')?.value||''):'',
+    description:'',
+    elapsedMs:0,
+    isBinary:false,
+    truncated:false
+  })));
+}
 export function safeExportDraft(draft,includeSecrets=false){
-  const copy={...blankDraft(),...draft,rows:sanitizeRows(draft.rows),params:sanitizeRows(draft.params),formFields:sanitizeRows(draft.formFields),binaryFile:{name:draft.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
+  const copy={...blankDraft(),...draft,rows:sanitizeRows(draft.rows),params:sanitizeRows(draft.params),formFields:sanitizeRows(draft.formFields),binaryFile:{name:draft.binaryFile?.name||'',base64:''},responseExamples:sanitizeResponseExamples(draft.responseExamples),result:null,scriptLog:[],scriptTests:[],scriptError:''};
   if(!includeSecrets){copy.rows=copy.rows.map(r=>({...r,value:named(r.key)?'{{REDACTED}}':r.value}));copy.bearerToken=copy.bearerToken?'{{REDACTED}}':'';}
   return copy;
 }
@@ -143,7 +170,7 @@ export function createPostmanCollection(drafts,{includeSecrets=false,name='Pakpo
     else if(r.format==='application/x-www-form-urlencoded')request.body={mode:'urlencoded',urlencoded:r.formFields.filter(x=>x.key).map(x=>({key:x.key,value:x.value,type:'text'}))};
     else if(r.format==='application/octet-stream')request.body={mode:'file',file:{src:r.binaryFile?.name||''}};
     else if(r.body)request.body={mode:'raw',raw:r.body,options:{raw:{language:r.format.includes('json')?'json':r.format.includes('xml')?'xml':'text'}}};
-    return {name:r.name||`${r.method} ${r.url}`,request,event:[r.preScript&&pmEvent('prerequest',r.preScript),r.postScript&&pmEvent('test',r.postScript)].filter(Boolean)};
+    return {name:r.name||`${r.method} ${r.url}`,request,response:(r.responseExamples||[]).map(example=>({...pmResponse(example),originalRequest:request})),event:[r.preScript&&pmEvent('prerequest',r.preScript),r.postScript&&pmEvent('test',r.postScript)].filter(Boolean)};
   });
   return {info:{name,schema:'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',description:'Exported from Pakpost'},item:items};
 }

@@ -4,11 +4,13 @@ import {ChevronDown,ChevronRight,FolderClosed,Ellipsis,GripVertical,Plus} from '
 import {filterCollectionTree,makeCollectionTree} from './localCollections';
 import {collectLocalExpansionKeys} from './collectionExpansion';
 import {MenuActionItem} from './MenuActionItem';
+import {statusTone} from './responseExamples.js';
 
 const menus={
   collection:[['newRequest','New request'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
   folder:[['newRequest','New request here'],['documentation','Documentation'],['renameFolder','Rename folder'],['duplicateFolder','Duplicate folder'],['sortFolder','Sort folder'],['deleteFolder','Delete folder']],
-  request:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]
+  request:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']],
+  example:[['deleteExample','Delete example']]
 };
 const DRAG_MIME='application/x-pakpost-local-request';
 function popupAt(event,setMenu,context){event.preventDefault();event.stopPropagation();
@@ -16,7 +18,7 @@ function popupAt(event,setMenu,context){event.preventDefault();event.stopPropaga
   const x=event.clientX||rect.right,y=event.clientY||rect.bottom;
   setMenu({...context,x:Math.min(x,window.innerWidth-245),y:Math.min(y,window.innerHeight-345)});
 }
-function Branch({node,collectionId,path=[],depth=0,search,onOpen,onMenu,expanded,toggle,onMove,pendingTabs,onOpenPending}){
+function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,onMenu,expanded,toggle,onMove,pendingTabs,onOpenPending}){
   return <>
     {node.folders.map(folder=>{
       const folderPath=[...path,folder.name];const key=`${collectionId}:${JSON.stringify(folderPath)}`;
@@ -29,7 +31,7 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onMenu,expanded
           <button type="button" className="pp-tree-action" aria-label={`Actions for folder ${folder.name}`} onClick={e=>onMenu(e,{type:'folder',collectionId,folderPath,name:folder.name})}><Ellipsis size={15}/></button>
         </div>
         <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}>
-          <div className="pp-collection-motion-inner"><Branch node={folder} collectionId={collectionId} path={folderPath} depth={depth+1} search={search} onOpen={onOpen} onMenu={onMenu} expanded={expanded} toggle={toggle} onMove={onMove} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/></div>
+          <div className="pp-collection-motion-inner"><Branch node={folder} collectionId={collectionId} path={folderPath} depth={depth+1} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={onMenu} expanded={expanded} toggle={toggle} onMove={onMove} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/></div>
         </div>
       </React.Fragment>;
     })}
@@ -37,15 +39,28 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onMenu,expanded
       <button key={t.id} type="button" className="pp-tree-request pp-draft-request" style={{paddingLeft:26+depth*14}} title="Unsaved draft — click to edit" onClick={()=>onOpenPending(t.id)}>
         <span className={`pp-http-label ${(t.method||'GET').toLowerCase()}`}>{t.method||'GET'}</span><span>{t.name}</span><span className="pp-unsaved-dot" title="Not saved"/>
       </button>)}
-    {node.requests.map(r=><div className="pp-tree-item-container" key={r.id} draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(DRAG_MIME,JSON.stringify({collectionId,requestId:r.id}));}} onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(DRAG_MIME))e.preventDefault()}} onDrop={e=>{e.preventDefault();e.stopPropagation();onMove(e,collectionId,path,r.id)}}>
-      <button type="button" className="pp-tree-request pp-local-request" style={{paddingLeft:26+(depth*14)}} title={r.url} onClick={()=>onOpen(r,collectionId)} onContextMenu={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}>
-        <GripVertical className="pp-drag-grip" size={12}/><span className={`pp-http-label ${(r.method||'GET').toLowerCase()}`}>{r.method||'GET'}</span><span>{r.requestName||r.name}</span>
-      </button>
-      <button type="button" className="pp-tree-action" aria-label={`Actions for request ${r.requestName||r.name}`} onClick={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}><Ellipsis size={15}/></button>
-    </div>)}
+    {node.requests.map(r=>{
+      const term=String(search||'').trim().toLowerCase();
+      const requestLabel=String(r.requestName||r.name||'').toLowerCase();
+      const examples=(r.responseExamples||[]).filter(example=>!term||requestLabel.includes(term)||`${example.name} ${example.statusCode} ${example.reasonPhrase||''}`.toLowerCase().includes(term));
+      return <React.Fragment key={r.id}>
+        <div className="pp-tree-item-container" draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(DRAG_MIME,JSON.stringify({collectionId,requestId:r.id}));}} onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(DRAG_MIME))e.preventDefault()}} onDrop={e=>{e.preventDefault();e.stopPropagation();onMove(e,collectionId,path,r.id)}}>
+          <button type="button" className="pp-tree-request pp-local-request" style={{paddingLeft:26+(depth*14)}} title={r.url} onClick={()=>onOpen(r,collectionId)} onContextMenu={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}>
+            <GripVertical className="pp-drag-grip" size={12}/><span className={`pp-http-label ${(r.method||'GET').toLowerCase()}`}>{r.method||'GET'}</span><span>{r.requestName||r.name}</span>
+          </button>
+          <button type="button" className="pp-tree-action" aria-label={`Actions for request ${r.requestName||r.name}`} onClick={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}><Ellipsis size={15}/></button>
+        </div>
+        {examples.map(example=><div className="pp-tree-item-container" key={`${r.id}:${example.id}`}>
+          <button type="button" className="pp-tree-example" style={{paddingLeft:40+(depth*14)}} onClick={()=>onOpenExample(r,collectionId,example)} onContextMenu={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})} title={example.description||example.name}>
+            <span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span>{example.name}</span>
+          </button>
+          <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})}><Ellipsis size={15}/></button>
+        </div>)}
+      </React.Fragment>;
+    })}
   </>;
 }
-export function LocalCollectionsTree({collections,search='',onOpen,onAction,onMove,expandAllSignal,revealDraft,pendingTabs=[],onOpenPending=()=>{}}){
+export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample,onAction,onMove,expandAllSignal,revealDraft,pendingTabs=[],onOpenPending=()=>{}}){
   const [expanded,setExpanded]=useState({}),[menu,setMenu]=useState(null);
   const toggle=key=>setExpanded(old=>({...old,[key]:old[key]===false?true:false}));
   useEffect(()=>{
@@ -84,7 +99,7 @@ export function LocalCollectionsTree({collections,search='',onOpen,onAction,onMo
           </div>
         </div>
         <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}>
-          <div className="pp-collection-motion-inner"><Branch node={tree} collectionId={col.id} search={search} onOpen={onOpen} onMenu={openMenu} expanded={expanded} toggle={toggle} onMove={drop} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/></div>
+          <div className="pp-collection-motion-inner"><Branch node={tree} collectionId={col.id} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={openMenu} expanded={expanded} toggle={toggle} onMove={drop} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/></div>
         </div>
       </div>;
     })}

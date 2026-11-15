@@ -31,6 +31,7 @@ import { isDarkAppearance, normalizeAppearance, readAppearance } from './feature
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
 import { runSandbox } from './features/runScript';
 import { postmanRequestSnapshot } from './features/postmanCompat';
+import {createResponseExample,exampleToResult,sanitizeResponseExamples,statusTone,suggestExampleName,upsertResponseExample} from './features/responseExamples';
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -113,6 +114,7 @@ export default function App() {
   const [binaryFile, setBinaryFile] = useState({name:RECOVERED.binaryFile?.name || '',base64:''});
   const [preScript, setPreScript] = useState(RECOVERED.preScript || '');
   const [postScript, setPostScript] = useState(RECOVERED.postScript || '');
+  const [responseExamples, setResponseExamples] = useState(sanitizeResponseExamples(RECOVERED.responseExamples));
   const [scriptLog, setScriptLog] = useState(RECOVERED.scriptLog || []);
   const [scriptTests, setScriptTests] = useState(RECOVERED.scriptTests || []);
   const [scriptError, setScriptError] = useState(RECOVERED.scriptError || '');
@@ -146,6 +148,9 @@ export default function App() {
   const [newMember, setNewMember] = useState('');
   const [newTeamMember, setNewTeamMember] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
+  const [saveExampleOpen, setSaveExampleOpen] = useState(false);
+  const [exampleName, setExampleName] = useState('');
+  const [exampleDescription, setExampleDescription] = useState('');
   const [saveScope,setSaveScope] = useState('local');
   const [saveLocalCollection,setSaveLocalCollection] = useState('');
   const [actionDialog,setActionDialog] = useState(null);
@@ -238,12 +243,12 @@ export default function App() {
     setEditingRequestName(false);
   }
 
-  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
+  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,responseExamples:sanitizeResponseExamples(responseExamples),scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
   function restoreDraft(next) {
     setMethod(next.method||'GET');setUrl(next.url||'');setRows(next.rows||[{...EMPTY_HEADER}]);setBody(next.body||'');setDocumentation(next.documentation||'');
     setFormat(next.format||'application/json');setFormFields(next.formFields||[{key:'',value:''}]);
     setBinaryFile(next.binaryFile||{name:'',base64:''});
-    setPreScript(next.preScript||'');setPostScript(next.postScript||'');
+    setPreScript(next.preScript||'');setPostScript(next.postScript||'');setResponseExamples(sanitizeResponseExamples(next.responseExamples));
     setScriptLog(next.scriptLog||[]);setScriptTests(next.scriptTests||[]);setScriptError(next.scriptError||'');
     setReqTab(next.reqTab||'params');setResTab(next.resTab||'body');setResult(next.result||null);setResponsePretty(next.responsePretty??true);setPrettyResponse(next.prettyResponse||'');
     setParams(next.params||[{...EMPTY_HEADER}]);setAuthType(next.authType||'none');setBearerToken(next.bearerToken||'');
@@ -279,7 +284,7 @@ export default function App() {
     const timer=setTimeout(persist,600);
     window.addEventListener('beforeunload',persist);
     return ()=>{clearTimeout(timer);window.removeEventListener('beforeunload',persist)};
-  },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,scriptLog,scriptTests,scriptError,
+  },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,responseExamples,scriptLog,scriptTests,scriptError,
     reqTab,resTab,result,params,authType,bearerToken,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope]);
   function selectTab(id) {
     setEditingRequestName(false);
@@ -362,7 +367,7 @@ export default function App() {
         if(!request)throw Error('Saved request was not found');
         const meta=decodeStoredHeaders(request.headersJson);
         const saved=await api(`${base}/${target.requestId}`,'PUT',{
-          ...request,headersJson:encodeStoredHeaders(meta.headers,meta.params,value)
+          ...request,headersJson:encodeStoredHeaders(meta.headers,meta.params,value,meta.responseExamples)
         },token);
         setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(target.workspaceId,target.collectionId)]:requests.map(r=>r.id===saved.id?saved:r)}));
         if(selectedCol===target.collectionId)setSavedRequests(requests.map(r=>r.id===saved.id?saved:r));
@@ -392,6 +397,30 @@ export default function App() {
     openBoundRequest({...request,name:request.requestName||request.name},
       {scope:'local',collectionId,requestId:request.id});
   }
+  function previewSavedExample(request,source,example){
+    const resultExample=exampleToResult(example);
+    const current=findBoundTab(openTabs,source);
+    if(current){
+      const stored=current.id===activeTabRef.current?snapshot():draftsRef.current[current.id];
+      const next={...stored,result:resultExample,resTab:'body'};
+      draftsRef.current[current.id]=next;
+      activeTabRef.current=current.id;setActiveTabId(current.id);restoreDraft(next);setPage('tester');
+      setOpenTabs(tabs=>tabs.map(tab=>tab.id===current.id?{...tab,status:resultExample.statusCode}:tab));
+      return;
+    }
+    addTab(request,source);
+    draftsRef.current[activeTabRef.current]={...draftsRef.current[activeTabRef.current],result:resultExample,resTab:'body'};
+    setResult(resultExample);setResTab('body');
+    const newTabId=activeTabRef.current;
+    setOpenTabs(tabs=>tabs.map(tab=>tab.id===newTabId?{...tab,status:resultExample.statusCode}:tab));
+  }
+  function openLocalExample(request,collectionId,example){
+    previewSavedExample({...request,name:request.requestName||request.name},{scope:'local',collectionId,requestId:request.id},example);
+  }
+  function openWorkspaceExample(request,collectionId,example){
+    const draft=workspaceDraft({...request,collectionId});
+    previewSavedExample({...draft,name:request.name||draft.name},{scope:'workspace',workspaceId:selectedWs,collectionId,requestId:request.id},example);
+  }
   function downloadJson(data,filename){
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;
@@ -401,6 +430,14 @@ export default function App() {
     try{setLocalCollections(old=>applyLocalAction(old,action));
       if(action.type==='deleteRequest'||action.type==='deleteCollection')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&(action.type==='deleteCollection'?t.source.collectionId===action.collectionId:(t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId))?{...t,source:null}:t));
       if(action.type==='renameRequest')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId?{...t,name:action.name,savedName:action.name}:t));
+      if(action.type==='deleteExample'){
+        const source=activeSource();
+        if(source?.scope==='local'&&source.collectionId===action.collectionId&&source.requestId===action.requestId){
+          const current=sanitizeResponseExamples(responseExamples).filter(example=>example.id!==action.exampleId);
+          setResponseExamples(current);
+          draftsRef.current[activeTabRef.current]={...snapshot(),responseExamples:current};
+        }
+      }
       if(action.type==='deleteRequest'||action.type==='deleteCollection')setNotice('Deleted from local collection. Open drafts are preserved.');
     }catch(e){setNotice(getMessage(e));}
   }
@@ -429,7 +466,7 @@ export default function App() {
       createCollectionDraft('local',collectionId,folderPath||[]);
       return;
     }
-    const immediate={duplicateCollection:'duplicateCollection',duplicateFolder:'duplicateFolder',duplicateRequest:'duplicateRequest',sortCollection:'sortCollection',sortMethod:'sortCollection',sortFolder:'sortFolder'};
+    const immediate={duplicateCollection:'duplicateCollection',duplicateFolder:'duplicateFolder',duplicateRequest:'duplicateRequest',sortCollection:'sortCollection',sortMethod:'sortCollection',sortFolder:'sortFolder',deleteExample:'deleteExample'};
     if(immediate[action]){updateLocal({...item,type:immediate[action],sort:action==='sortMethod'?'method':'name'});return;}
     setActionName(item.name||'');setActionDialog({scope:'local',...item});
   }
@@ -484,11 +521,12 @@ export default function App() {
   function workspaceDraft(item){
     const saved=decodeStoredHeaders(item.headersJson);
     let fields=[];try{fields=JSON.parse(item.formFieldsJson||'[]')}catch{}
-    return {...blankDraft(),...item,rows:[...saved.headers,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,format:item.contentType||'application/json',
+    return {...blankDraft(),...item,rows:[...saved.headers,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,format:item.contentType||'application/json',
       formFields:fields,preScript:item.preRequestScript||'',postScript:item.postResponseScript||''};
   }
   async function handleWorkspaceMenu(action,item){
     setWorkspaceMenu(null);
+    if(action==='deleteExample'){setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;}
     if(action==='documentation'){openDocumentation({scope:'workspace',type:item.type==='request'?'request':'collection',collectionId:item.collectionId,requestId:item.requestId,name:item.name});return;}
     if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
@@ -554,6 +592,23 @@ export default function App() {
         setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,source:null}:t));
         setSavedRequests(old=>old.filter(x=>x.id!==requestId));
         setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:(old[workspaceCollectionKey(selectedWs,collectionId)]||[]).filter(x=>x.id!==requestId)}));
+      }else if(action==='deleteExample'){
+        const list=await api(`${base}/requests`,'GET',undefined,token);
+        const original=list.find(x=>x.id===requestId);
+        if(!original)throw Error('Saved request not found');
+        const metadata=decodeStoredHeaders(original.headersJson);
+        const examples=metadata.responseExamples.filter(example=>example.id!==actionDialog.exampleId);
+        const saved=await api(`${base}/requests/${requestId}`,'PUT',{
+          ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples)
+        },token);
+        const updated=list.map(req=>req.id===requestId?saved:req);
+        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:updated}));
+        if(selectedCol===collectionId)setSavedRequests(updated);
+        const affected=openTabs.filter(tab=>tab.source?.scope==='workspace'&&tab.source.workspaceId===selectedWs&&tab.source.collectionId===collectionId&&tab.source.requestId===requestId);
+        for(const tab of affected){
+          if(draftsRef.current[tab.id])draftsRef.current[tab.id]={...draftsRef.current[tab.id],responseExamples:examples};
+          if(tab.id===activeTabRef.current)setResponseExamples(examples);
+        }
       }
     }); if(!success)return; }
     setActionDialog(null);
@@ -636,7 +691,7 @@ export default function App() {
     const savedRows=saved.headers;
     let formFields = [];
     try { formFields = JSON.parse(item.formFieldsJson||'[]'); }catch{}
-    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
+    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
       {scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId||selectedCol,requestId:item.id});
   }
 
@@ -868,7 +923,7 @@ export default function App() {
     const onKeyboard = e => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if(page === 'tester' && !busyAction && !saveOpen && !actionDialog && !documentationTarget)saveCurrent();
+        if(page === 'tester' && !busyAction && !saveOpen && !saveExampleOpen && !actionDialog && !documentationTarget)saveCurrent();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && page === 'tester') {
@@ -878,7 +933,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyboard);
     return () => window.removeEventListener('keydown', onKeyboard);
-  }, [page, loading, method, url, rows, body, documentation, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,actionDialog,documentationTarget]);
+  }, [page, loading, method, url, rows, body, documentation, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,responseExamples,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,saveExampleOpen,actionDialog,documentationTarget]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
   const activeTeam = teams.find(x => x.id === selectedTeam);
@@ -941,7 +996,7 @@ export default function App() {
   }
 
   const activeSource=()=>openTabs.find(t=>t.id===activeTabRef.current)?.source;
-  const currentSavePayload=(name)=>({name,method,url,headersJson:encodeStoredHeaders(rows,params,documentation),body,
+  const currentSavePayload=(name,examples=responseExamples)=>({name,method,url,headersJson:encodeStoredHeaders(rows,params,documentation,examples),body,
     bodyMode:bodyFormat(format).mode,contentType:format,
     formFieldsJson:JSON.stringify(formFields.map(({key,value,fileName,contentType})=>({key,value,fileName,contentType}))),
     preRequestScript:preScript,postResponseScript:postScript});
@@ -1024,6 +1079,49 @@ export default function App() {
     });
   }
 
+  function openSaveExampleDialog(){
+    if(!result||result.error)return;
+    setExampleName(suggestExampleName(result));
+    setExampleDescription('');
+    setSaveExampleOpen(true);
+  }
+  async function persistResponseExamples(nextExamples){
+    const source=activeSource();
+    if(source?.scope==='local'&&!source.pending){
+      setLocalCollections(old=>applyLocalAction(old,{type:'saveExamples',collectionId:source.collectionId,requestId:source.requestId,responseExamples:nextExamples}));
+    }
+    if(source?.scope==='workspace'&&!source.pending){
+      if(!token)throw Error('Sign in to update workspace examples');
+      const base=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`;
+      const latest=await api(base,'GET',undefined,token);
+      const original=latest.find(request=>request.id===source.requestId);
+      if(!original)throw Error('Saved request not found');
+      const metadata=decodeStoredHeaders(original.headersJson);
+      const saved=await api(`${base}/${source.requestId}`,'PUT',{
+        ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,nextExamples)
+      },token);
+      const updated=latest.map(request=>request.id===saved.id?saved:request);
+      setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(source.workspaceId,source.collectionId)]:updated}));
+      if(source.workspaceId===selectedWs&&source.collectionId===selectedCol)setSavedRequests(updated);
+    }
+    const tabId=activeTabRef.current;
+    draftsRef.current[tabId]={...snapshot(),responseExamples:nextExamples};
+    setResponseExamples(nextExamples);
+  }
+  async function saveResponseExample(e){
+    e?.preventDefault?.();
+    if(!result||result.error)return;
+    const name=(exampleName||'').trim()||suggestExampleName(result);
+    const example=createResponseExample(result,{name,description:exampleDescription});
+    const nextExamples=upsertResponseExample(responseExamples,example);
+    const source=activeSource();
+    const success=await doAction(async()=>{
+      await persistResponseExamples(nextExamples);
+      setNotice(!source||source.pending?`Added ${name} to draft. Save the request to keep it in a collection.`:`Saved example ${name}`);
+    });
+    if(success)setSaveExampleOpen(false);
+  }
+
   const visibleCollections = sortCollectionRoots(collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (workspaceRequestLists[workspaceCollectionKey(selectedWs,c.id)]||[]).some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase()))),collectionSort);
   const visibleLocalCollections = sortCollectionRoots(localCollections,collectionSort);
   const activeRequestName = openTabs.find(t => t.id === activeTabId)?.name || 'Untitled Request';
@@ -1096,7 +1194,7 @@ export default function App() {
           {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createLocalCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder="Collection name"/><button type="submit" title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
           <div className="pp-side-scroll">
             {localCollections.length>0&&<><div className="pp-local-subhead">LOCAL · BROWSER <span>{localCollections.length}</span></div>
-              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onAction={handleLocalMenu} onMove={moveLocalRequest} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
+              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onOpenExample={openLocalExample} onAction={handleLocalMenu} onMove={moveLocalRequest} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
             </>}
             {token && selectedWs ? <>
               <div className="pp-local-subhead">WORKSPACE · NEON</div>
@@ -1115,10 +1213,19 @@ export default function App() {
                   </div>
                 </div>
                 <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}><div className="pp-collection-motion-inner">
-                {[...requests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => <div className="pp-tree-item-container" key={r.id} draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
-                  <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest({...r,collectionId:c.id})}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
-                  <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
-                </div>)}
+                {[...requests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => {
+                  const meta=decodeStoredHeaders(r.headersJson);
+                  return <React.Fragment key={r.id}><div className="pp-tree-item-container" draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
+                    <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest({...r,collectionId:c.id})}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
+                    <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
+                  </div>
+                  {(meta.responseExamples||[]).map(example=><div key={`${r.id}:${example.id}`} className="pp-tree-item-container">
+                    <button type="button" className="pp-tree-example" style={{paddingLeft:46}} title={example.description||example.name} onContextMenu={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})} onClick={()=>openWorkspaceExample(r,c.id,example)}>
+                      <span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span>{example.name}</span>
+                    </button>
+                    <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})}><Settings2 size={14}/></button>
+                  </div>)}
+                  </React.Fragment>})}
                 {openTabs.filter(t=>t.source?.pending&&t.source.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.collectionId===c.id)
                   .filter(t=>t.name.toLowerCase().includes(explorerSearch.toLowerCase()))
                   .map(t=><button key={t.id} type="button" className="pp-tree-request pp-draft-request" onClick={()=>selectTab(t.id)} title="Unsaved draft — click to edit">
@@ -1154,6 +1261,8 @@ export default function App() {
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
             ['newRequest','New request'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
+          ]:workspaceMenu.type==='example'?[
+            ['deleteExample','Delete example']
           ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
             <MenuActionItem key={id} action={id} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
@@ -1238,12 +1347,12 @@ export default function App() {
             </section>
             <div role="separator" aria-label="Resize request and response panels" aria-orientation={split === 'vertical' ? 'vertical' : 'horizontal'} className="pp-splitter" onPointerDown={e => { draggingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={onSplitterMove} onPointerUp={onSplitterEnd} onPointerCancel={onSplitterEnd}><span className="pp-splitter-handle"/></div>
             <section className="pp-response-pane">
-              <div className="pp-pane-heading pp-response-heading"><span className="pp-pane-title"><Bolt size={15}/> Response</span>{result && !result.error ? <div className="pp-response-metrics"><span className={`pp-status ${result.statusCode < 400 ? 'good' : 'bad'}`}><span className="pp-status-dot"/>{result.statusCode} {result.reasonPhrase}</span><span><Clock3 size={13}/> {result.elapsedMs} ms</span><span><ArrowDownToLine size={13}/> {new Blob([result.body || '']).size.toLocaleString()} B</span></div> : <span className="pp-pane-meta">Awaiting response</span>}</div>
-              <div className="pp-panel-tabs"><button className={resTab === 'body' ? 'active' : ''} onClick={()=>setResTab('body')}>Body</button><button className={resTab === 'headers' ? 'active' : ''} onClick={()=>setResTab('headers')}>Headers{result && !result.error && <span className="pp-tiny-count">{Object.keys(result.headers || {}).length}</span>}</button><div className="pp-panel-tabs-spacer"/><button className="pp-copy-response" disabled={!result||!!result.error} onClick={beautifyResult} title="Beautify response"><WandSparkles size={14}/> Beautify</button><button className="pp-copy-response" disabled={!result||!!result.error} onClick={()=>setResponsePretty(v=>!v)} title="Toggle raw/pretty">{responsePretty?'Pretty':'Raw'}</button><button className="pp-copy-response" title="Copy response" disabled={!result || !!result.error} onClick={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}><Copy size={14}/> Copy</button></div>
+              <div className="pp-pane-heading pp-response-heading"><span className="pp-pane-title"><Bolt size={15}/> Response</span>{result && !result.error ? <div className="pp-response-metrics"><span className={`pp-status ${statusTone(result.statusCode)}`}><span className="pp-status-dot"/>{result.statusCode} {result.reasonPhrase}</span><span><Clock3 size={13}/> {result.elapsedMs} ms</span><span><ArrowDownToLine size={13}/> {new Blob([result.body || '']).size.toLocaleString()} B</span></div> : <span className="pp-pane-meta">Awaiting response</span>}</div>
+              <div className="pp-panel-tabs"><button className={resTab === 'body' ? 'active' : ''} onClick={()=>setResTab('body')}>Body</button><button className={resTab === 'headers' ? 'active' : ''} onClick={()=>setResTab('headers')}>Headers{result && !result.error && <span className="pp-tiny-count">{Object.keys(result.headers || {}).length}</span>}</button><div className="pp-panel-tabs-spacer"/><button className="pp-copy-response" disabled={!result||!!result.error} onClick={beautifyResult} title="Beautify response"><WandSparkles size={14}/> Beautify</button><button className="pp-copy-response" disabled={!result||!!result.error} onClick={()=>setResponsePretty(v=>!v)} title="Toggle raw/pretty">{responsePretty?'Pretty':'Raw'}</button><button className="pp-copy-response" title="Save response example" disabled={!result || !!result.error} onClick={openSaveExampleDialog}><Save size={14}/> Save example</button><button className="pp-copy-response" title="Copy response" disabled={!result || !!result.error} onClick={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}><Copy size={14}/> Copy</button></div>
               <div className="pp-panel-body pp-response-body">
                 {!result ? <div className="pp-response-empty"><div className="pp-response-empty-symbol"><Terminal size={28}/></div><strong>{loading ? 'Sending request…' : 'Ready to send a request'}</strong><p>{loading ? 'The server is processing your request.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p><span>⌘ / Ctrl + Enter</span></div> : result.error ? <div className="pp-response-error"><div><X size={18}/></div><strong>Request failed</strong><p>{result.error}</p></div> : <><div className="pp-response-code"><TextEditor readOnly value={responseText} lang={resTab==='headers'?'json':languageFromMime(responseType)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="250px"/></div>{result.truncated && <div className="pp-response-warning">Output truncated to 1 MB.</div>}{result.isBinary && <div className="pp-response-warning">Binary content displayed as Base64.</div>}</>}
               </div>
-              <div className="pp-pane-footer"><span>{result && !result.error ? `HTTP ${result.statusCode}` : 'No response yet'}</span><span className="pp-footer-tail">{result?.truncated ? 'Truncated' : 'Raw / JSON preview'}</span></div>
+              <div className="pp-pane-footer"><span>{result && !result.error ? `HTTP ${result.statusCode}` : 'No response yet'}</span><span className="pp-footer-tail">{responseExamples.length ? `${responseExamples.length} example${responseExamples.length>1?'s':''} saved` : (result?.truncated ? 'Truncated' : 'Raw / JSON preview')}</span></div>
             </section>
           </div>
         </div> : <div className="pp-manager">
@@ -1287,6 +1396,13 @@ export default function App() {
         </div>
       </div>
     </Dialog>}
+    {saveExampleOpen && <Dialog title="Save response example" subtitle="Capture the latest response as an example for this request." onClose={()=>setSaveExampleOpen(false)}><form className="modal-form" onSubmit={saveResponseExample}>
+      <label>Example name<input autoFocus required maxLength={140} value={exampleName} onChange={e=>setExampleName(e.target.value)}/></label>
+      <label>Description <textarea rows={3} maxLength={1000} placeholder="Optional note, e.g. when to expect this response" value={exampleDescription} onChange={e=>setExampleDescription(e.target.value)}/></label>
+      <p className="pp-example-warning">Review the response body before saving. It can contain personal data, tokens, or account details. Known sensitive response headers are redacted; the body is saved as-is (up to 64 KB). {!activeSource()||activeSource()?.pending?'This is a draft; use Save to keep this example in a collection.':''}</p>
+      {result && !result.error && <div className="pp-example-preview"><span className={`pp-example-status ${statusTone(result.statusCode)}`}>{result.statusCode}</span><strong>{result.reasonPhrase || 'HTTP response'}</strong><small>{new Blob([result.body || '']).size.toLocaleString()} B · {result.elapsedMs} ms</small></div>}
+      <button className="pp-modal-submit" type="submit" disabled={!result||!!result.error||busyAction}><Save size={16}/> Save example</button>
+    </form></Dialog>}
     {saveOpen && <Dialog title="Save as new request" subtitle="Keep an independent copy in a local collection or a signed-in workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}>
       <label>Request name<input autoFocus required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label>
       <div className="pp-modal-select-label"><span>Destination</span><RetroSelect ariaLabel="Save scope" value={saveScope} onChange={setSaveScope} options={[{value:'local',label:'Local browser'},...(token?[{value:'workspace',label:'Workspace · Neon'}]:[])]}/></div>
@@ -1295,7 +1411,7 @@ export default function App() {
       {!(saveScope==='local'?localCollections.length:saveCols.length)&&<div className="form-error">Create a collection first.</div>}
       <button className="pp-modal-submit" type="submit" disabled={!(saveScope==='local'?saveLocalCollection:saveCollection)||busyAction}><Save size={16}/> Save new request</button>
     </form></Dialog>}
-    {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
+    {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder',deleteExample:'Delete example'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
       <form className="modal-form" onSubmit={executeActionDialog}>
         {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required maxLength={120} value={actionName} onChange={e=>setActionName(e.target.value)}/></label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}
         <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>

@@ -34,6 +34,32 @@ function splitUrl(raw){
   try{const parsed=new URL(value);return {server:{url:parsed.origin},path:sanitizePath(parsed.pathname),query:parsed.search.slice(1)};}catch{return {server:null,path:sanitizePath(value.split('?')[0]),query:value.split('?')[1]||''};}
 }
 function contentType(draft){return draft.format||draft.contentType||'application/json'}
+
+function exampleKey(name,index){
+  const safe=String(name||`example-${index+1}`).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  return safe||`example-${index+1}`;
+}
+function exampleValue(example){
+  const body=String(example?.body||'');
+  if(String(example?.contentType||'').includes('json')){try{return JSON.parse(body||'null')}catch{}}
+  return body;
+}
+function openApiResponses(examples=[]){
+  if(!Array.isArray(examples)||!examples.length)return {default:{description:'Response'}};
+  const responses={};
+  examples.forEach((example,index)=>{
+    const code=String(Number(example?.statusCode||0)||'default');
+    if(!responses[code])responses[code]={description:String(example?.name||example?.reasonPhrase||`HTTP ${code}`),content:{}};
+    const mediaType=String(example?.contentType||'text/plain')||'text/plain';
+    if(!responses[code].content[mediaType])responses[code].content[mediaType]={examples:{}};
+    responses[code].content[mediaType].examples[exampleKey(example?.name,index)]={
+      summary:String(example?.name||`Example ${index+1}`),
+      ...(example?.description?{description:String(example.description)}:{}),
+      value:exampleValue(example)
+    };
+  });
+  return responses;
+}
 /** OpenAPI represents endpoint contracts, not executable Postman scripts or crypto hooks. */
 export function exportOpenApiCollection(drafts,{name='Pakpost collection',includeSecrets=false,documentation='',folderDocs={}}={}){
   const doc={openapi:'3.1.0',info:{title:name,version:'1.0.0',description:documentation||'Exported from Pakpost. Pre/post scripts and file bytes are not translated to OpenAPI.'},paths:{}};
@@ -46,7 +72,7 @@ export function exportOpenApiCollection(drafts,{name='Pakpost collection',includ
     if(target.server)servers.set(JSON.stringify(target.server),target.server);
     const operation={summary:request.requestName||request.name||`${method.toUpperCase()} ${pathname}`,
       ...(request.documentation?{description:request.documentation}:{}),
-      operationId:`pakpost_${method}_${i+1}`,responses:{default:{description:'Response'}}};
+      operationId:`pakpost_${method}_${i+1}`,responses:openApiResponses(request.responseExamples)};
     if(request.folderPath?.length){const tag=request.folderPath.join(' / ');operation.tags=[tag];if(!doc.tags)doc.tags=[];if(!doc.tags.some(t=>t.name===tag))doc.tags.push({name:tag,description:folderDocs[JSON.stringify(request.folderPath)]||''});}
     const pathVars=[...pathname.matchAll(/\{([\w.-]+)\}/g)].map(m=>m[1]);
     const params=pathVars.map(key=>({name:key,in:'path',required:true,schema:{type:'string'}}));

@@ -1,3 +1,4 @@
+import {sanitizeResponseExamples} from './responseExamples.js';
 /** Browser-local recovery. Session storage retains the live draft on refresh; the local fallback redacts known secrets. */
 const SESSION_KEY='pakpost_workbench_v4_live';
 const LOCAL_KEY='pakpost_workbench_v4_recovery';
@@ -7,6 +8,7 @@ const STRIP_FORM_FILE=(rows)=>(rows||[]).map(r=>({...r,fileBase64:undefined}));
 function normalizeDraft(d){
   if(!d||typeof d!=='object')return {};
   return {...d,binaryFile:{name:d.binaryFile?.name||'',base64:''},formFields:STRIP_FORM_FILE(d.formFields),
+    responseExamples:sanitizeResponseExamples(d.responseExamples),
     // Don't keep large or sensitive response bodies in durable local recovery.
     result:d.result&&!d.result.error?{...d.result,body:String(d.result.body||'').slice(0,150000)}:d.result,
     scriptLog:Array.isArray(d.scriptLog)?d.scriptLog.slice(-50):[],scriptTests:Array.isArray(d.scriptTests)?d.scriptTests.slice(-50):[]};
@@ -16,6 +18,7 @@ function safeDraft(d){
   try { const url=new URL(sanitizedUrl);for(const key of url.searchParams.keys()) if(SENSITIVE_KEY.test(key))url.searchParams.set(key,'');sanitizedUrl=url.toString(); }catch{/* URL templates are permitted. */}
   return {...d,url:sanitizedUrl,rows:(d.rows||[]).map(r=>({...r,value:SENSITIVE_KEY.test(r.key||'')?'':r.value})),
     params:(d.params||[]).map(r=>({...r,value:SENSITIVE_KEY.test(r.key||'')?'':r.value})),bearerToken:'',
+    responseExamples:sanitizeResponseExamples(d.responseExamples),
     result:null,scriptLog:[],scriptTests:[],scriptError:''};
 }
 export function readWorkbenchCache(){

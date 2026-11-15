@@ -8,9 +8,19 @@ const pathEquals=(a=[],b=[])=>JSON.stringify(a)===JSON.stringify(b);
 const newRequest=(name='New Request',path=[],idFactory=uid)=>({
   id:idFactory(),requestName:name,name,method:'GET',url:'',rows:[{key:'',value:''}],params:[{key:'',value:''}],
   body:'',format:'application/json',formFields:[{key:'',value:''}],binaryFile:{name:'',base64:''},
-  preScript:'',postScript:'',folderPath:path,authType:'none',bearerToken:''
+  preScript:'',postScript:'',folderPath:path,authType:'none',bearerToken:'',responseExamples:[]
 });
-function cloneCollection(c){return {...c,folderDocs:{...(c.folderDocs||{})},requests:(c.requests||[]).map(r=>({...r,folderPath:[...(r.folderPath||[])]}))};}
+function cloneCollection(c){
+  return {
+    ...c,
+    folderDocs:{...(c.folderDocs||{})},
+    requests:(c.requests||[]).map(r=>({
+      ...r,
+      folderPath:[...(r.folderPath||[])],
+      responseExamples:(r.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}}))
+    }))
+  };
+}
 const compare=(a,b,sort)=>sort==='method'?(a.method||'').localeCompare(b.method||'')||nameOf(a).localeCompare(nameOf(b)):nameOf(a).localeCompare(nameOf(b));
 
 export function applyLocalAction(collections,action,idFactory=uid){
@@ -49,10 +59,20 @@ export function applyLocalAction(collections,action,idFactory=uid){
     }
     case 'duplicateRequest': {
       if(!request)throw Error('Request not found');
-      const copy={...request,id:idFactory(),name:`${nameOf(request)} (copy)`,requestName:`${nameOf(request)} (copy)`,result:null,scriptLog:[],scriptTests:[],scriptError:''};
+      const copy={...request,id:idFactory(),name:`${nameOf(request)} (copy)`,requestName:`${nameOf(request)} (copy)`,responseExamples:(request.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),result:null,scriptLog:[],scriptTests:[],scriptError:''};
       col.requests.splice(col.requests.indexOf(request)+1,0,copy);break;
     }
     case 'deleteRequest': col.requests=col.requests.filter(r=>r.id!==action.requestId);break;
+    case 'saveExamples': {
+      if(!request)throw Error('Request not found');
+      request.responseExamples=(action.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}}));
+      break;
+    }
+    case 'deleteExample': {
+      if(!request)throw Error('Request not found');
+      request.responseExamples=(request.responseExamples||[]).filter(example=>example.id!==action.exampleId);
+      break;
+    }
     case 'sortFolder': {
       const selected=col.requests.filter(r=>pathEquals(r.folderPath,action.folderPath));
       const sorted=[...selected].sort((a,b)=>compare(a,b,action.sort));let index=0;
@@ -105,7 +125,9 @@ export function updateLocalRequest(collections,collectionId,requestId,draft){
   const old=col.requests[index];
   col.requests[index]={...old,...draft,id:old.id,folderPath:old.folderPath,requestName:draft.name||old.requestName,
     binaryFile:{name:draft.binaryFile?.name||'',base64:''},
-    formFields:(draft.formFields||[]).map(({fileBase64,...r})=>r),result:null,scriptLog:[],scriptTests:[],scriptError:''};
+    formFields:(draft.formFields||[]).map(({fileBase64,...r})=>r),
+    responseExamples:(draft.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),
+    result:null,scriptLog:[],scriptTests:[],scriptError:''};
   return validateLibrary(next);
 }
 export function createLocalSavedRequest(collections,collectionId,draft,idFactory=uid){
@@ -114,6 +136,7 @@ export function createLocalSavedRequest(collections,collectionId,draft,idFactory
   if(!col)throw Error('Collection not found');
   const r={...newRequest(draft.name||'New Request',[],idFactory),...draft,
     binaryFile:{name:draft.binaryFile?.name||'',base64:''},formFields:(draft.formFields||[]).map(({fileBase64,...f})=>f),
+    responseExamples:(draft.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),
     result:null,scriptLog:[],scriptTests:[],scriptError:''};
   col.requests.push(r);return {collections:validateLibrary(next),request:r};
 }

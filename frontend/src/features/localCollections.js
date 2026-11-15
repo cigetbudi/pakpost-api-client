@@ -17,6 +17,7 @@ export function toLocalCollection(source,idFactory=uid){
     // Imported files store metadata only; never persist bytes.
     binaryFile:{name:r.binaryFile?.name||'',base64:''},
     formFields:(r.formFields||[]).map(f=>({...f,fileBase64:undefined})),
+    responseExamples:(r.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),
     result:null,scriptLog:[],scriptTests:[],scriptError:'',
   }));
   return {id:idFactory(),name:String(source?.name||'Imported collection'),documentation:String(source?.documentation||''),folderDocs:{...(source?.folderDocs||{})},requests};
@@ -70,6 +71,7 @@ export function writeLocalCollections(collections){
     const normalized=collections.map(c=>({...c,requests:c.requests.map(r=>({...r,
       binaryFile:{name:r.binaryFile?.name||'',base64:''},
       formFields:(r.formFields||[]).map(f=>({...f,fileBase64:undefined})),
+      responseExamples:(r.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),
       result:null,scriptLog:[],scriptTests:[],scriptError:''
     }))}));
     const live=JSON.stringify({version:1,collections:normalized});

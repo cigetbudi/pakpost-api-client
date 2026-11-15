@@ -90,3 +90,16 @@ test('local docs follow rename, duplicate and delete folder',()=>{
  assert.equal(c[0].folderDocs['["B"]'],undefined);
  assert.equal(c[0].folderDocs['["B (copy)"]'],'A docs');
 });
+
+
+test('response examples persist in metadata and export to OpenAPI/Postman',()=>{
+  const examples=[{id:'ok',name:'Success',statusCode:200,reasonPhrase:'OK',headers:{'Content-Type':'application/json'},body:'{"responseCode":"00"}',contentType:'application/json'}];
+  const raw=encodeStoredHeaders(request.rows,request.params,request.documentation,examples);
+  const restored=decodeStoredHeaders(raw);
+  assert.equal(restored.responseExamples.length,1);
+  assert.equal(restored.responseExamples[0].name,'Success');
+  const postman=createPostmanCollection([{...request,responseExamples:examples}],{name:'People API'});
+  assert.equal(postman.item[0].response[0].name,'Success');
+  const openapi=exportOpenApiCollection([{...request,responseExamples:examples}],{name:'People API'});
+  assert.equal(openapi.paths['/users'].get.responses['200'].content['application/json'].examples.success.summary,'Success');
+});
