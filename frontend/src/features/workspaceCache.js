@@ -38,7 +38,8 @@ export function writeWorkbenchCache({openTabs,activeTabId,drafts,active,recent,s
     const tabList=openTabs.slice(0,100).map(t=>({id:t.id,name:t.name,method:t.method,status:t.status,source:t.source||null,pendingCopy:!!t.pendingCopy,savedFingerprint:t.savedFingerprint??null}));
     const all={...drafts,[activeTabId]:active};
     const clean=Object.fromEntries(tabList.map(t=>[t.id,normalizeDraft(all[t.id]) ]));
-    const base={version:1,openTabs:tabList,activeTabId,drafts:clean,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,recent:(recent||[]).slice(0,30)};
+    // V6 persists Cloud environment selections in account+workspace keys, not the legacy global ID.
+    const base={version:1,openTabs:tabList,activeTabId,drafts:clean,split,explorerTab,sidebarCollapsed,activeEnvId:envScope==='local'?activeEnvId:'',envScope,recent:(recent||[]).slice(0,30)};
     const live=JSON.stringify(base);
     if(live.length<MAX_BYTES)sessionStorage.setItem(SESSION_KEY,live);
     const fallback={...base,drafts:Object.fromEntries(Object.entries(clean).map(([k,d])=>[k,safeDraft(d)])),recent:[]};

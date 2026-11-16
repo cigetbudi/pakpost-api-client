@@ -13,6 +13,7 @@ import { ImportDestinationPicker } from './features/ImportDestinationPicker';
 import { VariableUrlInput } from './features/VariableUrlInput';
 import {VariableAwareInput} from './features/VariableAwareInput.jsx';
 import {putEnvironmentVariable} from './features/variableExperience.js';
+import {environmentContextKey,environmentsForContext,readEnvironmentSelections,selectionForContext,setSelectionForContext,writeEnvironmentSelections} from './features/environmentContext.js';
 import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentExplorer } from './features/EnvironmentExplorer';
 import { WorkbenchSettings } from './features/WorkbenchSettings';
@@ -104,6 +105,8 @@ export default function App() {
   const [commandIndex, setCommandIndex] = useState(0);
   const [theme, setTheme] = useState(() => readAppearance(localStorage));
   const [token, setToken] = useState(storedToken);
+  const currentTokenRef=useRef(token);
+  currentTokenRef.current=token;
   // Shared header storage context for both Collections and Environments.
   // The legacy cached envScope keeps existing users on their last chosen storage.
   const [storageScope,setStorageScope] = useState(()=>allowedStorageScope(!!storedToken(),CACHED?.envScope || defaultStorageScope(!!storedToken())));
@@ -136,8 +139,9 @@ export default function App() {
   const [responsePretty, setResponsePretty] = useState(true);
   const [prettyResponse, setPrettyResponse] = useState('');
   const [localEnvironments, setLocalEnvironments] = useState(initialLocalEnvs);
-  const [workspaceEnvironments, setWorkspaceEnvironments] = useState([]);
-  const [activeEnvId, setActiveEnvId] = useState(CACHED?.activeEnvId || '');
+  // Results and selected IDs are keyed to the actual workspace (and user) to avoid cross-team leaks.
+  const [workspaceEnvironmentResult,setWorkspaceEnvironmentResult] = useState({context:'',items:[]});
+  const [environmentSelections,setEnvironmentSelections] = useState(()=>readEnvironmentSelections(localStorage,CACHED));
   const [reqTab, setReqTab] = useState(RECOVERED.reqTab || 'params');
   const [resTab, setResTab] = useState(RECOVERED.resTab || 'body');
   const [loading, setLoading] = useState(false);
@@ -145,6 +149,32 @@ export default function App() {
   const [recent, setRecent] = useState(CACHED?.recent || []);
   const [workspaces, setWorkspaces] = useState([]);
   const [selectedWs, setSelectedWs] = useState('');
+  const cloudEnvironmentContext=environmentContextKey(STORAGE_WORKSPACE,selectedWs,me?.id);
+  const environmentContext=environmentContextKey(envScope,selectedWs,me?.id);
+  const cloudEnvironmentContextRef=useRef(cloudEnvironmentContext);
+  cloudEnvironmentContextRef.current=cloudEnvironmentContext;
+  const workspaceEnvironments=environmentsForContext(workspaceEnvironmentResult,cloudEnvironmentContext);
+  const currentEnvironments=envScope===STORAGE_WORKSPACE?workspaceEnvironments:localEnvironments;
+  const selectedEnvironmentId=selectionForContext(environmentSelections,environmentContext);
+  // An ID is never active until the matching environment has actually been loaded.
+  const activeEnvId=currentEnvironments.some(env=>env.id===selectedEnvironmentId)?selectedEnvironmentId:'';
+  function selectEnvironmentForContext(scope,workspaceId,userId,id) {
+    const context=environmentContextKey(scope,workspaceId,userId);
+    if(context)setEnvironmentSelections(previous=>setSelectionForContext(previous,context,id));
+  }
+  function setActiveEnvId(id) {
+    selectEnvironmentForContext(envScope,selectedWs,me?.id,id);
+  }
+  function setWorkspaceEnvironments(updater) {
+    const context=cloudEnvironmentContext;
+    if(!context||context!==cloudEnvironmentContextRef.current)return;
+    setWorkspaceEnvironmentResult(previous=>{
+      if(context!==cloudEnvironmentContextRef.current)return previous;
+      const before=environmentsForContext(previous,context);
+      return {context,items:typeof updater==='function'?updater(before):updater};
+    });
+  }
+  useEffect(()=>writeEnvironmentSelections(localStorage,environmentSelections),[environmentSelections]);
   const [collections, setCollections] = useState([]);
   const [localCollections, setLocalCollections] = useState(readLocalCollections);
   const [creatingLocalCollection, setCreatingLocalCollection] = useState(false);
@@ -343,12 +373,13 @@ export default function App() {
     const workspaceId=selectedWs,auth=token,epoch=workspaceFetchEpoch.current;
     if(cloud&&(!auth||!workspaceId))throw Error('Sign in and select a workspace before importing environments to Cloud.');
     // Remote list may not be loaded yet when the user is browsing Local environments.
-    const existing=cloud?(envScope==='workspace'?workspaceEnvironments:await api(`/api/workspaces/${workspaceId}/environments`,'GET',undefined,auth)):localEnvironments;
+    // Always read the destination workspace's real list: never dedupe against another team's cached list.
+    const existing=cloud?await api(`/api/workspaces/${workspaceId}/environments`,'GET',undefined,auth):localEnvironments;
     const prepared=uniqueEnvironmentImports(imported,existing);
     if(!cloud){
       const added=prepared.map(env=>({...env,id:crypto.randomUUID(),variables:(env.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret}))}));
       setLocalEnvironments(old=>[...old,...added]);
-      setStorageScope('local');setActiveEnvId(added[0].id);
+      setStorageScope(STORAGE_LOCAL);selectEnvironmentForContext(STORAGE_LOCAL,'','',added[0].id);
       return added.length;
     }
     const base=`/api/workspaces/${workspaceId}/environments`;
@@ -367,7 +398,7 @@ export default function App() {
     }
     if(epoch===workspaceFetchEpoch.current){
       setWorkspaceEnvironments(old=>[...old.filter(e=>!saved.some(x=>x.id===e.id)),...saved]);
-      setStorageScope('workspace');setActiveEnvId(saved[0].id);
+      setStorageScope(STORAGE_WORKSPACE);selectEnvironmentForContext(STORAGE_WORKSPACE,workspaceId,me?.id,saved[0].id);
     }
     return saved.length;
   }
@@ -394,7 +425,7 @@ export default function App() {
     }catch{}
     if(epoch===workspaceFetchEpoch.current){
       if(imported.firstId){setSelectedCol(imported.firstId);setExpandedCollections(old=>({...old,[workspaceCollectionKey(workspaceId,imported.firstId)]:true}));}
-      setStorageScope(STORAGE_WORKSPACE);setActiveEnvId('');
+      setStorageScope(STORAGE_WORKSPACE);
       setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
     }
     return imported.count;
@@ -411,7 +442,7 @@ export default function App() {
         const added=sources.map(source=>toLocalCollection(source));
         setLocalCollections(validateLibrary([...localCollections,...added]));
         count=requests.length;
-        setStorageScope(STORAGE_LOCAL);setActiveEnvId('');setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
+        setStorageScope(STORAGE_LOCAL);setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
       }
     }else if(kind==='pakpost'&&requests.length){
       // A Pakpost session is a tab backup, not a collection import.
@@ -876,9 +907,7 @@ export default function App() {
   }
 
 
-  useEffect(()=>{if(!token&&envScope==='workspace'){setStorageScope('local');setActiveEnvId('');}},[token,envScope]);
-  // A selected environment belongs to exactly one workspace.
-  useEffect(()=>{if(envScope===STORAGE_WORKSPACE)setActiveEnvId('');},[selectedWs]);
+  useEffect(()=>{if(!token&&envScope===STORAGE_WORKSPACE)setStorageScope(STORAGE_LOCAL);},[token,envScope]);
   useEffect(()=>{
     const safe=localEnvironments.map(e=>({...e,variables:e.variables.map(v=>v.isSecret?{...v,value:''}:v)}));
     const secrets=Object.fromEntries(localEnvironments.map(e=>[e.id,Object.fromEntries(e.variables.filter(v=>v.isSecret).map(v=>[v.key,v.value]))]));
@@ -886,11 +915,18 @@ export default function App() {
     sessionStorage.setItem('pakpost_guest_secrets',JSON.stringify(secrets));
   },[localEnvironments]);
   useEffect(()=>{
-    if(envScope!=='workspace'||!token||!selectedWs){setWorkspaceEnvironments([]);return;}
+    if(envScope!==STORAGE_WORKSPACE||!token||!selectedWs||!cloudEnvironmentContext){
+      setWorkspaceEnvironmentResult({context:'',items:[]});return;
+    }
+    const context=cloudEnvironmentContext;
+    let cancelled=false;
+    // Reset immediately for the new context; old workspace data will never be rendered.
+    setWorkspaceEnvironmentResult(previous=>previous.context===context?previous:{context,items:[]});
     api(`/api/workspaces/${selectedWs}/environments`,'GET',undefined,token)
-      .then(setWorkspaceEnvironments).catch(e=>setNotice(`Environments API: ${getMessage(e)}. Apply the v3 EF migration.`));
-  },[envScope,token,selectedWs]);
-  const currentEnvironments=envScope==='workspace'?workspaceEnvironments:localEnvironments;
+      .then(items=>{if(!cancelled&&cloudEnvironmentContextRef.current===context)setWorkspaceEnvironmentResult({context,items});})
+      .catch(e=>{if(!cancelled&&cloudEnvironmentContextRef.current===context)setNotice(`Environments API: ${getMessage(e)}`);});
+    return()=>{cancelled=true;};
+  },[envScope,token,selectedWs,cloudEnvironmentContext]);
   const activeEnvironment=currentEnvironments.find(e=>e.id===activeEnvId);
   // Restricted workspace secrets must remain unresolved, never silently become empty credentials.
   const varsFromEnv=(allowSecrets=true)=>Object.fromEntries((activeEnvironment?.variables||[]).filter(v=>!v.isRedacted).map(v=>[v.key,v.isSecret&&!allowSecrets?'[REDACTED]':v.value]));
@@ -902,12 +938,13 @@ export default function App() {
     await persistEnvironment({...activeEnvironment,variables});
   }
   const variableUi={variables:varsFromEnv(),definitions:activeEnvironment?.variables||[],
-    source:activeEnvironment?`${envScope===STORAGE_WORKSPACE?'Cloud · Neon':'Local · Browser'} / ${activeEnvironment.name}`:'No active environment',
+    source:activeEnvironment?`${envScope===STORAGE_WORKSPACE?`Cloud · ${workspaces.find(w=>w.id===selectedWs)?.name||'Workspace'}`:'Local · Browser'} / ${activeEnvironment.name}`:'No active environment',
     onEditVariable:activeEnvironment?quickEditVariable:null,
     onOpenEnvironments:()=>setExplorerTab('environments')};
   function updateStorageScope(scope){
     setStorageScope(allowedStorageScope(!!token,scope));
-    setActiveEnvId('');setCreatingLocalCollection(false);
+    // Keep each context's selection while switching Local, Cloud and workspaces.
+    setCreatingLocalCollection(false);
   }
   async function importEnvironmentFile(sourceText,requestedDestination){
     let doc;
@@ -1050,7 +1087,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  function logout() { sessionStorage.removeItem('pakpost_token'); setStorageScope(STORAGE_LOCAL);setStorageScope(STORAGE_LOCAL);setActiveEnvId('');setToken(''); setMe(null); setPage('tester'); setWorkspaces([]); }
+  function logout() { sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]); }
   function requiresLogin(target = 'workspace') {
     if (token) return true;
     setAuthMode('login'); setAuthError(''); setAuthOpen(true);
@@ -1069,7 +1106,7 @@ export default function App() {
       const payload = authMode === 'register' ? authForm : { email: authForm.email, password: authForm.password };
       const data = await api(path, 'POST', payload);
       sessionStorage.setItem('pakpost_token', data.accessToken);
-      setToken(data.accessToken); setStorageScope(STORAGE_WORKSPACE);setStorageScope(STORAGE_WORKSPACE);setActiveEnvId('');setMe(data.user); setAuthOpen(false);
+      setToken(data.accessToken);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
       setAuthForm({ displayName: '', email: '', password: '' });
       setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
     } catch (e) { setAuthError(getMessage(e)); }
@@ -1079,22 +1116,30 @@ export default function App() {
     if (!auth) return;
     try {
       const data = await api('/api/workspaces', 'GET', undefined, auth);
+      // Logout or account switch may happen before this request resolves.
+      if(auth!==currentTokenRef.current)return;
       setWorkspaces(data);
       setSelectedWs(current => data.some(x => x.id === current) ? current : (data[0]?.id || ''));
-    } catch (e) { setNotice(getMessage(e)); }
+    } catch (e) { if(auth===currentTokenRef.current)setNotice(getMessage(e)); }
   }
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
   useEffect(() => {
     if (!token || !selectedWs) { setCollections([]); setMembers([]); setTeams([]); return; }
+    let cancelled=false;
+    const epoch=workspaceFetchEpoch.current;
+    // Show no stale workspace metadata while a different team is loading.
+    setCollections([]);setMembers([]);setTeams([]);
     Promise.all([
       api(`/api/workspaces/${selectedWs}/collections`, 'GET', undefined, token),
       api(`/api/workspaces/${selectedWs}/members`, 'GET', undefined, token),
       api(`/api/workspaces/${selectedWs}/teams`, 'GET', undefined, token),
     ]).then(([cols, mems, tms]) => {
+      if(cancelled||epoch!==workspaceFetchEpoch.current)return;
       setCollections(cols); setMembers(mems); setTeams(tms);
       setSelectedCol(current => cols.some(x => x.id === current) ? current : cols[0]?.id || '');
       setSelectedTeam(current => tms.some(x => x.id === current) ? current : tms[0]?.id || '');
-    }).catch(e => setNotice(getMessage(e)));
+    }).catch(e => {if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
+    return()=>{cancelled=true;};
   }, [selectedWs, token]);
   useEffect(() => {
     if (!token || !selectedWs || !selectedCol) { setSavedRequests([]); return; }
@@ -1391,8 +1436,9 @@ export default function App() {
         <div className="pp-env-top pp-unified-storage-top">
           <span>STORAGE</span>
           {token?<RetroSelect ariaLabel="Storage location for collections and environments" title="Controls storage for both Collections and Environments" className="pp-top-scope" value={storageScope} onChange={updateStorageScope} options={[{value:STORAGE_LOCAL,label:'Local · Browser'},{value:STORAGE_WORKSPACE,label:'Cloud · Neon',disabled:!selectedWs}]}/>:<span className="pp-top-env-local" title="Sign in to use Cloud · Neon">Local · Browser</span>}
+          {token&&envScope===STORAGE_WORKSPACE&&<span className="pp-v6-workspace-indicator" title={`Active environment workspace: ${activeWorkspace?.name||'Select workspace'}`}>{activeWorkspace?.name||'Select workspace'}</span>}
           <span className="pp-top-env-label">ENV</span>
-          <RetroSelect ariaLabel="Active environment" className="pp-top-environment" value={activeEnvId} onChange={setActiveEnvId} options={[{value:'',label:'No environment'},...currentEnvironments.map(e=>({value:e.id,label:e.name}))]}/>
+          <RetroSelect ariaLabel="Active environment" title={envScope===STORAGE_WORKSPACE?`Environment for ${workspaces.find(w=>w.id===selectedWs)?.name||'selected workspace'}`:'Local environment'} className="pp-top-environment" value={activeEnvId} onChange={setActiveEnvId} options={[{value:'',label:'No environment'},...currentEnvironments.map(e=>({value:e.id,label:e.name}))]}/>
           <button title="Manage environments" onClick={()=>openContext('environments')}><Settings2 size={16}/></button>
         </div>
         <span className="pp-connection"><span/> Local development</span>
@@ -1418,7 +1464,7 @@ export default function App() {
         {explorerTab === 'environments' ? <>
           {token&&envScope===STORAGE_WORKSPACE&&<div className="pp-compact-workspace"><Layers3 size={15}/><span>Workspace</span><RetroSelect ariaLabel="Switch environment workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/><button type="button" title="Manage workspace" aria-label="Manage workspace" onClick={()=>navigate('workspace')}><Settings2 size={15}/></button></div>}
           {!token&&<button className="pp-link-row pp-login-hint" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}><LockKeyhole size={14}/> Sign in to access Cloud environments <ChevronRight size={13}/></button>}
-          <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} onImportFile={importEnvironmentFile} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} scope={envScope===STORAGE_WORKSPACE?`Workspace: ${activeWorkspace?.name||'Private'}`:'Local · Browser'}/>
+          <EnvironmentExplorer key={environmentContext||'cloud-pending'} items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} onImportFile={importEnvironmentFile} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} scope={envScope===STORAGE_WORKSPACE?`Cloud · ${activeWorkspace?.name||'Choose workspace'}`:'Local · Browser'}/>
         </> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
             environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
