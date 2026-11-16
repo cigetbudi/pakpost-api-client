@@ -6,8 +6,10 @@ namespace Pakpost.Infrastructure.Persistence;
 public sealed class PakpostDbContext(DbContextOptions<PakpostDbContext> options) : DbContext(options), IUnitOfWork
 {
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserExternalIdentity> UserExternalIdentities => Set<UserExternalIdentity>();
     public DbSet<Workspace> Workspaces => Set<Workspace>();
     public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
+    public DbSet<WorkspaceMemberRole> WorkspaceMemberRoles => Set<WorkspaceMemberRole>();
     public DbSet<Collection> Collections => Set<Collection>();
     public DbSet<SavedRequest> SavedRequests => Set<SavedRequest>();
     public DbSet<Team> Teams => Set<Team>();

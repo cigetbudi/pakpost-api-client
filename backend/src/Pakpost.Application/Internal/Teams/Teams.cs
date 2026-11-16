@@ -4,6 +4,7 @@ using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
+using Pakpost.Application.Common.Security;
 namespace Pakpost.Application.Internal.Teams;
 public sealed record TeamDto(Guid Id,Guid WorkspaceId,string Name);
 public sealed record TeamMemberDto(Guid UserId,string Email,string DisplayName);
@@ -24,8 +25,7 @@ public sealed class ListTeamsHandler(IWorkspaceRepository w,ITeamRepository t):I
 public sealed class CreateTeamHandler(IWorkspaceRepository w,ITeamRepository t,IUnitOfWork uow):IRequestHandler<CreateTeamCommand,TeamDto>
 {
     public async ValueTask<TeamDto> Handle(CreateTeamCommand q,CancellationToken ct)
-    { var actor=await w.FindMemberAsync(q.WorkspaceId,q.ActorId,ct);
-      if(actor is null || actor.Role is not (WorkspaceRole.Owner or WorkspaceRole.Admin))throw AppException.Forbidden();
+    { await WorkspacePermissions.RequireAsync(w,q.WorkspaceId,q.ActorId,WorkspacePermissions.TeamManage,ct);
       var team=new Team(q.WorkspaceId,q.ActorId,q.Name);t.Add(team);
       t.AddMember(new TeamMember(team.Id,q.ActorId));await uow.SaveChangesAsync(ct);
       return new(team.Id,team.WorkspaceId,team.Name); }
@@ -44,8 +44,7 @@ public sealed class ListTeamMembersHandler(IWorkspaceRepository w,ITeamRepositor
 public sealed class AddTeamMemberHandler(IWorkspaceRepository w,ITeamRepository t,IUserRepository users,IUnitOfWork uow):IRequestHandler<AddTeamMemberCommand,TeamMemberDto>
 {
     public async ValueTask<TeamMemberDto> Handle(AddTeamMemberCommand q,CancellationToken ct)
-    { var actor=await w.FindMemberAsync(q.WorkspaceId,q.ActorId,ct);
-      if(actor is null || actor.Role is not (WorkspaceRole.Owner or WorkspaceRole.Admin))throw AppException.Forbidden();
+    { await WorkspacePermissions.RequireAsync(w,q.WorkspaceId,q.ActorId,WorkspacePermissions.TeamManage,ct);
       var team=await t.FindAsync(q.TeamId,ct);
       if(team is null || team.WorkspaceId!=q.WorkspaceId)throw AppException.NotFound();
       var user=await users.FindByEmailAsync(q.Email.Trim().ToLowerInvariant(),ct)

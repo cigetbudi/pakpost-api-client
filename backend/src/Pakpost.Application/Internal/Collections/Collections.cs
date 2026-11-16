@@ -31,8 +31,8 @@ public sealed class CreateCollectionHandler(ICollectionRepository collections, I
 {
     public async ValueTask<CollectionDto> Handle(CreateCollectionCommand request, CancellationToken ct)
     {
-        if (await workspaces.FindMemberAsync(request.WorkspaceId, request.ActorId, ct) is null)
-            throw AppException.Forbidden();
+        await WorkspacePermissions.RequireAsync(workspaces,request.WorkspaceId,request.ActorId,
+            WorkspacePermissions.CollectionWrite,ct);
         var col = new Collection(request.WorkspaceId, request.Name, request.ActorId);
         collections.Add(col);
         await uow.SaveChangesAsync(ct);
@@ -49,7 +49,7 @@ public sealed class RenameCollectionHandler(ICollectionRepository collections,IW
 {
     public async ValueTask<CollectionDto> Handle(RenameCollectionCommand cmd,CancellationToken ct)
     {
-        await WorkspacePermissions.RequireManagerAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,ct);
+        await WorkspacePermissions.RequireAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,WorkspacePermissions.CollectionWrite,ct);
         var item=await collections.FindAsync(cmd.CollectionId,ct);
         if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
         item.Rename(cmd.Name);await uow.SaveChangesAsync(ct);
@@ -61,7 +61,7 @@ public sealed class DeleteCollectionHandler(ICollectionRepository collections,IW
 {
     public async ValueTask<Unit> Handle(DeleteCollectionCommand cmd,CancellationToken ct)
     {
-        await WorkspacePermissions.RequireManagerAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,ct);
+        await WorkspacePermissions.RequireAsync(workspaces,cmd.WorkspaceId,cmd.ActorId,WorkspacePermissions.CollectionWrite,ct);
         var item=await collections.FindAsync(cmd.CollectionId,ct);
         if(item is null||item.WorkspaceId!=cmd.WorkspaceId)throw AppException.NotFound("Collection not found");
         collections.Remove(item);await uow.SaveChangesAsync(ct);

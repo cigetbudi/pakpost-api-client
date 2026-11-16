@@ -18,6 +18,8 @@ public static class DependencyInjection
         services.AddDbContext<PakpostDbContext>(options => options.UseNpgsql(connection));
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<PakpostDbContext>());
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IUserExternalIdentityRepository, UserExternalIdentityRepository>();
+        services.AddSingleton<IGoogleIdentityVerifier, GoogleIdentityVerifier>();
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<ISavedRequestRepository, SavedRequestRepository>();

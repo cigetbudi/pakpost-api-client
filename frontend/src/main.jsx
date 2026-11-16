@@ -33,3 +33,6 @@ import './v28-unified-storage.css';
 import './v29-variable-experience.css';
 
 import './v30-workspace-environments.css';
+import './v31-google-sso.css';
+
+import './v32-multi-role.css';

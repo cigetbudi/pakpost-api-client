@@ -116,7 +116,7 @@ test('Collections toolbar keeps all four sorts, provides compact expand/collapse
 
 test('Import dialog keeps explicit Local/Cloud destination and guards against env-only files',()=>{
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
-  assert.match(app,/setCollectionImportDestination\(defaultStorageScope\(!!token\)\)/);
+  assert.match(app,/setCollectionImportDestination\(token&&canEditCloud\?STORAGE_WORKSPACE:STORAGE_LOCAL\)/);
   assert.match(app,/collectionImportSources\(parsed\)/);
   assert.match(app,/parsed.kind==='environment'/);
   assert.match(app,/importRequestsAndEnvironments\(parsed,allowedStorageScope/);

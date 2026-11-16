@@ -34,8 +34,8 @@ public abstract class SavedRequestsAccess
 {
     protected static async Task Check(Guid actorId,Guid workspaceId,Guid collectionId,IWorkspaceRepository workspaces,ICollectionRepository collections,CancellationToken ct,bool destructive=false)
     {
-        if(destructive)await WorkspacePermissions.RequireManagerAsync(workspaces,workspaceId,actorId,ct);
-        else await WorkspacePermissions.RequireMemberAsync(workspaces,workspaceId,actorId,ct);
+        await WorkspacePermissions.RequireAsync(workspaces,workspaceId,actorId,
+            destructive?WorkspacePermissions.CollectionWrite:WorkspacePermissions.CollectionRead,ct);
         var c=await collections.FindAsync(collectionId,ct);
         if (c is null || c.WorkspaceId!=workspaceId) throw AppException.NotFound("Collection not found");
     }
@@ -54,7 +54,7 @@ public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollecti
     :SavedRequestsAccess,IRequestHandler<SaveRequestCommand,SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(SaveRequestCommand c,CancellationToken ct)
-    { await Check(c.ActorId,c.WorkspaceId,c.CollectionId,workspaces,collections,ct);
+    { await Check(c.ActorId,c.WorkspaceId,c.CollectionId,workspaces,collections,ct,destructive:true);
       SavedHeaderPolicy.EnsureSafe(c.HeadersJson);
       var item=new SavedRequest(c.CollectionId,c.Name,c.Method,c.Url,c.HeadersJson,c.Body,c.BodyMode,c.ContentType,c.FormFieldsJson,c.PreRequestScript,c.PostResponseScript);
       requests.Add(item);await uow.SaveChangesAsync(ct);return ToDto(item); }
@@ -98,7 +98,7 @@ public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,IC
 {
     public async ValueTask<SavedRequestDto> Handle(UpdateSavedRequestCommand cmd,CancellationToken ct)
     {
-        await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct);
+        await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct,destructive:true);
         var item=await requests.FindAsync(cmd.RequestId,ct);
         if(item is null||item.CollectionId!=cmd.CollectionId)throw AppException.NotFound("Request not found");
         SavedHeaderPolicy.EnsureSafe(cmd.HeadersJson);

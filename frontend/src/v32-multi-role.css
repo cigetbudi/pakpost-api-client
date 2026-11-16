@@ -1,0 +1,17 @@
+.pp-rbac-role-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:7px;margin:7px 0 10px}
+.pp-rbac-role{display:flex;align-items:flex-start;gap:8px;padding:9px;border:1px solid var(--border,#40454f);border-radius:9px;cursor:pointer}
+.pp-rbac-role.is-checked{border-color:var(--accent,#3b82f6);background:color-mix(in srgb,var(--accent,#3b82f6) 7%,transparent)}
+.pp-rbac-role.is-locked{opacity:.48;cursor:not-allowed}
+.pp-rbac-role input{margin-top:3px;accent-color:var(--accent,#3b82f6)}
+.pp-rbac-role span{display:flex;flex-direction:column;gap:2px}
+.pp-rbac-role small{font-size:11px;opacity:.68;line-height:1.45}
+.pp-rbac-badges{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:5px 0}
+.pp-rbac-badges span{font-size:11px;padding:2px 7px;border-radius:8px;border:1px solid var(--border,#40454f);opacity:.85}
+.pp-rbac-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:8px 0}
+.pp-rbac-actions button{border-radius:8px}
+.pp-rbac-heading{font-size:12px;font-weight:650;letter-spacing:.02em;margin-top:10px}
+.pp-rbac-muted{opacity:.7;font-size:12px}
+.pp-rbac-manage-member{padding:11px 0;border-bottom:1px solid var(--border,#40454f)}
+.pp-rbac-manage-member .pp-manager-member{padding:0;border:none}
+.pp-rbac-manage-member>.pp-rbac-badges{padding-left:41px}
+.pp-rbac-manage-member>.pp-rbac-actions,.pp-rbac-manage-member>.pp-rbac-role-grid{margin-left:41px}

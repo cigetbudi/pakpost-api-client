@@ -4,6 +4,7 @@ using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
+using Pakpost.Application.Common.Security;
 namespace Pakpost.Application.Internal.Environments;
 public sealed record EnvironmentVariableDto(string Key,string Value,bool IsSecret,bool IsRedacted=false);
 public sealed record RequestEnvironmentDto(Guid Id,string Name,IReadOnlyList<EnvironmentVariableDto> Variables);
@@ -30,17 +31,12 @@ public sealed class UpdateEnvironmentValidator:AbstractValidator<UpdateEnvironme
 }
 public static class EnvironmentAccess
 {
-    public static async Task<WorkspaceRole> Verify(IWorkspaceRepository workspaces,Guid ws,Guid actor,bool write,CancellationToken ct)
-    {
-        var member=await workspaces.FindMemberAsync(ws,actor,ct);
-        if(member is null || (write && member.Role is not WorkspaceRole.Owner and not WorkspaceRole.Admin))
-            throw AppException.Forbidden();
-        return member.Role;
-    }
-    // Never decrypt a workspace secret for a read-only Member.
-    // The optional DTO flag lets clients distinguish a redacted value from an empty one.
+    public static async Task<WorkspaceMember> Verify(IWorkspaceRepository workspaces,Guid ws,Guid actor,bool write,CancellationToken ct)
+        =>await WorkspacePermissions.RequireAsync(workspaces,ws,actor,
+            write?WorkspacePermissions.EnvironmentWrite:WorkspacePermissions.EnvironmentRead,ct);
+    // A read-only member cannot decrypt a shared secret. A masked value is not an empty secret.
     public static RequestEnvironmentDto ToDto(RequestEnvironment env,IEnvironmentValueCipher cipher,bool canReadSecrets)
-        => new(env.Id,env.Name,env.Variables.Select(v=>new EnvironmentVariableDto(
+        =>new(env.Id,env.Name,env.Variables.Select(v=>new EnvironmentVariableDto(
             v.Key,v.IsSecret?(canReadSecrets?cipher.Unprotect(v.StoredValue):string.Empty):v.StoredValue,
             v.IsSecret,v.IsSecret&&!canReadSecrets)).ToArray());
 }
@@ -49,8 +45,8 @@ public sealed class ListEnvironmentsHandler(IWorkspaceRepository workspaces,IReq
 {
     public async ValueTask<IReadOnlyList<RequestEnvironmentDto>> Handle(ListEnvironmentsQuery q,CancellationToken ct)
     {
-        var role=await EnvironmentAccess.Verify(workspaces,q.WorkspaceId,q.ActorId,false,ct);
-        bool canReadSecrets=role is WorkspaceRole.Owner or WorkspaceRole.Admin;
+        var member=await EnvironmentAccess.Verify(workspaces,q.WorkspaceId,q.ActorId,false,ct);
+        bool canReadSecrets=WorkspacePermissions.Can(member,WorkspacePermissions.EnvironmentSecretRead);
         return (await environments.ListAsync(q.WorkspaceId,ct)).Select(e=>EnvironmentAccess.ToDto(e,cipher,canReadSecrets)).ToArray();
     }
 }

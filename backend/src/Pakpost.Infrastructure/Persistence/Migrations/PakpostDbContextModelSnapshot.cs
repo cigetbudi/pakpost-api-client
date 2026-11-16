@@ -229,6 +229,29 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("team_members", "organization");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.UserExternalIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+                    b.HasKey("Id");
+                    b.HasIndex("Provider", "Subject").IsUnique();
+                    b.HasIndex("UserId", "Provider").IsUnique();
+                    b.ToTable("user_external_identities", "auth");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -289,6 +312,23 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.HasIndex("OwnerUserId");
 
                     b.ToTable("workspaces", "organization");
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceMemberRole", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("WorkspaceId", "UserId", "Role");
+                    b.ToTable("workspace_member_roles", "organization");
                 });
 
             modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceMember", b =>
@@ -386,6 +426,15 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.UserExternalIdentity", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.Workspace", b =>
                 {
                     b.HasOne("Pakpost.Domain.Entities.User", null)
@@ -408,6 +457,20 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceMemberRole", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.WorkspaceMember", null)
+                        .WithMany("Roles")
+                        .HasForeignKey("WorkspaceId", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceMember", b =>
+                {
+                    b.Navigation("Roles");
                 });
 
             modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironment", b =>

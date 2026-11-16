@@ -4,6 +4,7 @@ using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
 using Pakpost.Application.Internal.Collections;
 using Pakpost.Application.Internal.Environments;
+using Pakpost.Application.Internal.Workspaces;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
 
@@ -114,21 +115,74 @@ var cases=new (string Name,Func<Task> Test)[]
             await WorkspacePermissions.RequireManagerAsync(new FakeWorkspaces(ws,id,role),ws,id,CancellationToken.None);
         await MustBeForbidden(()=>WorkspacePermissions.RequireMemberAsync(new FakeWorkspaces(ws,id,WorkspaceRole.Member),ws,Guid.NewGuid(),CancellationToken.None));
     }),
-    ("Collection rename and delete reject ordinary Members",async()=>{
+    ("Developer role can write collections and existing Members migrate to Developer",async()=>{
         var ws=Guid.NewGuid();var id=Guid.NewGuid();var collections=new FakeCollections();
+        var collection=new Collection(ws,"Before",id);collections.Items.Add(collection);
         var repo=new FakeWorkspaces(ws,id,WorkspaceRole.Member);var uow=new FakeUnitOfWork();
-        await MustBeForbidden(async()=>{await new RenameCollectionHandler(collections,repo,uow)
-            .Handle(new RenameCollectionCommand(id,ws,Guid.NewGuid(),"Renamed"),CancellationToken.None);});
-        await MustBeForbidden(async()=>{await new DeleteCollectionHandler(collections,repo,uow)
-            .Handle(new DeleteCollectionCommand(id,ws,Guid.NewGuid()),CancellationToken.None);});
+        await new RenameCollectionHandler(collections,repo,uow)
+            .Handle(new RenameCollectionCommand(id,ws,collection.Id,"After"),CancellationToken.None);
+        Assert(collection.Name=="After");
+        var roles=WorkspacePermissions.RolesOf(new WorkspaceMember(ws,id,WorkspaceRole.Member));
+        Assert(roles.SequenceEqual([WorkspaceAccessRole.Developer]));
     }),
-    ("Saved request delete and move reject ordinary Members",async()=>{
+    ("QA role cannot create, rename, move or save Cloud requests",async()=>{
         var ws=Guid.NewGuid();var id=Guid.NewGuid();var collections=new FakeCollections();
-        var repo=new FakeWorkspaces(ws,id,WorkspaceRole.Member);var requests=new FakeSavedRequests();var uow=new FakeUnitOfWork();
-        await MustBeForbidden(async()=>{await new DeleteSavedRequestHandler(repo,collections,requests,uow)
-            .Handle(new DeleteSavedRequestCommand(id,ws,Guid.NewGuid(),Guid.NewGuid()),CancellationToken.None);});
+        var collection=new Collection(ws,"Cloud",id);collections.Items.Add(collection);
+        var repo=new FakeWorkspaces(ws,id,WorkspaceRole.Member,[WorkspaceAccessRole.QA]);
+        var requests=new FakeSavedRequests();var uow=new FakeUnitOfWork();
+        await MustBeForbidden(async()=>{await new CreateCollectionHandler(collections,repo,uow)
+            .Handle(new CreateCollectionCommand(id,ws,"New"),CancellationToken.None);});
+        await MustBeForbidden(async()=>{await new RenameCollectionHandler(collections,repo,uow)
+            .Handle(new RenameCollectionCommand(id,ws,collection.Id,"Renamed"),CancellationToken.None);});
+        await MustBeForbidden(async()=>{await new SaveRequestHandler(repo,collections,requests,uow)
+            .Handle(new SaveRequestCommand(id,ws,collection.Id,"Testing","GET","https://example.com","{}",""),CancellationToken.None);});
+        await MustBeForbidden(async()=>{await new UpdateSavedRequestHandler(repo,collections,requests,uow)
+            .Handle(new UpdateSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid(),"Testing","GET","https://example.com","{}",""),CancellationToken.None);});
         await MustBeForbidden(async()=>{await new MoveSavedRequestHandler(repo,collections,requests,uow)
-            .Handle(new MoveSavedRequestCommand(id,ws,Guid.NewGuid(),Guid.NewGuid(),Guid.NewGuid()),CancellationToken.None);});
+            .Handle(new MoveSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid(),collection.Id),CancellationToken.None);});
+        await MustBeForbidden(async()=>{await new DeleteSavedRequestHandler(repo,collections,requests,uow)
+            .Handle(new DeleteSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid()),CancellationToken.None);});
+        await MustBeForbidden(async()=>{await EnvironmentAccess.Verify(repo,ws,id,true,CancellationToken.None);});
+    }),
+    ("Multi-role grants union, not role hierarchy or team membership",()=>{
+        var admin=WorkspacePermissions.EffectivePermissions([WorkspaceAccessRole.WorkspaceAdmin]);
+        Assert(admin.Contains(WorkspacePermissions.MemberManage));
+        Assert(!admin.Contains(WorkspacePermissions.CollectionWrite));
+        var combined=WorkspacePermissions.EffectivePermissions([WorkspaceAccessRole.WorkspaceAdmin,WorkspaceAccessRole.Developer]);
+        Assert(combined.Contains(WorkspacePermissions.CollectionWrite));
+        Assert(combined.Contains(WorkspacePermissions.MemberManage));
+        foreach(var role in new[]{WorkspaceAccessRole.QA,WorkspaceAccessRole.TechnicalWriter}){
+            var rights=WorkspacePermissions.EffectivePermissions([role]);
+            Assert(rights.Contains(WorkspacePermissions.RequestExecute));
+            Assert(!rights.Contains(WorkspacePermissions.CollectionWrite));
+            Assert(!rights.Contains(WorkspacePermissions.EnvironmentSecretRead));
+        }
+        return Task.CompletedTask;
+    }),
+    ("Workspace Admin cannot elevate to Team Lead or Workspace Admin",async()=>{
+        var ws=Guid.NewGuid();var user=Guid.NewGuid();
+        var admin=new WorkspaceMember(ws,user,WorkspaceRole.Admin,[WorkspaceAccessRole.WorkspaceAdmin,WorkspaceAccessRole.Developer]);
+        await MustBeForbidden(()=>Task.Run(()=>RoleDelegation.Check(admin,[WorkspaceAccessRole.TeamLead])));
+        await MustBeForbidden(()=>Task.Run(()=>RoleDelegation.Check(admin,[WorkspaceAccessRole.WorkspaceAdmin])));
+        RoleDelegation.Check(admin,[WorkspaceAccessRole.Developer,WorkspaceAccessRole.QA]);
+    }),
+    ("Missing role rows do not restore legacy Member write permission",()=>{
+        var m=new WorkspaceMember(Guid.NewGuid(),Guid.NewGuid(),WorkspaceRole.Member);
+        m.Roles.Clear();
+        Assert(WorkspacePermissions.RolesOf(m).Count==0);
+        Assert(!WorkspacePermissions.Can(m,WorkspacePermissions.CollectionWrite));
+        return Task.CompletedTask;
+    }),
+    ("Changing roles preserves other assignments and cannot remove the last role",()=>{
+        var ws=Guid.NewGuid();var user=Guid.NewGuid();
+        var member=new WorkspaceMember(ws,user,WorkspaceRole.Member,[WorkspaceAccessRole.Developer,WorkspaceAccessRole.QA]);
+        member.ReplaceRoles([WorkspaceAccessRole.QA,WorkspaceAccessRole.TechnicalWriter]);
+        Assert(member.Roles.Count==2 && member.Roles.Any(r=>r.Role==WorkspaceAccessRole.QA) &&
+            member.Roles.Any(r=>r.Role==WorkspaceAccessRole.TechnicalWriter));
+        var rejected=false;
+        try{member.ReplaceRoles([]);}catch(ArgumentException){rejected=true;}
+        Assert(rejected);
+        return Task.CompletedTask;
     })
 };
 
@@ -165,10 +219,13 @@ sealed class FakeEnvironments(RequestEnvironment environment):IRequestEnvironmen
     public void AddVariable(RequestEnvironmentVariable value)=>AddedVariables.Add(value);
     public void RemoveVariable(RequestEnvironmentVariable value)=>RemovedVariables.Add(value);
 }
-sealed class FakeWorkspaces(Guid workspaceId,Guid userId,WorkspaceRole role):IWorkspaceRepository
+sealed class FakeWorkspaces(Guid workspaceId,Guid userId,WorkspaceRole role,WorkspaceAccessRole[]? roles=null):IWorkspaceRepository
 {
     public Task<WorkspaceMember?> FindMemberAsync(Guid ws,Guid actor,CancellationToken ct)
-        =>Task.FromResult<WorkspaceMember?>(ws==workspaceId&&actor==userId?new WorkspaceMember(ws,actor,role):null);
+        =>Task.FromResult<WorkspaceMember?>(ws==workspaceId&&actor==userId?new WorkspaceMember(ws,actor,role,roles):null);
+    public Task<WorkspaceMember?> FindMemberForUpdateAsync(Guid ws,Guid actor,CancellationToken ct)
+        =>FindMemberAsync(ws,actor,ct);
+    public Task<bool> AnyWorkspaceAsync(CancellationToken ct)=>Task.FromResult(true);
     public Task<Workspace?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<Workspace?>(null);
     public Task<IReadOnlyList<Workspace>> ListForUserAsync(Guid id,CancellationToken ct)
         =>Task.FromResult<IReadOnlyList<Workspace>>([]);

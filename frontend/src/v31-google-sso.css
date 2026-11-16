@@ -1,0 +1,6 @@
+.pp-google-auth-section{margin-top:17px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.pp-google-divider{font-size:11px;color:var(--muted);text-align:center}
+.pp-google-signin{display:flex;flex-direction:column;align-items:center;min-height:40px;justify-content:center;width:100%}
+.pp-google-link-top{display:inline-flex;align-items:center;gap:6px;color:var(--text2);font-size:11px;white-space:nowrap;padding:7px 9px;border:1px solid var(--border);border-radius:6px}
+.pp-google-link-top:hover{color:var(--accent);background:var(--hover)}
+@media(max-width:860px){.pp-google-link-top{font-size:0;gap:0}.pp-google-link-top svg{width:15px;height:15px}}

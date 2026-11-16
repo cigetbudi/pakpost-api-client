@@ -6,10 +6,23 @@ public interface IUserRepository
     Task<User?> FindByEmailAsync(string email, CancellationToken ct);
     void Add(User user);
 }
+public interface IUserExternalIdentityRepository
+{
+    Task<UserExternalIdentity?> FindByProviderSubjectAsync(string provider, string subject, CancellationToken ct);
+    Task<UserExternalIdentity?> FindByUserProviderAsync(Guid userId, string provider, CancellationToken ct);
+    void Add(UserExternalIdentity identity);
+}
+public sealed record GoogleIdentity(string Subject, string Email, string DisplayName);
+public interface IGoogleIdentityVerifier
+{
+    Task<GoogleIdentity> VerifyAsync(string idToken, CancellationToken ct);
+}
 public interface IWorkspaceRepository
 {
     Task<Workspace?> FindAsync(Guid id, CancellationToken ct);
     Task<WorkspaceMember?> FindMemberAsync(Guid workspaceId, Guid userId, CancellationToken ct);
+    Task<WorkspaceMember?> FindMemberForUpdateAsync(Guid workspaceId, Guid userId, CancellationToken ct);
+    Task<bool> AnyWorkspaceAsync(CancellationToken ct);
     Task<IReadOnlyList<Workspace>> ListForUserAsync(Guid userId, CancellationToken ct);
     Task<IReadOnlyList<WorkspaceMember>> ListMembersAsync(Guid workspaceId, CancellationToken ct);
     void Add(Workspace workspace);

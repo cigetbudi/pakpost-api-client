@@ -28,12 +28,12 @@ test('Mediator source generator is registered only in executable and uses scoped
   assert.match(program, /options\.Assemblies = \[typeof\(RegisterCommand\)\]/)
 })
 
-test('all 25 CQRS handlers are migrated to ValueTask without MediatR references', () => {
+test('all 29 CQRS handlers are migrated to ValueTask without MediatR references', () => {
   const internal = join(root, 'backend/src/Pakpost.Application/Internal')
   const sources = findCs(internal).map(f => readFileSync(f, 'utf8'))
   const joined = sources.join('\n')
-  assert.equal((joined.match(/IRequestHandler</g) || []).length, 25)
-  assert.equal((joined.match(/ValueTask(?:<[^\n]+>)? Handle\(/g) || []).length, 25)
+  assert.equal((joined.match(/IRequestHandler</g) || []).length, 29)
+  assert.equal((joined.match(/ValueTask(?:<[^\n]+>)? Handle\(/g) || []).length, 29)
   assert.doesNotMatch(joined, /using MediatR;|public (?:async )?Task(?:<[^\n]+>)? Handle\(/)
   assert.equal((joined.match(/return Unit\.Value;/g) || []).length, 3)
 })

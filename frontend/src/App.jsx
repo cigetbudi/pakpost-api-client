@@ -4,6 +4,9 @@ import {
   ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
 import { TextEditor } from './features/Editors';
+import { GoogleSignInButton } from './features/GoogleSignInButton';
+import { WorkspaceRolePicker } from './features/WorkspaceRolePicker.jsx';
+import {canGrantRole,canWorkspace,currentWorkspaceMember,normalizeRoles,WORKSPACE_ROLES} from './features/workspaceRoles.js';
 import { KeyValueEditor } from './features/KeyValueEditor';
 import { DocumentationEditor } from './features/DocumentationEditor';
 import { emptyRow, isEnabled, encodeStoredHeaders, decodeStoredHeaders } from './features/requestMetadata';
@@ -12,7 +15,8 @@ import { RetroSelect } from './features/RetroSelect';
 import { ImportDestinationPicker } from './features/ImportDestinationPicker';
 import { VariableUrlInput } from './features/VariableUrlInput';
 import {VariableAwareInput} from './features/VariableAwareInput.jsx';
-import {putEnvironmentVariable} from './features/variableExperience.js';
+import {putEnvironmentVariable,isSensitiveVariable} from './features/variableExperience.js';
+import {sessionEnvironmentKey,readableEnvironmentValues,applySessionOverrides,sessionOverridesFromValues,storeSessionOverrides} from './features/sessionEnvironment.js';
 import {environmentContextKey,environmentsForContext,readEnvironmentSelections,selectionForContext,setSelectionForContext,writeEnvironmentSelections} from './features/environmentContext.js';
 import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentExplorer } from './features/EnvironmentExplorer';
@@ -96,6 +100,8 @@ function Dialog({ title, subtitle, onClose, children }) {
   </div>;
 }
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
+
 export default function App() {
   const [page, setPage] = useState('tester');
   const [interceptorMode,setInterceptorMode]=useState(()=>readInterceptorMode(localStorage));
@@ -118,6 +124,9 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authForm, setAuthForm] = useState({ displayName: '', email: '', password: '' });
+  const [googleLinkOpen, setGoogleLinkOpen] = useState(false);
+  const [googleLinkPassword, setGoogleLinkPassword] = useState('');
+  const [googleLinkError, setGoogleLinkError] = useState('');
   const [notice, setNotice] = useState('');
   const [exportChoice,setExportChoice] = useState(null);
   const [exportFormat,setExportFormat] = useState('postman');
@@ -142,6 +151,10 @@ export default function App() {
   // Results and selected IDs are keyed to the actual workspace (and user) to avoid cross-team leaks.
   const [workspaceEnvironmentResult,setWorkspaceEnvironmentResult] = useState({context:'',items:[]});
   const [environmentSelections,setEnvironmentSelections] = useState(()=>readEnvironmentSelections(localStorage,CACHED));
+  // Never persist QA/Writer Cloud environment edits. Their script changes are RAM-only.
+  const sessionEnvironmentOverlays=useRef(new Map());
+  const [,refreshSessionEnvironment]=useState(0);
+  useEffect(()=>{sessionEnvironmentOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
   const [reqTab, setReqTab] = useState(RECOVERED.reqTab || 'params');
   const [resTab, setResTab] = useState(RECOVERED.resTab || 'body');
   const [loading, setLoading] = useState(false);
@@ -195,6 +208,10 @@ export default function App() {
   const [newCollection, setNewCollection] = useState('');
   const [newTeam, setNewTeam] = useState('');
   const [newMember, setNewMember] = useState('');
+  const [newMemberRoles,setNewMemberRoles]=useState(['Developer']);
+  const [editingMemberId,setEditingMemberId]=useState('');
+  const [editingMemberRoles,setEditingMemberRoles]=useState([]);
+  const [canCreateWorkspace,setCanCreateWorkspace]=useState(false);
   const [newTeamMember, setNewTeamMember] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveExampleOpen, setSaveExampleOpen] = useState(false);
@@ -527,7 +544,7 @@ export default function App() {
     }
   }
   function openCollectionImport(){
-    setCollectionImportDestination(defaultStorageScope(!!token));
+    setCollectionImportDestination(token&&canEditCloud?STORAGE_WORKSPACE:STORAGE_LOCAL);
     setCollectionImportFile(null);setCollectionImportError('');setCollectionImportOpen(true);
   }
   async function submitCollectionImport(){
@@ -539,6 +556,8 @@ export default function App() {
         throw Error('This file has no collections. Use Environments or Import / Export to import it.');
       if(!collectionImportSources(parsed).length)
         throw Error('This file has no HTTP collections. Choose Postman, OpenAPI, Insomnia v4 JSON or cURL.');
+      if(collectionImportDestination===STORAGE_WORKSPACE&&!canEditCloud)
+        throw Error('You cannot import Cloud collections with your current workspace roles. Choose Local.');
       const message=await importRequestsAndEnvironments(parsed,allowedStorageScope(!!token,collectionImportDestination));
       setNotice(message);setCollectionImportOpen(false);setCollectionImportFile(null);
     }catch(error){setCollectionImportError(getMessage(error));}
@@ -928,17 +947,43 @@ export default function App() {
     return()=>{cancelled=true;};
   },[envScope,token,selectedWs,cloudEnvironmentContext]);
   const activeEnvironment=currentEnvironments.find(e=>e.id===activeEnvId);
-  // Restricted workspace secrets must remain unresolved, never silently become empty credentials.
-  const varsFromEnv=(allowSecrets=true)=>Object.fromEntries((activeEnvironment?.variables||[]).filter(v=>!v.isRedacted).map(v=>[v.key,v.isSecret&&!allowSecrets?'[REDACTED]':v.value]));
+  // Do not resolve masked Cloud secrets in the browser, even for a request executor.
+  // Read-only members can create temporary personal values without writing to Neon.
+  const activeSessionEnvironmentKey=envScope===STORAGE_WORKSPACE?sessionEnvironmentKey(environmentContext,activeEnvId):'';
+  const activeSessionOverrides=sessionEnvironmentOverlays.current.get(activeSessionEnvironmentKey)||{};
+  const canWriteEnvironment=envScope!==STORAGE_WORKSPACE||canWorkspace(currentWorkspaceMember(members,me),'environment.write');
+  const varsFromEnv=(allowSecrets=true)=>{
+    const base=readableEnvironmentValues(activeEnvironment);
+    const variables=envScope===STORAGE_WORKSPACE?applySessionOverrides(base,activeSessionOverrides):base;
+    if(!allowSecrets){
+      for(const key of Object.keys(variables)){
+        const definition=activeEnvironment?.variables?.find(v=>v.key===key);
+        if(isSensitiveVariable(key,definition))variables[key]='[REDACTED]';
+      }
+    }
+    return variables;
+  };
+  function rememberSessionValues(key,environment,values){
+    if(!key||!environment)return;
+    const next=sessionOverridesFromValues(readableEnvironmentValues(environment),values);
+    if(storeSessionOverrides(sessionEnvironmentOverlays.current,key,next))refreshSessionEnvironment(v=>v+1);
+  }
   async function quickEditVariable(key,value){
     if(!activeEnvironment)throw Error('Select an environment in the top toolbar first.');
+    if(envScope===STORAGE_WORKSPACE&&!canWriteEnvironment){
+      // Validate the key and reject edits to restricted server-side secrets.
+      putEnvironmentVariable(activeEnvironment.variables,key,value);
+      rememberSessionValues(activeSessionEnvironmentKey,activeEnvironment,{...varsFromEnv(),[key]:String(value)});
+      setNotice('Variable changed for this session only. Cloud environment is unchanged.');
+      return;
+    }
     if(envScope===STORAGE_WORKSPACE&&(activeEnvironment.variables||[]).some(v=>v.isRedacted))
       throw Error('This environment contains restricted variables. Open Environments to edit with appropriate permissions.');
     const variables=putEnvironmentVariable(activeEnvironment.variables,key,value);
     await persistEnvironment({...activeEnvironment,variables});
   }
   const variableUi={variables:varsFromEnv(),definitions:activeEnvironment?.variables||[],
-    source:activeEnvironment?`${envScope===STORAGE_WORKSPACE?`Cloud · ${workspaces.find(w=>w.id===selectedWs)?.name||'Workspace'}`:'Local · Browser'} / ${activeEnvironment.name}`:'No active environment',
+    source:activeEnvironment?`${envScope===STORAGE_WORKSPACE?`Cloud · ${workspaces.find(w=>w.id===selectedWs)?.name||'Workspace'}`:'Local · Browser'} / ${activeEnvironment.name}${envScope===STORAGE_WORKSPACE&&!canWriteEnvironment?' · Session-only edits':''}`:'No active environment',
     onEditVariable:activeEnvironment?quickEditVariable:null,
     onOpenEnvironments:()=>setExplorerTab('environments')};
   function updateStorageScope(scope){
@@ -1011,12 +1056,19 @@ export default function App() {
     }else setLocalEnvironments(v=>v.filter(x=>x.id!==id));
     setActiveEnvId('');
   }
-  async function applyScriptVariables(values) {
-    if(!activeEnvironment)return;
-    const old=activeEnvironment.variables;
-    const merged=Object.entries(values).map(([key,value])=>({key,value:String(value),isSecret:old.find(x=>x.key===key)?.isSecret||false}));
-    if(JSON.stringify(Object.fromEntries(old.map(x=>[x.key,x.value])))!==JSON.stringify(values))
-      await persistEnvironment({...activeEnvironment,variables:merged});
+  async function applyScriptVariables(values,runEnvironment){
+    const {environment,scope,sessionKey,canWrite,initialValues}=runEnvironment;
+    if(!environment||JSON.stringify(initialValues)===JSON.stringify(values))return;
+    if(scope===STORAGE_WORKSPACE&&!canWrite){
+      // QA, Writer and Developer (without environment.write): pm.environment.set/unset
+      // updates only a personal in-memory overlay; never calls the Cloud PUT endpoint.
+      rememberSessionValues(sessionKey,environment,values);
+      return;
+    }
+    const old=environment.variables;
+    const merged=Object.entries(values).map(([key,value])=>({key,value:String(value),isSecret:old.find(x=>x.key===key)?.isSecret||isSensitiveVariable(key)}));
+    // This preserves the existing persistence behavior for Local and authorized Cloud editors.
+    await persistEnvironment({...environment,variables:merged});
   }
   const selectFormat=(v)=>{setFormat(v);};
   async function beautifyBody(){
@@ -1087,7 +1139,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  function logout() { sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]); }
+  function logout() { setCanCreateWorkspace(false);sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]); }
   function requiresLogin(target = 'workspace') {
     if (token) return true;
     setAuthMode('login'); setAuthError(''); setAuthOpen(true);
@@ -1099,18 +1151,36 @@ export default function App() {
     setPage(target);
     if (target === 'workspace') loadWorkspaces();
   }
+  function completeSignIn(data) {
+    sessionStorage.setItem('pakpost_token', data.accessToken);
+    setToken(data.accessToken);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
+    setAuthForm({ displayName: '', email: '', password: '' });
+    setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
+  }
   async function submitAuth(e) {
     e.preventDefault(); setAuthBusy(true); setAuthError('');
     try {
       const path = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
       const payload = authMode === 'register' ? authForm : { email: authForm.email, password: authForm.password };
-      const data = await api(path, 'POST', payload);
-      sessionStorage.setItem('pakpost_token', data.accessToken);
-      setToken(data.accessToken);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
-      setAuthForm({ displayName: '', email: '', password: '' });
-      setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
+      completeSignIn(await api(path, 'POST', payload));
     } catch (e) { setAuthError(getMessage(e)); }
     finally { setAuthBusy(false); }
+  }
+  async function submitGoogleAuth(credential) {
+    if (authBusy) return;
+    setAuthBusy(true);setAuthError('');
+    try { completeSignIn(await api('/api/auth/google','POST',{credential})); }
+    catch(e) {setAuthError(getMessage(e));}
+    finally {setAuthBusy(false);}
+  }
+  async function submitGoogleLink(credential) {
+    if (authBusy || !token || !googleLinkPassword) return;
+    setAuthBusy(true);setGoogleLinkError('');
+    try {
+      await api('/api/auth/google/link','POST',{credential,password:googleLinkPassword},token);
+      setGoogleLinkOpen(false);setGoogleLinkPassword('');setNotice('Google account connected. You can sign in with Google next time.');
+    } catch(e) {setGoogleLinkError(getMessage(e));}
+    finally {setAuthBusy(false);}
   }
   async function loadWorkspaces(auth = token) {
     if (!auth) return;
@@ -1119,10 +1189,13 @@ export default function App() {
       // Logout or account switch may happen before this request resolves.
       if(auth!==currentTokenRef.current)return;
       setWorkspaces(data);
+      api('/api/workspaces/capabilities','GET',undefined,auth).then(cap=>{if(auth===currentTokenRef.current)setCanCreateWorkspace(!!cap.canCreateWorkspace)}).catch(()=>setCanCreateWorkspace(false));
       setSelectedWs(current => data.some(x => x.id === current) ? current : (data[0]?.id || ''));
     } catch (e) { if(auth===currentTokenRef.current)setNotice(getMessage(e)); }
   }
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
+  // Role editor state is scoped to the selected Workspace, never carried to another team.
+  useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);},[selectedWs]);
   useEffect(() => {
     if (!token || !selectedWs) { setCollections([]); setMembers([]); setTeams([]); return; }
     let cancelled=false;
@@ -1224,6 +1297,12 @@ export default function App() {
   },[url,openTabs,localCollections,workspaceRequestLists,localEnvironments,workspaceEnvironments]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
+  const selfMember=currentWorkspaceMember(members,me);
+  const canEditCloud=canWorkspace(selfMember,'collection.write');
+  const canManageMembers=canWorkspace(selfMember,'member.manage');
+  const canManageTeams=canWorkspace(selfMember,'team.manage');
+  const canAssignRoles=canWorkspace(selfMember,'role.assign');
+  const assignableRoles=selfMember?.roles||[];
   const activeTeam = teams.find(x => x.id === selectedTeam);
   const headerCount = rows.filter(x => x.key.trim()&&isEnabled(x)).length;
   const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()&&isEnabled(x)).map(x => [x.key.trim(), x.value]));
@@ -1233,12 +1312,16 @@ export default function App() {
     const tabId=activeTabRef.current;
     stashActive();setLoading(true);setResult(null);setPrettyResponse('');setResponsePretty(true);setScriptError('');setScriptLog([]);setScriptTests([]);
     let variables=varsFromEnv();
+    // Snapshot the workspace, selected environment and permissions at Send time.
+    // A later workspace switch cannot redirect this request's script edits.
+    const runEnvironment={environment:activeEnvironment,scope:envScope,sessionKey:activeSessionEnvironmentKey,
+      canWrite:canWriteEnvironment,initialValues:{...variables}};
     const logs=[],tests=[];
     try {
       const pre=await runSandbox(preScript,'pre',variables,postmanRequestSnapshot({method,url,headers:requestHeaderObject(),body:languageFromMime(format)==='json'?stripJsonComments(body):body,format},variables),null);
       if(pre.error)throw new Error(`Pre-request script: ${pre.error}`);
       variables=pre.variables;logs.push(...pre.logs.map(x=>'PRE: '+x));tests.push(...pre.tests);
-      await applyScriptVariables(pre.environmentVariables || variables);
+      await applyScriptVariables(pre.environmentVariables || variables,runEnvironment);
       const command=buildOutgoing(variables);
       for(const [name,value] of Object.entries(pre.requestHeaderOverrides||{})){
         const previous=Object.keys(command.headers).find(key=>key.toLowerCase()===name.toLowerCase());
@@ -1260,7 +1343,7 @@ export default function App() {
         const post=await runSandbox(postScript,'post',pre.environmentVariables||varsFromEnv(),command,r,pre.localVariables||{});
         logs.push(...post.logs.map(x=>'POST: '+x));tests.push(...post.tests);
         if(post.error){scriptErrorNext=post.error;logs.push('SCRIPT ERROR: '+post.error);}
-        else await applyScriptVariables(post.environmentVariables||post.variables);
+        else await applyScriptVariables(post.environmentVariables||post.variables,runEnvironment);
       }catch(scriptFailure){
         scriptErrorNext=getMessage(scriptFailure);
         logs.push('SCRIPT ERROR: '+scriptErrorNext);
@@ -1292,7 +1375,7 @@ export default function App() {
     preRequestScript:preScript,postResponseScript:postScript});
   function openSaveAs(destination=null){
     const origin=destination||activeSource();
-    setSaveScope(origin?.scope||'local');
+    setSaveScope(origin?.scope==='workspace'&&!canEditCloud?'local':origin?.scope||'local');
     setSaveLocalCollection(origin?.scope==='local'?origin.collectionId:localCollections[0]?.id||'');
     setSaveWs(origin?.workspaceId||selectedWs||workspaces[0]?.id||'');
     setSaveCollection(origin?.scope==='workspace'?origin.collectionId:selectedCol||'');
@@ -1301,6 +1384,10 @@ export default function App() {
   }
   async function saveCurrent(){
     const origin=activeSource();
+    if(origin?.scope==='workspace' && (!canEditCloud || origin.workspaceId!==selectedWs)){
+      openSaveAs({...origin,scope:'local',collectionId:localCollections[0]?.id||''});
+      setNotice('Cloud is read-only for this role. Save a separate Local copy instead.');return;
+    }
     if(!origin){openSaveAs();return;}
     const name=activeRequestName.trim();
     if(!name){setNotice('Request name cannot be empty');return;}
@@ -1442,7 +1529,7 @@ export default function App() {
           <button title="Manage environments" onClick={()=>openContext('environments')}><Settings2 size={16}/></button>
         </div>
         <span className="pp-connection"><span/> Local development</span>
-        {me ? <button className="pp-profile" title={me.email} onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
+        {me ? <><button className="pp-profile" title={me.email} onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button>{GOOGLE_CLIENT_ID && <button type="button" className="pp-google-link-top" title="Connect Google to your existing PakPost account" onClick={()=>{setGoogleLinkError('');setGoogleLinkPassword('');setGoogleLinkOpen(true);}}><Link2 size={14}/> Connect Google</button>}</> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
       </div>
     </header>
 
@@ -1464,7 +1551,7 @@ export default function App() {
         {explorerTab === 'environments' ? <>
           {token&&envScope===STORAGE_WORKSPACE&&<div className="pp-compact-workspace"><Layers3 size={15}/><span>Workspace</span><RetroSelect ariaLabel="Switch environment workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/><button type="button" title="Manage workspace" aria-label="Manage workspace" onClick={()=>navigate('workspace')}><Settings2 size={15}/></button></div>}
           {!token&&<button className="pp-link-row pp-login-hint" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}><LockKeyhole size={14}/> Sign in to access Cloud environments <ChevronRight size={13}/></button>}
-          <EnvironmentExplorer key={environmentContext||'cloud-pending'} items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} onImportFile={importEnvironmentFile} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} scope={envScope===STORAGE_WORKSPACE?`Cloud · ${activeWorkspace?.name||'Choose workspace'}`:'Local · Browser'}/>
+          <EnvironmentExplorer key={environmentContext||'cloud-pending'} items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} onImportFile={importEnvironmentFile} authenticated={!!token} workspaceName={activeWorkspace?.name||''} readOnly={envScope===STORAGE_WORKSPACE&&!canWorkspace(selfMember,'environment.write')} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} scope={envScope===STORAGE_WORKSPACE?`Cloud · ${activeWorkspace?.name||'Choose workspace'}`:'Local · Browser'}/>
         </> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
             environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
@@ -1483,7 +1570,7 @@ export default function App() {
                 <button type="button" aria-label="Collapse all collections and folders" title="Collapse all" onClick={()=>expandOrCollapseAllCollections(false)}><ChevronsDownUp size={15}/></button>
               </div>
               <button type="button" className="pp-env-import-action" title="Import collection" onClick={openCollectionImport}><FileUp size={15}/> Import</button>
-              <button type="button" className="pp-env-primary" title="New collection" disabled={busyAction} onClick={()=>setCreatingLocalCollection(true)}><Plus size={15}/> New</button>
+              <button type="button" className="pp-env-primary" title="New collection" disabled={busyAction||(collectionsScope===STORAGE_WORKSPACE&&!canEditCloud)} onClick={()=>setCreatingLocalCollection(true)}><Plus size={15}/> New</button>
             </div>
           </div>
           {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createExplorerCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder={storageScope===STORAGE_WORKSPACE?'Cloud collection name':'Local collection name'}/><button type="submit" disabled={busyAction} title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
@@ -1505,7 +1592,7 @@ export default function App() {
                     <FolderClosed size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
                   </button>
                   <div className="pp-tree-actions">
-                    <button className="pp-tree-action" type="button" title="New request in collection" aria-label={`New request in ${c.name}`} onClick={e=>{e.stopPropagation();createCollectionDraft('workspace',c.id)}}><Plus size={15}/></button>
+                    <button className="pp-tree-action" type="button" title={canEditCloud?"New request in collection":"Cannot save Cloud requests with this role"} disabled={!canEditCloud} aria-label={`New request in ${c.name}`} onClick={e=>{e.stopPropagation();createCollectionDraft('workspace',c.id)}}><Plus size={15}/></button>
                     <button className="pp-tree-action" type="button" title="Collection actions" aria-label={`Actions for ${c.name}`} onClick={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})}><Settings2 size={14}/></button>
                   </div>
                 </div>
@@ -1513,7 +1600,7 @@ export default function App() {
                 {[...requests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => {
                   const meta=decodeStoredHeaders(r.headersJson);
                   const examplesOpen=expandedWorkspaceExamples[`${selectedWs}:${c.id}:${r.id}`]??!!explorerSearch;
-                  return <React.Fragment key={r.id}><div className="pp-tree-item-container" draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
+                  return <React.Fragment key={r.id}><div className="pp-tree-item-container" draggable={canEditCloud} onDragStart={e=>{if(!canEditCloud)return;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
                     {!!meta.responseExamples?.length&&<button type="button" className="pp-endpoint-example-toggle pp-workspace-example-toggle" aria-expanded={examplesOpen} title={`${examplesOpen?'Hide':'Show'} ${meta.responseExamples.length} response examples`} aria-label={`${examplesOpen?'Collapse':'Expand'} examples for ${r.name}`} onClick={e=>{e.stopPropagation();setExpandedWorkspaceExamples(old=>({...old,[`${selectedWs}:${c.id}:${r.id}`]:!examplesOpen}));}}>{examplesOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>}
                     <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest({...r,collectionId:c.id})}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
                     <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
@@ -1561,7 +1648,7 @@ export default function App() {
           ]:workspaceMenu.type==='example'?[
             ['renameExample','Rename example'],['deleteExample','Delete example']
           ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <MenuActionItem key={id} action={id} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
+            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
@@ -1589,7 +1676,7 @@ export default function App() {
               if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancelRequestRename();}
             }}
           /> : <button type="button" className="pp-editable-request-name" onClick={beginRequestRename} title="Rename request" aria-label={`Rename ${activeRequestName}`}><span>{activeRequestName}</span><Pencil size={13}/></button>}<span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
-          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} {...variableUi} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} disabled={busyAction} title="Save changes (Ctrl/Cmd+S)"><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
+          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} {...variableUi} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} disabled={busyAction} title={!canEditCloud&&activeSource()?.scope==='workspace'?"Save as Local copy — Cloud is read-only":"Save changes (Ctrl/Cmd+S)"}><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
               <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
@@ -1659,13 +1746,51 @@ export default function App() {
           </div>
         </div> : <div className="pp-manager">
           <div className="pp-manager-top"><div><span className="pp-manager-eyebrow"><Layers3 size={14}/> WORKSPACE MANAGEMENT</span><h2>{activeWorkspace?.name || 'Your workspaces'}</h2><p>Collections, teams and members are available after sign-in.</p></div><button className="pp-plain-btn" onClick={() => setPage('tester')}><ArrowRight size={15}/> Back to request tester</button></div>
-          <div className="pp-manager-columns"><aside className="pp-manager-ws"><div className="pp-manager-label">YOUR WORKSPACES <span>{workspaces.length}</span></div><form className="pp-manager-add" onSubmit={e => { e.preventDefault(); if(!newWs.trim()) return; doAction(async()=>{const w=await api('/api/workspaces','POST',{name:newWs.trim()},token);setNewWs('');await loadWorkspaces();setSelectedWs(w.id);setNotice('Workspace created.');}); }}><input placeholder="New workspace" maxLength={120} value={newWs} onChange={e=>setNewWs(e.target.value)}/><button title="Create workspace" disabled={busyAction}><Plus size={16}/></button></form>{workspaces.map(w=><button className={`pp-manager-ws-row ${w.id === selectedWs ? 'active' : ''}`} key={w.id} onClick={()=>setSelectedWs(w.id)}><Layers3 size={17}/><span>{w.name}</span><ChevronRight size={15}/></button>)}</aside>
+          <div className="pp-manager-columns"><aside className="pp-manager-ws"><div className="pp-manager-label">YOUR WORKSPACES <span>{workspaces.length}</span></div>{canCreateWorkspace&&<form className="pp-manager-add" onSubmit={e => { e.preventDefault(); if(!newWs.trim()) return; doAction(async()=>{const w=await api('/api/workspaces','POST',{name:newWs.trim()},token);setNewWs('');await loadWorkspaces();setSelectedWs(w.id);setNotice('Workspace created.');}); }}><input placeholder="New workspace" maxLength={120} value={newWs} onChange={e=>setNewWs(e.target.value)}/><button title="Create workspace" disabled={busyAction}><Plus size={16}/></button></form>}{workspaces.map(w=><button className={`pp-manager-ws-row ${w.id === selectedWs ? 'active' : ''}`} key={w.id} onClick={()=>setSelectedWs(w.id)}><Layers3 size={17}/><span>{w.name}</span><ChevronRight size={15}/></button>)}</aside>
             <section className="pp-manager-details">{!activeWorkspace ? <Empty icon={FolderClosed} title="No workspace selected" description="Create a workspace on the left to start organizing your requests."/> : <>
               <div className="pp-manager-detail-title"><span className="pp-manager-avatar"><Layers3 size={18}/></span><div><strong>{activeWorkspace.name}</strong><small>Private · Members only</small></div><LockKeyhole size={15}/></div>
               <div className="pp-manager-tabs">{[['collections','Collections',FolderClosed],['teams','Teams',Users],['members','Members',ShieldCheck]].map(([id,label,Icon])=><button className={wsTab === id ? 'active':''} key={id} onClick={()=>setWsTab(id)}><Icon size={15}/>{label}</button>)}</div>
-              {wsTab === 'collections' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Collections</strong><form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newCollection.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name:newCollection.trim()},token);setNewCollection('');setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));setNotice('Collection created');});}}><input placeholder="Collection name" maxLength={120} value={newCollection} onChange={e=>setNewCollection(e.target.value)}/><button title="Create collection" disabled={busyAction}><Plus size={16}/></button></form></div>{collections.map(c=><button className={`pp-manager-entry ${selectedCol === c.id ? 'active' : ''}`} key={c.id} onClick={()=>setSelectedCol(c.id)}><FolderClosed size={16}/><span>{c.name}</span><ChevronRight size={15}/></button>)}{!collections.length && <Empty icon={FolderPlus} title="No collections yet" description="Create your first collection above."/>}{selectedCol && <div className="pp-manager-saved"><h3>Saved requests</h3>{savedRequests.map(r=><div className="pp-manager-saved-row" key={r.id}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><button onClick={()=>loadSavedRequest(r)}><strong>{r.name}</strong><small>{r.url}</small></button><IconButton icon={Trash2} label="Delete request" disabled={busyAction} onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/${r.id}`,'DELETE',undefined,token);setSavedRequests(v=>v.filter(x=>x.id!==r.id));})}/></div>)}{!savedRequests.length && <p className="pp-muted-small">No saved requests in this collection.</p>}</div>}</div>}
-              {wsTab === 'teams' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Teams</strong><form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeam.trim())return;doAction(async()=>{const t=await api(`/api/workspaces/${selectedWs}/teams`,'POST',{name:newTeam.trim()},token);setNewTeam('');setTeams(await api(`/api/workspaces/${selectedWs}/teams`,'GET',undefined,token));setSelectedTeam(t.id);setNotice('Team created');});}}><input placeholder="Team name" maxLength={120} value={newTeam} onChange={e=>setNewTeam(e.target.value)}/><button title="Create team" disabled={busyAction}><Plus size={16}/></button></form></div>{teams.map(t=><button className={`pp-manager-entry ${selectedTeam===t.id?'active':''}`} key={t.id} onClick={()=>setSelectedTeam(t.id)}><Users size={16}/><span>{t.name}</span><ChevronRight size={15}/></button>)}{!teams.length && <Empty icon={Users} title="No teams yet" description="Create a team above to manage collaboration."/>}{activeTeam && <div className="pp-manager-saved"><div className="pp-manager-section-heading"><strong>{activeTeam.name} members</strong><form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeamMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'POST',{email:newTeamMember.trim()},token);setNewTeamMember('');setTeamMembers(await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'GET',undefined,token));setNotice('Member added to team');});}}><input type="email" placeholder="Member email" value={newTeamMember} onChange={e=>setNewTeamMember(e.target.value)}/><button title="Add to team" disabled={busyAction}><Plus size={16}/></button></form></div>{teamMembers.map(m=><div className="pp-manager-member" key={m.userId}><span>{m.displayName[0]}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div></div>)}<p className="pp-muted-small">A user must belong to this workspace before joining a team.</p></div>}</div>}
-              {wsTab === 'members' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Workspace members</strong><form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/members`,'POST',{email:newMember.trim(),role:'Member'},token);setNewMember('');setMembers(await api(`/api/workspaces/${selectedWs}/members`,'GET',undefined,token));setNotice('Member added');});}}><input type="email" placeholder="Existing user email" value={newMember} onChange={e=>setNewMember(e.target.value)}/><button title="Add member" disabled={busyAction}><Plus size={16}/></button></form></div>{members.map(m=><div className="pp-manager-member" key={m.userId}><span>{m.displayName[0]}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div><em>{m.role}</em></div>)}<p className="pp-muted-small">Members must register before they can be added.</p></div>}
+              {wsTab === 'collections' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Collections</strong>{canEditCloud&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newCollection.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name:newCollection.trim()},token);setNewCollection('');setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));setNotice('Collection created');});}}><input placeholder="Collection name" maxLength={120} value={newCollection} onChange={e=>setNewCollection(e.target.value)}/><button title="Create collection" disabled={busyAction}><Plus size={16}/></button></form>}</div>{collections.map(c=><button className={`pp-manager-entry ${selectedCol === c.id ? 'active' : ''}`} key={c.id} onClick={()=>setSelectedCol(c.id)}><FolderClosed size={16}/><span>{c.name}</span><ChevronRight size={15}/></button>)}{!collections.length && <Empty icon={FolderPlus} title="No collections yet" description="Create your first collection above."/>}{selectedCol && <div className="pp-manager-saved"><h3>Saved requests</h3>{savedRequests.map(r=><div className="pp-manager-saved-row" key={r.id}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><button onClick={()=>loadSavedRequest(r)}><strong>{r.name}</strong><small>{r.url}</small></button>{canEditCloud&&<IconButton icon={Trash2} label="Delete request" disabled={busyAction} onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/${r.id}`,'DELETE',undefined,token);setSavedRequests(v=>v.filter(x=>x.id!==r.id));})}/>}</div>)}{!savedRequests.length && <p className="pp-muted-small">No saved requests in this collection.</p>}</div>}</div>}
+              {wsTab === 'teams' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Teams</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeam.trim())return;doAction(async()=>{const t=await api(`/api/workspaces/${selectedWs}/teams`,'POST',{name:newTeam.trim()},token);setNewTeam('');setTeams(await api(`/api/workspaces/${selectedWs}/teams`,'GET',undefined,token));setSelectedTeam(t.id);setNotice('Team created');});}}><input placeholder="Team name" maxLength={120} value={newTeam} onChange={e=>setNewTeam(e.target.value)}/><button title="Create team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teams.map(t=><button className={`pp-manager-entry ${selectedTeam===t.id?'active':''}`} key={t.id} onClick={()=>setSelectedTeam(t.id)}><Users size={16}/><span>{t.name}</span><ChevronRight size={15}/></button>)}{!teams.length && <Empty icon={Users} title="No teams yet" description="Create a team above to manage collaboration."/>}{activeTeam && <div className="pp-manager-saved"><div className="pp-manager-section-heading"><strong>{activeTeam.name} members</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeamMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'POST',{email:newTeamMember.trim()},token);setNewTeamMember('');setTeamMembers(await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'GET',undefined,token));setNotice('Member added to team');});}}><input type="email" placeholder="Member email" value={newTeamMember} onChange={e=>setNewTeamMember(e.target.value)}/><button title="Add to team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teamMembers.map(m=><div className="pp-manager-member" key={m.userId}><span>{m.displayName[0]}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div></div>)}<p className="pp-muted-small">A user must belong to this workspace before joining a team.</p></div>}</div>}
+              {wsTab === 'members' && <div className="pp-manager-section">
+                <div className="pp-manager-section-heading"><strong>Workspace members</strong><span className="pp-rbac-muted">Roles apply only to {activeWorkspace?.name||'this workspace'}</span></div>
+                {canManageMembers && <form onSubmit={e=>{e.preventDefault();if(!newMember.trim()||!newMemberRoles.length)return;
+                  doAction(async()=>{await api(`/api/workspaces/${selectedWs}/members`,'POST',
+                    {email:newMember.trim(),role:'Member',roles:newMemberRoles},token);
+                    setNewMember('');setNewMemberRoles(['Developer']);
+                    setMembers(await api(`/api/workspaces/${selectedWs}/members`,'GET',undefined,token));
+                    setNotice('Member added with assigned roles');});}}>
+                  <div className="pp-manager-add"><input type="email" placeholder="Existing user email" value={newMember} onChange={e=>setNewMember(e.target.value)}/>
+                    <button title="Add member" disabled={busyAction||!newMemberRoles.length}><Plus size={16}/></button></div>
+                  <div className="pp-rbac-heading">Assign roles</div>
+                  <WorkspaceRolePicker value={newMemberRoles} onChange={setNewMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
+                </form>}
+                {members.map(m=>{
+                  const founder=m.userId===activeWorkspace?.ownerUserId;
+                  const self=m.userId===me?.id;
+                  const canModify=canAssignRoles && !founder && !self &&
+                    (assignableRoles.includes('TeamLead') || !(m.roles||[]).some(r=>['TeamLead','WorkspaceAdmin'].includes(r)));
+                  return <div className="pp-rbac-manage-member" key={m.userId}>
+                    <div className="pp-manager-member"><span>{m.displayName?.[0]||'?'}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div></div>
+                    <div className="pp-rbac-badges">{(m.roles||[]).map(r=><span key={r}>{WORKSPACE_ROLES.find(role=>role.id===r)?.label||r}</span>)}
+                      {founder&&<span>Founder</span>}{self&&<span>You</span>}</div>
+                    {canModify && <div className="pp-rbac-actions"><button className="pp-plain-btn" type="button" onClick={()=>{
+                      if(editingMemberId===m.userId)setEditingMemberId('');else{
+                        setEditingMemberId(m.userId);setEditingMemberRoles(normalizeRoles(m.roles));
+                      }}}><ShieldCheck size={14}/> {editingMemberId===m.userId?'Cancel':'Manage roles'}</button></div>}
+                    {canModify && editingMemberId===m.userId && <div className="pp-rbac-manage-editor">
+                      <WorkspaceRolePicker value={editingMemberRoles} onChange={setEditingMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
+                      <div className="pp-rbac-actions"><button type="button" className="pp-small-primary" disabled={busyAction||!editingMemberRoles.length}
+                        onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/members/${m.userId}/roles`,'PUT',
+                          {roles:editingMemberRoles},token);
+                          setMembers(await api(`/api/workspaces/${selectedWs}/members`,'GET',undefined,token));
+                          setEditingMemberId('');setNotice('Workspace roles updated');})}>Save roles</button>
+                      </div>
+                    </div>}
+                  </div>;
+                })}
+                <p className="pp-muted-small">Members must sign in first. Workspace Admin can grant Developer/QA/Writer; Team Lead can also grant privileged roles.</p>
+              </div>}
             </>}</section></div>
         </div>}
       </main>
@@ -1687,7 +1812,29 @@ export default function App() {
         <div className="pp-action-dialog-buttons"><button onClick={()=>setExportChoice(null)}>Cancel</button><button className="pp-modal-submit" onClick={confirmExport}><ArrowDownToLine size={15}/> Export JSON</button></div>
       </div>
     </Dialog>}
-    {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}><form className="modal-form" onSubmit={submitAuth}>{authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}<label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label><label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>{authError && <div className="form-error">{authError}</div>}<button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button><p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p><p className="pp-muted-small pp-center">Google SSO can be added later.</p></form></Dialog>}
+    {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}>
+      <form className="modal-form" onSubmit={submitAuth}>
+        {authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}
+        <label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label>
+        <label>Password<input type="password" required minLength={authMode === 'register' ? 12 : 1} maxLength={128} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Your password'} value={authForm.password} onChange={e=>setAuthForm(v=>({...v,password:e.target.value}))}/></label>
+        {authError && <div className="form-error" role="alert">{authError}</div>}
+        <button className="pp-modal-submit" disabled={authBusy} type="submit">{authBusy ? 'Working...' : authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17}/></button>
+        <p className="form-toggle">{authMode === 'login' ? 'New to Pakpost?' : 'Already have an account?'} <button type="button" onClick={()=>{setAuthMode(v=>v==='login'?'register':'login');setAuthError('');}}>{authMode === 'login' ? 'Create account' : 'Sign in'}</button></p>
+      </form>
+      {GOOGLE_CLIENT_ID && <div className="pp-google-auth-section">
+        <div className="pp-google-divider">or continue with</div>
+        <GoogleSignInButton clientId={GOOGLE_CLIENT_ID} disabled={authBusy} onCredential={submitGoogleAuth} onError={setAuthError}/>
+        <p className="pp-muted-small pp-center">Already have an email/password account? Sign in and choose Connect Google first.</p>
+      </div>}
+    </Dialog>}
+    {googleLinkOpen && me && <Dialog title="Connect Google" subtitle={`Link Google to ${me.email}. This keeps your existing workspaces and collections.`} onClose={()=>setGoogleLinkOpen(false)}>
+      <div className="modal-form">
+        <label>Confirm your PakPost password<input type="password" autoComplete="current-password" value={googleLinkPassword} onChange={e=>setGoogleLinkPassword(e.target.value)} placeholder="Existing account password"/></label>
+        {googleLinkError && <div className="form-error" role="alert">{googleLinkError}</div>}
+        {googleLinkPassword && <GoogleSignInButton clientId={GOOGLE_CLIENT_ID} disabled={authBusy} onCredential={submitGoogleLink} onError={setGoogleLinkError}/>}
+        {!googleLinkPassword && <p className="pp-muted-small">Enter your PakPost password to enable Google linking.</p>}
+      </div>
+    </Dialog>}
     {closeConfirmation&&<Dialog title="Unsaved changes" subtitle="Changes in these tabs have not been saved to their collections." onClose={()=>setCloseConfirmation(null)}>
       <div className="pp-unsaved-confirm">
         <p>{closeConfirmation.unsaved.length===1?'This request has unsaved changes:':`${closeConfirmation.unsaved.length} requests have unsaved changes:`}</p>
@@ -1708,7 +1855,7 @@ export default function App() {
     </form></Dialog>}
     {saveOpen && <Dialog title="Save as new request" subtitle="Keep an independent copy in a local collection or a signed-in workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}>
       <label>Request name<input autoFocus required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label>
-      <div className="pp-modal-select-label"><span>Destination</span><RetroSelect ariaLabel="Save scope" value={saveScope} onChange={setSaveScope} options={[{value:'local',label:'Local browser'},...(token?[{value:'workspace',label:'Workspace · Neon'}]:[])]}/></div>
+      <div className="pp-modal-select-label"><span>Destination</span><RetroSelect ariaLabel="Save scope" value={saveScope} onChange={setSaveScope} options={[{value:'local',label:'Local browser'},...(token&&canEditCloud?[{value:'workspace',label:'Workspace · Neon'}]:[])]}/></div>
       {saveScope==='local'?<div className="pp-modal-select-label"><span>Local collection</span><RetroSelect ariaLabel="Local collection" value={saveLocalCollection} onChange={setSaveLocalCollection} options={localCollections.map(c=>({value:c.id,label:c.name}))}/></div>:
         <><div className="pp-modal-select-label"><span>Workspace</span><RetroSelect ariaLabel="Save workspace" value={saveWs} onChange={setSaveWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/></div><div className="pp-modal-select-label"><span>Collection</span><RetroSelect ariaLabel="Save collection" value={saveCollection} onChange={setSaveCollection} options={saveCols.map(c=>({value:c.id,label:c.name}))}/></div></>}
       {!(saveScope==='local'?localCollections.length:saveCols.length)&&<div className="form-error">Create a collection first.</div>}
@@ -1716,7 +1863,7 @@ export default function App() {
     </form></Dialog>}
     {collectionImportOpen&&<Dialog title="Import collection" subtitle="Postman v2.1, OpenAPI JSON, Insomnia v4 JSON or cURL" onClose={()=>{if(!collectionImportBusy)setCollectionImportOpen(false)}}>
       <div className="pp-collection-import-dialog">
-        <ImportDestinationPicker authenticated={!!token} workspaceName={activeWorkspace?.name||''} value={collectionImportDestination} onChange={setCollectionImportDestination} onLogin={()=>{setCollectionImportOpen(false);setAuthMode('login');setAuthOpen(true);}}/>
+        <ImportDestinationPicker authenticated={!!token} allowCloud={canEditCloud} workspaceName={activeWorkspace?.name||''} value={collectionImportDestination} onChange={setCollectionImportDestination} onLogin={()=>{setCollectionImportOpen(false);setAuthMode('login');setAuthOpen(true);}}/>
         <label className="pp-collection-file-picker"><FileUp size={17}/><span>{collectionImportFile?.name||'Choose a collection file'}</span><input type="file" accept=".json,.txt,.curl,.sh,application/json,text/plain" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;setCollectionImportError('');if(file.size>3*1024*1024){setCollectionImportError('Maximum collection import size is 3 MB.');return;}setCollectionImportFile(file);}}/></label>
         {collectionImportError&&<p role="alert" className="pp-env-error">{collectionImportError}</p>}
         <div className="pp-collection-import-actions"><button type="button" disabled={collectionImportBusy} onClick={()=>setCollectionImportOpen(false)}>Cancel</button><button type="button" className="pp-env-primary" disabled={collectionImportBusy||!collectionImportFile} onClick={submitCollectionImport}><FileUp size={15}/>{collectionImportBusy?'Importing…':'Import collection'}</button></div>
