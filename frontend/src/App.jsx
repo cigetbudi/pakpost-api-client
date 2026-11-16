@@ -6,6 +6,8 @@ import {
 import { TextEditor } from './features/Editors';
 import { GoogleSignInButton } from './features/GoogleSignInButton';
 import { WorkspaceRolePicker } from './features/WorkspaceRolePicker.jsx';
+import { WorkspaceAccessBreakdown } from './features/WorkspaceAccessBreakdown.jsx';
+import {filterWorkspaceMembers,roleSelectionChanged,summarizeWorkspaceMembers} from './features/workspaceRoleInsights.js';
 import {canGrantRole,canWorkspace,currentWorkspaceMember,normalizeRoles,WORKSPACE_ROLES} from './features/workspaceRoles.js';
 import { KeyValueEditor } from './features/KeyValueEditor';
 import { DocumentationEditor } from './features/DocumentationEditor';
@@ -164,6 +166,8 @@ export default function App() {
   const [recent, setRecent] = useState(CACHED?.recent || []);
   const [workspaces, setWorkspaces] = useState([]);
   const [selectedWs, setSelectedWs] = useState('');
+  const selectedWorkspaceRef=useRef(selectedWs);
+  selectedWorkspaceRef.current=selectedWs;
   const cloudEnvironmentContext=environmentContextKey(STORAGE_WORKSPACE,selectedWs,me?.id);
   const environmentContext=environmentContextKey(envScope,selectedWs,me?.id);
   const cloudEnvironmentContextRef=useRef(cloudEnvironmentContext);
@@ -214,6 +218,10 @@ export default function App() {
   const [newMemberRoles,setNewMemberRoles]=useState(['Developer']);
   const [editingMemberId,setEditingMemberId]=useState('');
   const [editingMemberRoles,setEditingMemberRoles]=useState([]);
+  const [memberSearch,setMemberSearch]=useState('');
+  const [memberRoleFilter,setMemberRoleFilter]=useState('all');
+  const [showMemberAdd,setShowMemberAdd]=useState(false);
+  const [expandedMemberAccess,setExpandedMemberAccess]=useState('');
   const [canCreateWorkspace,setCanCreateWorkspace]=useState(false);
   const [newTeamMember, setNewTeamMember] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
@@ -1249,7 +1257,7 @@ export default function App() {
   }
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
   // Role editor state is scoped to the selected Workspace, never carried to another team.
-  useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);},[selectedWs]);
+  useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);setMemberSearch('');setMemberRoleFilter('all');setShowMemberAdd(false);setExpandedMemberAccess('');},[selectedWs]);
   useEffect(() => {
     if (!token || !selectedWs) { setCollections([]); setMembers([]); setMembersWorkspaceId(''); setTeams([]); return; }
     let cancelled=false;
@@ -1357,6 +1365,8 @@ export default function App() {
   const canManageTeams=canWorkspace(selfMember,'team.manage');
   const canAssignRoles=canWorkspace(selfMember,'role.assign');
   const assignableRoles=selfMember?.roles||[];
+  const visibleWorkspaceMembers=filterWorkspaceMembers(membersWorkspaceId===selectedWs?members:[],{query:memberSearch,role:memberRoleFilter});
+  const workspaceMemberStats=summarizeWorkspaceMembers(membersWorkspaceId===selectedWs?members:[]);
   const activeTeam = teams.find(x => x.id === selectedTeam);
   const headerCount = rows.filter(x => x.key.trim()&&isEnabled(x)).length;
   const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()&&isEnabled(x)).map(x => [x.key.trim(), x.value]));
@@ -1814,43 +1824,78 @@ export default function App() {
               {wsTab === 'collections' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Collections</strong>{canEditCloud&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newCollection.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name:newCollection.trim()},token);setNewCollection('');setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));setNotice('Collection created');});}}><input placeholder="Collection name" maxLength={120} value={newCollection} onChange={e=>setNewCollection(e.target.value)}/><button title="Create collection" disabled={busyAction}><Plus size={16}/></button></form>}</div>{collections.map(c=><button className={`pp-manager-entry ${selectedCol === c.id ? 'active' : ''}`} key={c.id} onClick={()=>setSelectedCol(c.id)}><FolderClosed size={16}/><span>{c.name}</span><ChevronRight size={15}/></button>)}{!collections.length && <Empty icon={FolderPlus} title="No collections yet" description="Create your first collection above."/>}{selectedCol && <div className="pp-manager-saved"><h3>Saved requests</h3>{savedRequests.map(r=><div className="pp-manager-saved-row" key={r.id}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><button onClick={()=>loadSavedRequest(r)}><strong>{r.name}</strong><small>{r.url}</small></button>{canEditCloud&&<IconButton icon={Trash2} label="Delete request" disabled={busyAction} onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/${r.id}`,'DELETE',undefined,token);setSavedRequests(v=>v.filter(x=>x.id!==r.id));})}/>}</div>)}{!savedRequests.length && <p className="pp-muted-small">No saved requests in this collection.</p>}</div>}</div>}
               {wsTab === 'teams' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Teams</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeam.trim())return;doAction(async()=>{const t=await api(`/api/workspaces/${selectedWs}/teams`,'POST',{name:newTeam.trim()},token);setNewTeam('');setTeams(await api(`/api/workspaces/${selectedWs}/teams`,'GET',undefined,token));setSelectedTeam(t.id);setNotice('Team created');});}}><input placeholder="Team name" maxLength={120} value={newTeam} onChange={e=>setNewTeam(e.target.value)}/><button title="Create team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teams.map(t=><button className={`pp-manager-entry ${selectedTeam===t.id?'active':''}`} key={t.id} onClick={()=>setSelectedTeam(t.id)}><Users size={16}/><span>{t.name}</span><ChevronRight size={15}/></button>)}{!teams.length && <Empty icon={Users} title="No teams yet" description="Create a team above to manage collaboration."/>}{activeTeam && <div className="pp-manager-saved"><div className="pp-manager-section-heading"><strong>{activeTeam.name} members</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeamMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'POST',{email:newTeamMember.trim()},token);setNewTeamMember('');setTeamMembers(await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'GET',undefined,token));setNotice('Member added to team');});}}><input type="email" placeholder="Member email" value={newTeamMember} onChange={e=>setNewTeamMember(e.target.value)}/><button title="Add to team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teamMembers.map(m=><div className="pp-manager-member" key={m.userId}><span>{m.displayName[0]}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div></div>)}<p className="pp-muted-small">A user must belong to this workspace before joining a team.</p></div>}</div>}
               {wsTab === 'members' && <div className="pp-manager-section">
-                <div className="pp-manager-section-heading"><strong>Workspace members</strong><span className="pp-rbac-muted">Roles apply only to {activeWorkspace?.name||'this workspace'}</span></div>
-                {canManageMembers && <form onSubmit={e=>{e.preventDefault();if(!newMember.trim()||!newMemberRoles.length)return;
-                  doAction(async()=>{await api(`/api/workspaces/${selectedWs}/members`,'POST',
+                <div className="pp-v34-hero">
+                  <div className="pp-v34-header">
+                    <div><h3>Members & roles</h3><p>Roles apply only to <strong className="pp-v34-strong">{activeWorkspace?.name||'this workspace'}</strong>. Members can have multiple roles.</p></div>
+                    {canManageMembers&&<button type="button" className="pp-v34-button primary" aria-expanded={showMemberAdd} onClick={()=>setShowMemberAdd(previous=>!previous)}><Plus size={15}/>{showMemberAdd?'Close':'Add existing member'}</button>}
+                  </div>
+                  <div className="pp-v34-stats" aria-label="Workspace member statistics">
+                    <span className="pp-v34-stat"><strong>{workspaceMemberStats.count}</strong> members</span>
+                    {workspaceMemberStats.roles.filter(role=>role.count>0).map(role=><span className="pp-v34-stat" key={role.id}><strong>{role.count}</strong> {role.label}</span>)}
+                  </div>
+                </div>
+                {canManageMembers&&showMemberAdd&&<form className="pp-v34-add" onSubmit={e=>{e.preventDefault();if(!newMember.trim()||!newMemberRoles.length)return;
+                  doAction(async()=>{const workspaceId=selectedWs;await api(`/api/workspaces/${workspaceId}/members`,'POST',
                     {email:newMember.trim(),role:'Member',roles:newMemberRoles},token);
-                    setNewMember('');setNewMemberRoles(['Developer']);
-                    setMembers(await api(`/api/workspaces/${selectedWs}/members`,'GET',undefined,token));
-                    setNotice('Member added with assigned roles');});}}>
-                  <div className="pp-manager-add"><input type="email" placeholder="Existing user email" value={newMember} onChange={e=>setNewMember(e.target.value)}/>
-                    <button title="Add member" disabled={busyAction||!newMemberRoles.length}><Plus size={16}/></button></div>
-                  <div className="pp-rbac-heading">Assign roles</div>
+                    const refreshed=await api(`/api/workspaces/${workspaceId}/members`,'GET',undefined,token);
+                    if(workspaceId!==selectedWorkspaceRef.current||token!==currentTokenRef.current)return;
+                    setNewMember('');setNewMemberRoles(['Developer']);setShowMemberAdd(false);
+                    setMembers(refreshed);setNotice('Member added with assigned roles');});}}>
+                  <label htmlFor="pp-member-email">Email of an existing PakPost account</label>
+                  <input id="pp-member-email" type="email" required maxLength={254} placeholder="teammate@company.com" value={newMember} onChange={e=>setNewMember(e.target.value)}/>
+                  <div className="pp-rbac-heading">Assign initial roles</div>
                   <WorkspaceRolePicker value={newMemberRoles} onChange={setNewMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
+                  <p className="pp-v34-add-help">This adds an already-registered PakPost user. Sending an email invitation is planned for V8.</p>
+                  <div className="pp-v34-add-actions"><button type="button" className="pp-v34-button" onClick={()=>setShowMemberAdd(false)}>Cancel</button><button type="submit" className="pp-v34-button primary" disabled={busyAction||!newMemberRoles.length||!newMember.trim()}>Add member</button></div>
                 </form>}
-                {members.map(m=>{
-                  const founder=m.userId===activeWorkspace?.ownerUserId;
-                  const self=m.userId===me?.id;
-                  const canModify=canAssignRoles && !founder && !self &&
-                    (assignableRoles.includes('TeamLead') || !(m.roles||[]).some(r=>['TeamLead','WorkspaceAdmin'].includes(r)));
-                  return <div className="pp-rbac-manage-member" key={m.userId}>
-                    <div className="pp-manager-member"><span>{m.displayName?.[0]||'?'}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div></div>
-                    <div className="pp-rbac-badges">{(m.roles||[]).map(r=><span key={r}>{WORKSPACE_ROLES.find(role=>role.id===r)?.label||r}</span>)}
-                      {founder&&<span>Founder</span>}{self&&<span>You</span>}</div>
-                    {canModify && <div className="pp-rbac-actions"><button className="pp-plain-btn" type="button" onClick={()=>{
-                      if(editingMemberId===m.userId)setEditingMemberId('');else{
-                        setEditingMemberId(m.userId);setEditingMemberRoles(normalizeRoles(m.roles));
-                      }}}><ShieldCheck size={14}/> {editingMemberId===m.userId?'Cancel':'Manage roles'}</button></div>}
-                    {canModify && editingMemberId===m.userId && <div className="pp-rbac-manage-editor">
-                      <WorkspaceRolePicker value={editingMemberRoles} onChange={setEditingMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
-                      <div className="pp-rbac-actions"><button type="button" className="pp-small-primary" disabled={busyAction||!editingMemberRoles.length}
-                        onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/members/${m.userId}/roles`,'PUT',
-                          {roles:editingMemberRoles},token);
-                          setMembers(await api(`/api/workspaces/${selectedWs}/members`,'GET',undefined,token));
-                          setEditingMemberId('');setNotice('Workspace roles updated');})}>Save roles</button>
+                <div className="pp-v34-toolbar">
+                  <label className="pp-v34-search"><Search size={15}/><input aria-label="Search workspace members" type="search" placeholder="Search name or email" value={memberSearch} onChange={e=>setMemberSearch(e.target.value)}/></label>
+                  <RetroSelect className="pp-v34-filter" ariaLabel="Filter members by role" value={memberRoleFilter} onChange={setMemberRoleFilter}
+                    options={[{value:'all',label:'All roles'},...WORKSPACE_ROLES.map(role=>({value:role.id,label:role.label}))]}/>
+                  <span className="pp-v34-filter-count">{visibleWorkspaceMembers.length} shown</span>
+                </div>
+                <div className="pp-v34-member-list">
+                  {visibleWorkspaceMembers.map(m=>{
+                    const founder=m.userId===activeWorkspace?.ownerUserId;
+                    const self=m.userId===me?.id;
+                    const canModify=canAssignRoles&&!founder&&!self&&
+                      (assignableRoles.includes('TeamLead')||!(m.roles||[]).some(r=>['TeamLead','WorkspaceAdmin'].includes(r)));
+                    const accessOpen=expandedMemberAccess===m.userId;
+                    const editorOpen=canModify&&editingMemberId===m.userId;
+                    return <article className="pp-v34-member" key={m.userId}>
+                      <div className="pp-v34-member-top">
+                        <span className="pp-v34-avatar" aria-hidden="true">{m.displayName?.[0]||m.email?.[0]||'?'}</span>
+                        <div className="pp-v34-member-id"><strong>{m.displayName||'Unnamed member'}</strong><small>{m.email}</small></div>
+                        <div className="pp-v34-member-buttons">
+                          <button type="button" aria-expanded={accessOpen} onClick={()=>setExpandedMemberAccess(current=>current===m.userId?'':m.userId)}><ShieldCheck size={14}/>{accessOpen?'Hide access':'View access'}</button>
+                          {canModify&&<button type="button" aria-expanded={editorOpen} onClick={()=>{
+                            if(editorOpen){setEditingMemberId('');setEditingMemberRoles([]);}else{setEditingMemberId(m.userId);setEditingMemberRoles(normalizeRoles(m.roles));}
+                          }}><Pencil size={13}/>{editorOpen?'Cancel edit':'Manage roles'}</button>}
+                        </div>
                       </div>
-                    </div>}
-                  </div>;
-                })}
-                <p className="pp-muted-small">Members must sign in first. Workspace Admin can grant Developer/QA/Writer; Team Lead can also grant privileged roles.</p>
+                      <div className="pp-v34-tags">{(m.roles||[]).map(roleId=><span className="pp-v34-tag" key={roleId}>{WORKSPACE_ROLES.find(role=>role.id===roleId)?.label||roleId}</span>)}
+                        {founder&&<span className="pp-v34-tag muted">Founder · protected</span>}{self&&<span className="pp-v34-tag muted">You</span>}
+                      </div>
+                      {accessOpen&&<WorkspaceAccessBreakdown permissions={m.permissions||[]}/>}
+                      {editorOpen&&<div className="pp-v34-role-edit">
+                        <div className="pp-v34-role-edit-heading"><strong>Assign roles to {m.displayName||m.email}</strong><span>Changes affect only {activeWorkspace?.name}</span></div>
+                        <WorkspaceRolePicker value={editingMemberRoles} onChange={setEditingMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
+                        <p className="pp-v34-add-help">Effective permissions are refreshed from the backend after Save. Privileged roles can only be granted by Team Lead.</p>
+                        <div className="pp-v34-role-edit-actions">
+                          <button type="button" className="pp-v34-button" onClick={()=>{setEditingMemberId('');setEditingMemberRoles([]);}}>Cancel</button>
+                          <button type="button" className="pp-v34-button primary" disabled={busyAction||!editingMemberRoles.length||!roleSelectionChanged(m.roles,editingMemberRoles)}
+                            onClick={()=>doAction(async()=>{const workspaceId=selectedWs;await api(`/api/workspaces/${workspaceId}/members/${m.userId}/roles`,'PUT',
+                              {roles:editingMemberRoles},token);
+                              const refreshed=await api(`/api/workspaces/${workspaceId}/members`,'GET',undefined,token);
+                              if(workspaceId!==selectedWorkspaceRef.current||token!==currentTokenRef.current)return;
+                              setMembers(refreshed);setEditingMemberId('');setEditingMemberRoles([]);setNotice('Workspace roles updated');})}>Save roles</button>
+                        </div>
+                      </div>}
+                    </article>;
+                  })}
+                  {!visibleWorkspaceMembers.length&&<p className="pp-v34-empty">{workspaceMemberStats.count?'No members match your search or role filter.':'No members in this workspace yet.'}</p>}
+                </div>
+                <p className="pp-muted-small">Only Team Lead can assign privileged roles. Workspace Admin can assign Developer, QA and Technical Writer roles. Access is always verified by the backend.</p>
               </div>}
             </>}</section></div>
         </div>}
