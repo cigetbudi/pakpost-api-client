@@ -62,5 +62,6 @@ test('local and Neon collection examples collapse by default and provide accessi
   assert.match(local,/pp-endpoint-example-toggle/);
   assert.match(app,/expandedWorkspaceExamples\[/);
   assert.match(app,/pp-workspace-example-toggle/);
-  assert.match(app,/type="text" autoComplete="off" spellCheck=\{false\} placeholder="\{\{AuthToken\}\}/);
+  assert.match(app, /<VariableAwareInput placeholder="\{\{AuthToken\}\}/);
+  assert.match(app, /ariaLabel="Bearer token"/);
 });

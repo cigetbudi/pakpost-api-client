@@ -1,0 +1,22 @@
+/* Shared Local/Cloud controls: reuse the app's existing theme tokens. */
+.pp-storage-tabs{display:flex;gap:3px;margin:12px 11px 5px;padding:3px;background:var(--surface2);border:1px solid var(--border-soft);border-radius:6px}
+.pp-storage-tabs button{flex:1;min-width:0;padding:9px 5px;display:flex;gap:6px;align-items:center;justify-content:center;border-radius:4px;color:var(--muted);font-size:11px;font-weight:700}
+.pp-storage-tabs button:hover{color:var(--text);background:var(--hover)}
+.pp-storage-tabs button.active{color:var(--accent);background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.pp-import-destination{display:flex;flex-direction:column;gap:8px}
+.pp-import-scope-toggle{display:flex;gap:4px;padding:3px;border:1px solid var(--border-soft);border-radius:6px;background:var(--surface2)}
+.pp-import-scope-toggle button{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 4px;border-radius:4px;color:var(--muted);font-size:11px;font-weight:700}
+.pp-import-scope-toggle button.active{color:var(--accent);background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.09)}
+.pp-import-scope-toggle button:not(.active):hover{background:var(--hover);color:var(--text)}
+.pp-import-guest-destination{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:12px}
+.pp-import-destination .pp-side-hint{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0}
+.pp-import-destination .pp-side-hint button{color:var(--accent);font-size:inherit;font-weight:700;text-decoration:underline}
+.pp-import-modal{display:flex;flex-direction:column;gap:14px}
+.pp-import-modal .pp-import-destination{padding:0 18px}
+.pp-import-file-picker{display:flex;align-items:center;gap:9px;margin:0 18px;padding:12px;border:1px dashed var(--border);border-radius:5px;text-align:left;color:var(--text2);font-size:12px;overflow-wrap:anywhere}
+.pp-import-file-picker:hover{border-color:var(--accent);color:var(--accent)}
+
+.pp-top-env-local{padding:3px 8px;color:var(--text2);font-size:11px;font-weight:700}
+
+/* Match the existing Local collection count, including collapsed remote collections. */
+.pp-cloud-endpoint-count{flex:none;margin-left:auto;color:var(--muted);font:10px 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}

@@ -1,10 +1,12 @@
-import React, {useRef,useState} from 'react';
+import React, {useEffect,useRef,useState} from 'react';
 import {Check,ClipboardPaste,Copy,Download,FileJson,FileUp,Import,ShieldAlert,Upload} from 'lucide-react';
 import {GENERATORS,generateCode} from './requestTools';
 import {TextEditor} from './Editors';
 import {RetroSelect} from './RetroSelect';
 import {createPostmanCollection,createLocalPostmanExport,createSessionExport,parseImportText} from './importExport';
 import {exportCollectionByFormat,flattenLocalCollections} from './exportFormats';
+import {ImportDestinationPicker} from './ImportDestinationPicker';
+import {defaultStorageScope,allowedStorageScope,STORAGE_WORKSPACE} from './storageScope.js';
 
 const IMPORT_PLACEHOLDER = String.raw`curl -X POST https://postman-echo.com/post \
   -H "Content-Type: application/json" \
@@ -31,16 +33,19 @@ export function CodeSidebar({request,buildResolved,theme='dark'}){
   </div>;
 }
 
-export function ImportExportSidebar({requests,environments,localCollections=[],onImport,onMessage,theme='dark'}){
+export function ImportExportSidebar({requests,environments,localCollections=[],onImport,onMessage,theme='dark',authenticated=false,workspaceName='',onLogin}){
   const [text,setText]=useState('');const [busy,setBusy]=useState(false);const [includeSecrets,setIncludeSecrets]=useState(false);
   const [exportFormat,setExportFormat]=useState('postman');
+  const [destination,setDestination]=useState(()=>defaultStorageScope(authenticated));
+  useEffect(()=>setDestination(defaultStorageScope(authenticated)),[authenticated]);
+  const importDestination=allowedStorageScope(authenticated,destination);
   const fileInput=useRef(null);
   async function doImport(source){
     if(!source.trim())return;
     setBusy(true);try{
       const parsed=parseImportText(source);
-      await onImport(parsed);
-      onMessage(['postman','curl','openapi','insomnia'].includes(parsed.kind) ? `Imported ${parsed.requests.length} request(s) from ${parsed.kind.toUpperCase()} into Local Collections${parsed.environments?.length?` and ${parsed.environments.length} environment(s)`:''}.` : `Restored ${parsed.requests.length} tab(s)${parsed.environments.length?' and '+parsed.environments.length+' environment(s)':''}.`);
+      const message=await onImport(parsed,importDestination);
+      onMessage(message||`Import complete · ${importDestination===STORAGE_WORKSPACE?'Cloud · Neon':'Local · Browser'}`);
       setText('');
     }catch(err){onMessage('Import failed: '+err.message)}finally{setBusy(false)}
   }
@@ -51,7 +56,8 @@ export function ImportExportSidebar({requests,environments,localCollections=[],o
   }
   return <div className="pp-side-tool pp-exchange-panel">
     <div className="pp-side-section-title">IMPORT</div>
-    <p className="pp-side-hint">Import Postman v2.1, OpenAPI 3.0/3.1 JSON, Insomnia v4 JSON or cURL into Local Collections. Pakpost session backups restore tabs.</p>
+    <p className="pp-side-hint">Import Postman v2.1, OpenAPI 3.0/3.1 JSON, Insomnia v4 JSON, environments or cURL. Pakpost session backups restore tabs.</p>
+    <ImportDestinationPicker authenticated={authenticated} workspaceName={workspaceName} value={importDestination} onChange={setDestination} onLogin={onLogin}/>
     <div className="pp-import-text pp-highlighted-import" aria-label="Paste cURL or JSON export"><TextEditor value={text} onChange={setText} theme={theme} lint={false} lang={text.length > 80000 ? 'text' : /^[\s]*[\[{]/.test(text) ? 'json' : 'shell'} minHeight="155px" placeholder={IMPORT_PLACEHOLDER}/></div>
     <div className="pp-side-actions"><button onClick={()=>doImport(text)} disabled={!text.trim()||busy}><ClipboardPaste size={14}/> Import pasted</button><button onClick={()=>fileInput.current?.click()} disabled={busy}><Upload size={14}/> Choose file</button><input ref={fileInput} type="file" hidden accept=".json,.txt,.sh,.curl,application/json,text/plain" onChange={pickFile}/></div>
     <div className="pp-side-divider"/>
@@ -81,6 +87,6 @@ export function ImportExportSidebar({requests,environments,localCollections=[],o
       }}><FileJson size={15}/><span><strong>Local collections as {exportFormat==='postman'?'Postman':exportFormat==='openapi'?'OpenAPI 3.1':'Insomnia v4'}</strong><small>{exportFormat==='postman'?'Preserves imported folder hierarchy':exportFormat==='openapi'?'Local collection tags, docs and examples':'Folders and HTTP requests (legacy v4)'}</small></span></button>
     </div>
     <div className="pp-side-divider"/>
-    <p className="pp-side-hint">OpenAPI is a contract format and cannot execute Postman scripts. Insomnia v4 JSON is a legacy interchange format; current Insomnia v5 YAML is not supported here. Review bodies/examples for secrets before sharing. Imports stay local and do not sync to Neon automatically.</p>
+    <p className="pp-side-hint">OpenAPI is a contract format and cannot execute Postman scripts. Insomnia v4 JSON is a legacy interchange format; current Insomnia v5 YAML is not supported here. Cloud imports use the selected workspace; Local imports never sync automatically.</p>
   </div>;
 }

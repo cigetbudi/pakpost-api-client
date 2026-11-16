@@ -1,0 +1,53 @@
+/* V5 — universal {{variable}} input highlighting and safe, inline Quick Edit. */
+.pp-variable-field {position:relative;display:flex;align-items:stretch;width:100%;min-width:0;isolation:isolate}
+.pp-variable-field > input.pp-variable-input {width:100%;min-width:0;position:relative;z-index:1;color:transparent!important;caret-color:var(--text);font-family:'JetBrains Mono',ui-monospace,monospace}
+.pp-variable-field > input.pp-variable-input::placeholder {color:var(--muted)!important;opacity:.72}
+.pp-variable-field > input.pp-variable-input::selection {background:var(--accent-soft);color:transparent}
+.pp-variable-highlight {position:absolute;inset:0;z-index:2;display:flex;align-items:center;min-width:0;box-sizing:border-box;padding:9px 12px;border:1.5px solid transparent;white-space:pre;overflow:hidden;pointer-events:none;font:12px/1.5 'JetBrains Mono',ui-monospace,monospace;color:var(--text)}
+.pp-variable-highlight > .pp-var-text {flex:none;pointer-events:none}
+.pp-variable-highlight > .pp-var-token {flex:none;pointer-events:auto;display:inline;margin:0;padding:0;border:0;border-radius:2px;background:transparent;color:var(--green);font:inherit;font-weight:800;line-height:inherit;white-space:pre;cursor:help}
+.pp-variable-highlight > .pp-var-token.pp-env-token-missing {color:var(--red);text-decoration:underline dotted;text-underline-offset:3px}
+.pp-variable-highlight > .pp-var-token.pp-env-token-restricted {color:var(--red);text-decoration:underline wavy;text-underline-offset:3px}
+.pp-variable-highlight > .pp-var-token:hover,.pp-variable-highlight > .pp-var-token:focus-visible {outline:1px solid currentColor;outline-offset:2px}
+/* The URL already has a custom border/padding on its parent. Keep exact text alignment. */
+.pp-url-field.pp-variable-field {flex:1;height:100%;width:auto}
+.pp-url-field.pp-variable-field > input.pp-variable-input {padding:0;margin:0;border:0;background:transparent;outline:none;height:100%;font-size:12.5px}
+.pp-url-field.pp-variable-field > .pp-variable-highlight {padding:0;border:0;font-size:12.5px}
+/* No new grid columns: keep existing compact Headers / Params layout. */
+.pp-kv21-row > .pp-variable-field {height:42px}
+.pp-kv21-row > .pp-variable-field > input.pp-variable-input {height:42px}
+.pp-keyvalue-row > .pp-variable-field {min-width:0}
+.pp-keyvalue-row > .pp-variable-field > input.pp-variable-input {min-width:0}
+.pp-auth-form .pp-variable-field > input.pp-variable-input {min-height:42px}
+/* Content-Type retains MIME autocomplete and arrow. */
+.pp-mime-input > input {position:relative;z-index:1;color:transparent!important;caret-color:var(--text)}
+.pp-mime-input > input::placeholder {color:var(--muted)}
+.pp-mime-input > .pp-variable-highlight {padding-right:34px}
+.pp-mime-input > .pp-mime-arrow {z-index:3}
+.pp-mime-input .pp-url-suggestions {z-index:70}
+/* Portaled popover cannot be clipped by request pane overflow. */
+.pp-var-popover {position:fixed;z-index:400;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);box-shadow:0 10px 32px rgba(0,0,0,.28);color:var(--text);font:12px/1.45 'DM Sans',sans-serif}
+.pp-var-popover-head {display:flex;align-items:center;gap:7px;min-width:0}
+.pp-var-popover-name {font:700 12px 'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-var-status {margin-left:auto;font-size:10px;color:var(--green)}
+.pp-var-status-missing,.pp-var-status-restricted {color:var(--red)}
+.pp-var-close {flex:none;display:grid;place-items:center;color:var(--muted);padding:3px}
+.pp-var-popover-source {font-size:11px;color:var(--muted);margin:6px 0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-var-value-row {min-height:36px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:6px;padding:7px 9px;background:var(--surface)}
+.pp-var-value {font:11px 'JetBrains Mono',monospace;overflow:hidden;overflow-wrap:anywhere;max-height:66px;min-width:0}
+.pp-var-reveal {display:inline-flex;gap:5px;align-items:center;justify-content:center;padding:4px;color:var(--text2);font-size:11px}
+.pp-var-message {color:var(--muted);font-size:11px;line-height:1.4;margin:0 0 9px}
+.pp-var-edit-trigger {display:inline-flex;align-items:center;gap:7px;color:var(--accent);font-weight:700;margin-top:10px;padding:3px 0}
+.pp-var-edit-form {display:flex;flex-direction:column;gap:8px}
+.pp-var-edit-form label {display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--text2)}
+.pp-var-edit-form input {width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:12px 'JetBrains Mono',monospace}
+.pp-var-edit-form input:focus-visible {outline:2px solid var(--accent);outline-offset:0}
+.pp-var-edit-actions {display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);padding-top:8px}
+.pp-var-edit-actions button {display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:6px;padding:6px 10px}
+.pp-var-edit-actions button[type='submit'] {color:var(--accent);background:var(--accent-soft)}
+.pp-var-edit-error {color:var(--red);font-size:11px;overflow-wrap:anywhere;margin:0}
+@media(max-width:780px) {.pp-url-field.pp-variable-field > input.pp-variable-input,.pp-url-field.pp-variable-field > .pp-variable-highlight{font-size:11px}}
+@media(prefers-reduced-motion:reduce) {.pp-var-popover{animation:none}}
+/* CodeMirror raw body: syntax-safe token marks, no interpolation during editing. */
+.pp-cm-env-token {font-weight:750;color:var(--green);border-bottom:1px dotted currentColor;cursor:help}
+.pp-cm-env-token-missing,.pp-cm-env-token-restricted {color:var(--red)}

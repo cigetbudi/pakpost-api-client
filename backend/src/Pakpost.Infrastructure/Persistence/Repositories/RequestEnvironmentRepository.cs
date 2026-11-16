@@ -10,4 +10,8 @@ public sealed class RequestEnvironmentRepository(PakpostDbContext db) : IRequest
         => db.RequestEnvironments.Include(x=>x.Variables).FirstOrDefaultAsync(x=>x.Id==id,ct);
     public void Add(RequestEnvironment environment)=>db.RequestEnvironments.Add(environment);
     public void Remove(RequestEnvironment environment)=>db.RequestEnvironments.Remove(environment);
+    // Explicit tracking matters: child GUIDs are assigned by the domain constructor.
+    // Attaching them through an existing parent can otherwise mark them Modified, not Added.
+    public void AddVariable(RequestEnvironmentVariable variable)=>db.RequestEnvironmentVariables.Add(variable);
+    public void RemoveVariable(RequestEnvironmentVariable variable)=>db.RequestEnvironmentVariables.Remove(variable);
 }

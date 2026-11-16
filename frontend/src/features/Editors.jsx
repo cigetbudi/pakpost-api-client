@@ -1,4 +1,4 @@
-import React, {useMemo,useRef} from 'react';
+import React, {useEffect,useMemo,useRef,useState} from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import {json} from '@codemirror/lang-json';
 import {xml} from '@codemirror/lang-xml';
@@ -10,6 +10,9 @@ import {extraCodeLanguage} from './extraCodeLanguages';
 import {keymap, ViewPlugin, Decoration} from '@codemirror/view';
 import {toggleLineComment} from './commentEditing';
 import {MessageSquareText} from 'lucide-react';
+import {codeMirrorVariableDecoration} from './codeMirrorVariables.js';
+import {variableDescriptors} from './variableExperience.js';
+import {VariablePopover} from './VariableAwareInput.jsx';
 
 // JSONC drafts use the JSON grammar so property names, values and numbers are
 // colored exactly like the read-only JSON response editor. CodeMirror's JSON
@@ -38,11 +41,33 @@ const jsoncCommentHighlight=ViewPlugin.fromClass(class {
   }
 },{decorations:plugin=>plugin.decorations});
 
-export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false}) {
+export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false,variableUi=null}) {
   const editorView=useRef(null);
+  const [hover,setHover]=useState(null);
+  const hoverTimer=useRef(null);
+  const variables=variableUi?.variables||{};
+  const definitions=variableUi?.definitions||[];
+  const variableSignature=variableUi?JSON.stringify([variables,definitions]):'';
+  const closeHover=()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);hoverTimer.current=null;setHover(null);};
+  const delayClose=()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);hoverTimer.current=setTimeout(closeHover,180);};
+  const keepHover=()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);hoverTimer.current=null;};
+  useEffect(()=>()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);},[]);
+  useEffect(()=>{closeHover();},[variableSignature,value]);
+  function handleTokenEnter(e){
+    if(!variableUi)return;
+    const token=e.target.closest?.('[data-pp-variable-key]');
+    if(!token)return;
+    keepHover();
+    const name=token.getAttribute('data-pp-variable-key');
+    const item=variableDescriptors(`{{${name}}}`,variables,definitions)[0];
+    setHover({item,anchor:token.getBoundingClientRect()});
+  }
+  function handleTokenLeave(e){if(e.target.closest?.('[data-pp-variable-key]'))delayClose();}
+
   const extensions=useMemo(()=>{
     const ex=[];
     if(lang==='json'||lang==='jsonc')ex.push(json());
+    if(variableUi&&!readOnly)ex.push(codeMirrorVariableDecoration(variables,definitions));
     if(lang==='jsonc')ex.push(jsoncCommentHighlight);
     if(lang==='xml')ex.push(xml());
     if(lang==='html')ex.push(html());
@@ -56,12 +81,15 @@ export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=
       },{delay:350}));
     }
     return ex;
-  },[lang,lint,readOnly,allowComments]);
-  return <div className={'pp-editor-wrap'+(fill?' pp-editor-wrap-fill':'')}>
+  },[lang,lint,readOnly,allowComments,variableSignature]);
+  return <div className={'pp-editor-wrap'+(fill?' pp-editor-wrap-fill':'')} onMouseOver={handleTokenEnter} onMouseOut={handleTokenLeave}>
     {allowComments&&!readOnly&&<button className="pp-editor-comment" type="button" title="Toggle comment on selected lines (Ctrl/Cmd+/)" aria-label="Toggle comment selection" onMouseDown={e=>e.preventDefault()} onClick={()=>{if(editorView.current)toggleLineComment(editorView.current,lang)}}><MessageSquareText size={14}/> <span>Comment</span></button>}
     <CodeMirror value={value} theme={theme === 'dark' ? 'dark' : 'light'}
     extensions={extensions} onChange={onChange} readOnly={readOnly} onCreateEditor={view=>{editorView.current=view;}}
     basicSetup={{foldGutter:lineNumbers,lineNumbers,highlightActiveLine:!readOnly,autocompletion:!readOnly}}
     minHeight={fill?'100%':minHeight} height={fill?'100%':undefined} placeholder={placeholder} className={fill?'pp-cm-editor pp-cm-fill':'pp-cm-editor'} />
+    {hover&&variableUi&&<VariablePopover item={hover.item} anchor={hover.anchor} source={variableUi.source}
+      onEditVariable={variableUi.onEditVariable} onOpenEnvironments={variableUi.onOpenEnvironments}
+      onMouseEnter={keepHover} onMouseLeave={delayClose} onClose={closeHover}/>}
   </div>;
 }

@@ -9,14 +9,17 @@ import { DocumentationEditor } from './features/DocumentationEditor';
 import { emptyRow, isEnabled, encodeStoredHeaders, decodeStoredHeaders } from './features/requestMetadata';
 import {readWorkspaceCollectionDocs,writeWorkspaceCollectionDocs,workspaceDocKey} from './features/documentationStore';
 import { RetroSelect } from './features/RetroSelect';
+import { ImportDestinationPicker } from './features/ImportDestinationPicker';
 import { VariableUrlInput } from './features/VariableUrlInput';
+import {VariableAwareInput} from './features/VariableAwareInput.jsx';
+import {putEnvironmentVariable} from './features/variableExperience.js';
 import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentExplorer } from './features/EnvironmentExplorer';
 import { WorkbenchSettings } from './features/WorkbenchSettings';
 import {sortCollectionRoots} from './features/collectionSort';
 import {isWorkspaceCollectionOpen, toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from './features/collectionExpansion';
 import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
-import { blankDraft, parseCurl, isCurl } from './features/importExport';
+import { blankDraft, parseCurl, isCurl, parseImportText } from './features/importExport';
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from './features/environmentImport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
@@ -27,6 +30,7 @@ import {stripJsonComments,hasJsonComments} from './features/jsonComments';
 import {findBoundTab} from './features/sourceTabs';
 import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, hasUnsavedMarker, tabSaved} from './features/draftLifecycle';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
+import {defaultStorageScope,allowedStorageScope,STORAGE_LOCAL,STORAGE_WORKSPACE,cloudEndpointCount,collectionImportSources,saveCloudCollections} from './features/storageScope';
 import {MenuActionItem} from './features/MenuActionItem';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from './features/appearance';
 import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
@@ -100,6 +104,11 @@ export default function App() {
   const [commandIndex, setCommandIndex] = useState(0);
   const [theme, setTheme] = useState(() => readAppearance(localStorage));
   const [token, setToken] = useState(storedToken);
+  // Shared header storage context for both Collections and Environments.
+  // The legacy cached envScope keeps existing users on their last chosen storage.
+  const [storageScope,setStorageScope] = useState(()=>allowedStorageScope(!!storedToken(),CACHED?.envScope || defaultStorageScope(!!storedToken())));
+  const collectionsScope=storageScope;
+  const envScope=storageScope;
   const [me, setMe] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState('login');
@@ -126,7 +135,6 @@ export default function App() {
   const [scriptError, setScriptError] = useState(RECOVERED.scriptError || '');
   const [responsePretty, setResponsePretty] = useState(true);
   const [prettyResponse, setPrettyResponse] = useState('');
-  const [envScope, setEnvScope] = useState(CACHED?.envScope || 'local');
   const [localEnvironments, setLocalEnvironments] = useState(initialLocalEnvs);
   const [workspaceEnvironments, setWorkspaceEnvironments] = useState([]);
   const [activeEnvId, setActiveEnvId] = useState(CACHED?.activeEnvId || '');
@@ -140,6 +148,11 @@ export default function App() {
   const [collections, setCollections] = useState([]);
   const [localCollections, setLocalCollections] = useState(readLocalCollections);
   const [creatingLocalCollection, setCreatingLocalCollection] = useState(false);
+  const [collectionImportOpen,setCollectionImportOpen] = useState(false);
+  const [collectionImportFile,setCollectionImportFile] = useState(null);
+  const [collectionImportDestination,setCollectionImportDestination] = useState(()=>defaultStorageScope(!!storedToken()));
+  const [collectionImportError,setCollectionImportError] = useState('');
+  const [collectionImportBusy,setCollectionImportBusy] = useState(false);
   const [localCollectionName, setLocalCollectionName] = useState('');
   const [members, setMembers] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -324,15 +337,84 @@ export default function App() {
     originalRequestNameRef.current=name; cancelledRequestNameRef.current=false; setEditingRequestName(focusName);
     setActiveTabId(id); restoreDraft(draft); setPage('tester');
   }
-  function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]}) {
-    if(requests.length>200)throw Error('Import limit: maximum 200 requests.');
-    if(['postman','curl','openapi','insomnia'].includes(kind)){
-      const sources=kind==='curl'?[{name:'Imported cURL',requests}]:incoming.length?incoming:[{name:'Imported collection',requests}];
-      const next=validateLibrary([...localCollections,...sources.map(c=>toLocalCollection(c))]);
-      setLocalCollections(next);
+  async function importPreparedEnvironments(imported,destination){
+    if(!imported.length)return 0;
+    const cloud=destination===STORAGE_WORKSPACE;
+    const workspaceId=selectedWs,auth=token,epoch=workspaceFetchEpoch.current;
+    if(cloud&&(!auth||!workspaceId))throw Error('Sign in and select a workspace before importing environments to Cloud.');
+    // Remote list may not be loaded yet when the user is browsing Local environments.
+    const existing=cloud?(envScope==='workspace'?workspaceEnvironments:await api(`/api/workspaces/${workspaceId}/environments`,'GET',undefined,auth)):localEnvironments;
+    const prepared=uniqueEnvironmentImports(imported,existing);
+    if(!cloud){
+      const added=prepared.map(env=>({...env,id:crypto.randomUUID(),variables:(env.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret}))}));
+      setLocalEnvironments(old=>[...old,...added]);
+      setStorageScope('local');setActiveEnvId(added[0].id);
+      return added.length;
+    }
+    const base=`/api/workspaces/${workspaceId}/environments`;
+    const saved=[];
+    for(const env of prepared){
+      let created;
+      try{
+        created=await api(base,'POST',{name:env.name},auth);
+        saved.push(await api(`${base}/${created.id}`,'PUT',{name:env.name,variables:env.variables},auth));
+      }catch(error){
+        // Undo only the empty record created by this failed environment; keep earlier successful imports.
+        if(created){try{await api(`${base}/${created.id}`,'DELETE',undefined,auth)}catch{}}
+        if(saved.length&&epoch===workspaceFetchEpoch.current)setWorkspaceEnvironments(old=>[...old.filter(e=>!saved.some(x=>x.id===e.id)),...saved]);
+        throw Error(`Cloud import partially completed (${saved.length}/${prepared.length} environments): ${getMessage(error)}`);
+      }
+    }
+    if(epoch===workspaceFetchEpoch.current){
+      setWorkspaceEnvironments(old=>[...old.filter(e=>!saved.some(x=>x.id===e.id)),...saved]);
+      setStorageScope('workspace');setActiveEnvId(saved[0].id);
+    }
+    return saved.length;
+  }
+  async function importCloudCollections(sources){
+    const workspaceId=selectedWs;
+    const auth=token;
+    const epoch=workspaceFetchEpoch.current;
+    let imported;
+    try{
+      imported=await saveCloudCollections(sources,{workspaceId,token:auth,request:api,onCreated:created=>{
+        if(epoch===workspaceFetchEpoch.current)setCollections(old=>[...old,created]);
+      }});
+    }catch(error){
+      // A failed remote import can still have successful records: refresh without local fallback.
+      if(auth&&workspaceId){try{
+        const latest=await api(`/api/workspaces/${workspaceId}/collections`,'GET',undefined,auth);
+        if(epoch===workspaceFetchEpoch.current)setCollections(latest);
+      }catch{}}
+      throw error;
+    }
+    try{
+      const latest=await api(`/api/workspaces/${workspaceId}/collections`,'GET',undefined,auth);
+      if(epoch===workspaceFetchEpoch.current)setCollections(latest);
+    }catch{}
+    if(epoch===workspaceFetchEpoch.current){
+      if(imported.firstId){setSelectedCol(imported.firstId);setExpandedCollections(old=>({...old,[workspaceCollectionKey(workspaceId,imported.firstId)]:true}));}
+      setStorageScope(STORAGE_WORKSPACE);setActiveEnvId('');
       setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
-    }else if(requests.length){
-      // A Pakpost session is a tab backup, not a Postman collection import.
+    }
+    return imported.count;
+  }
+  async function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]},requestedDestination){
+    if(requests.length>200)throw Error('Import limit: maximum 200 requests.');
+    const destination=allowedStorageScope(!!token,requestedDestination);
+    const sources=collectionImportSources({kind,requests,collections:incoming});
+    let count=0;
+    if(sources.length){
+      if(destination===STORAGE_WORKSPACE){
+        count=await importCloudCollections(sources);
+      }else{
+        const added=sources.map(source=>toLocalCollection(source));
+        setLocalCollections(validateLibrary([...localCollections,...added]));
+        count=requests.length;
+        setStorageScope(STORAGE_LOCAL);setActiveEnvId('');setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
+      }
+    }else if(kind==='pakpost'&&requests.length){
+      // A Pakpost session is a tab backup, not a collection import.
       stashActive();
       const tabs=requests.map(request=>{
         const id=`t${++tabSequence.current}`;
@@ -344,11 +426,10 @@ export default function App() {
       const last=tabs.at(-1);
       activeTabRef.current=last.id;setActiveTabId(last.id);restoreDraft(draftsRef.current[last.id]);setPage('tester');
     }
-    if(environments.length){
-      const added=environments.map(env=>({id:crypto.randomUUID(),name:env.name||'Imported',variables:(env.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret}))}));
-      setLocalEnvironments(current=>[...current,...added]);
-      setEnvScope('local');setActiveEnvId(added[0].id);
-    }
+    if(environments.length)await importPreparedEnvironments(environments,destination);
+    const place=destination===STORAGE_WORKSPACE?'Cloud · Neon':'Local · Browser';
+    if(kind==='pakpost')return `Restored ${requests.length} tab(s)${environments.length?` and imported ${environments.length} environment(s) into ${place}`:''}.`;
+    return `Imported ${[count?`${count} request(s)`:null,environments.length?`${environments.length} environment(s)`:null].filter(Boolean).join(' and ')||'0 items'} into ${place}.`;
   }
   function openDocumentation(target){
     let initial='';
@@ -397,11 +478,40 @@ export default function App() {
       setDocumentationTarget(null);setNotice('Documentation saved');
     }catch(e){setNotice(`Cannot save documentation: ${getMessage(e)}`)}finally{setDocBusy(false)}
   }
-  function createLocalCollection(e){
+  async function createExplorerCollection(e){
     e.preventDefault();
-    const name=localCollectionName.trim();if(!name)return;
-    try{setLocalCollections(validateLibrary([...localCollections,toLocalCollection({name,requests:[]})]));setLocalCollectionName('');setCreatingLocalCollection(false);}
-    catch(err){setNotice(getMessage(err));}
+    const name=localCollectionName.trim();if(!name||busyAction)return;
+    if(storageScope===STORAGE_WORKSPACE&&token){
+      if(!selectedWs){setNotice('Select a workspace before creating a Cloud collection.');return;}
+      await doAction(async()=>{
+        const created=await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name},token);
+        setCollections(current=>[...current,created]);
+        setSelectedCol(created.id);
+        setLocalCollectionName('');setCreatingLocalCollection(false);
+        setNotice('Cloud collection created.');
+      });
+    }else{
+      try{setLocalCollections(validateLibrary([...localCollections,toLocalCollection({name,requests:[]})]));setLocalCollectionName('');setCreatingLocalCollection(false);}
+      catch(err){setNotice(getMessage(err));}
+    }
+  }
+  function openCollectionImport(){
+    setCollectionImportDestination(defaultStorageScope(!!token));
+    setCollectionImportFile(null);setCollectionImportError('');setCollectionImportOpen(true);
+  }
+  async function submitCollectionImport(){
+    if(!collectionImportFile||collectionImportBusy)return;
+    setCollectionImportBusy(true);setCollectionImportError('');
+    try{
+      const parsed=parseImportText(await collectionImportFile.text());
+      if(parsed.kind==='environment'||(parsed.kind==='pakpost'&&!parsed.requests?.length))
+        throw Error('This file has no collections. Use Environments or Import / Export to import it.');
+      if(!collectionImportSources(parsed).length)
+        throw Error('This file has no HTTP collections. Choose Postman, OpenAPI, Insomnia v4 JSON or cURL.');
+      const message=await importRequestsAndEnvironments(parsed,allowedStorageScope(!!token,collectionImportDestination));
+      setNotice(message);setCollectionImportOpen(false);setCollectionImportFile(null);
+    }catch(error){setCollectionImportError(getMessage(error));}
+    finally{setCollectionImportBusy(false);}
   }
   function openBoundRequest(request,source){
     const current=findBoundTab(openTabs,source);
@@ -490,7 +600,7 @@ export default function App() {
   }
   function expandOrCollapseAllCollections(open) {
     setLocalExpandAllSignal(previous => ({open, nonce: (previous?.nonce||0)+1}));
-    if(token && selectedWs)
+    if(token && selectedWs && collectionsScope===STORAGE_WORKSPACE)
       setExpandedCollections(previous => setAllWorkspaceCollections(previous,selectedWs,collections.map(c=>c.id),open));
   }
   function toggleWorkspaceCollectionById(id) {
@@ -766,7 +876,9 @@ export default function App() {
   }
 
 
-  useEffect(()=>{if(!token&&envScope==='workspace'){setEnvScope('local');setActiveEnvId('');}},[token,envScope]);
+  useEffect(()=>{if(!token&&envScope==='workspace'){setStorageScope('local');setActiveEnvId('');}},[token,envScope]);
+  // A selected environment belongs to exactly one workspace.
+  useEffect(()=>{if(envScope===STORAGE_WORKSPACE)setActiveEnvId('');},[selectedWs]);
   useEffect(()=>{
     const safe=localEnvironments.map(e=>({...e,variables:e.variables.map(v=>v.isSecret?{...v,value:''}:v)}));
     const secrets=Object.fromEntries(localEnvironments.map(e=>[e.id,Object.fromEntries(e.variables.filter(v=>v.isSecret).map(v=>[v.key,v.value]))]));
@@ -782,38 +894,29 @@ export default function App() {
   const activeEnvironment=currentEnvironments.find(e=>e.id===activeEnvId);
   // Restricted workspace secrets must remain unresolved, never silently become empty credentials.
   const varsFromEnv=(allowSecrets=true)=>Object.fromEntries((activeEnvironment?.variables||[]).filter(v=>!v.isRedacted).map(v=>[v.key,v.isSecret&&!allowSecrets?'[REDACTED]':v.value]));
-  function updateEnvScope(scope){setEnvScope(scope);setActiveEnvId('');}
-  async function importEnvironmentFile(sourceText){
+  async function quickEditVariable(key,value){
+    if(!activeEnvironment)throw Error('Select an environment in the top toolbar first.');
+    if(envScope===STORAGE_WORKSPACE&&(activeEnvironment.variables||[]).some(v=>v.isRedacted))
+      throw Error('This environment contains restricted variables. Open Environments to edit with appropriate permissions.');
+    const variables=putEnvironmentVariable(activeEnvironment.variables,key,value);
+    await persistEnvironment({...activeEnvironment,variables});
+  }
+  const variableUi={variables:varsFromEnv(),definitions:activeEnvironment?.variables||[],
+    source:activeEnvironment?`${envScope===STORAGE_WORKSPACE?'Cloud · Neon':'Local · Browser'} / ${activeEnvironment.name}`:'No active environment',
+    onEditVariable:activeEnvironment?quickEditVariable:null,
+    onOpenEnvironments:()=>setExplorerTab('environments')};
+  function updateStorageScope(scope){
+    setStorageScope(allowedStorageScope(!!token,scope));
+    setActiveEnvId('');setCreatingLocalCollection(false);
+  }
+  async function importEnvironmentFile(sourceText,requestedDestination){
     let doc;
     try{doc=JSON.parse(sourceText)}catch{throw Error('Invalid JSON environment file. Use Postman, Hoppscotch or Insomnia v4 JSON (not YAML).');}
     const imported=parseEnvironmentDocument(doc);
     if(!imported?.length)throw Error('No supported environments found. Choose a Postman, Hoppscotch or Insomnia v4 JSON environment export.');
-    const prepared=uniqueEnvironmentImports(imported,currentEnvironments);
-    if(envScope==='local'){
-      const added=prepared.map(env=>({...env,id:crypto.randomUUID()}));
-      setLocalEnvironments(old=>[...old,...added]);
-      setActiveEnvId(added[0].id);
-    }else{
-      if(!token||!selectedWs)throw Error('Select and sign in to a workspace first.');
-      const base=`/api/workspaces/${selectedWs}/environments`;
-      const importedRemote=[];
-      for(const env of prepared){
-        let created;
-        try{
-          created=await api(base,'POST',{name:env.name},token);
-          const saved=await api(`${base}/${created.id}`,'PUT',{name:env.name,variables:env.variables},token);
-          importedRemote.push(saved);
-        }catch(error){
-          // Avoid leaving empty environment records on validation errors.
-          if(created){try{await api(`${base}/${created.id}`,'DELETE',undefined,token)}catch{/* report original failure */}}
-          if(importedRemote.length)setWorkspaceEnvironments(old=>[...old,...importedRemote]);
-          throw Error(`${importedRemote.length} imported before failure: ${getMessage(error)}`);
-        }
-      }
-      setWorkspaceEnvironments(old=>[...old,...importedRemote]);
-      setActiveEnvId(importedRemote[0].id);
-    }
-    setNotice(`Imported ${prepared.length} environment(s) into ${envScope==='workspace'?'Workspace · Neon':'Local browser'} from JSON.`);
+    const destination=allowedStorageScope(!!token,requestedDestination);
+    const count=await importPreparedEnvironments(imported,destination);
+    setNotice(`Imported ${count} environment(s) into ${destination===STORAGE_WORKSPACE?'Cloud · Neon':'Local · Browser'}.`);
   }
   async function createEnvironment(name){
     if(envScope==='workspace'){
@@ -947,7 +1050,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  function logout() { sessionStorage.removeItem('pakpost_token'); setToken(''); setMe(null); setPage('tester'); setWorkspaces([]); }
+  function logout() { sessionStorage.removeItem('pakpost_token'); setStorageScope(STORAGE_LOCAL);setStorageScope(STORAGE_LOCAL);setActiveEnvId('');setToken(''); setMe(null); setPage('tester'); setWorkspaces([]); }
   function requiresLogin(target = 'workspace') {
     if (token) return true;
     setAuthMode('login'); setAuthError(''); setAuthOpen(true);
@@ -966,7 +1069,7 @@ export default function App() {
       const payload = authMode === 'register' ? authForm : { email: authForm.email, password: authForm.password };
       const data = await api(path, 'POST', payload);
       sessionStorage.setItem('pakpost_token', data.accessToken);
-      setToken(data.accessToken); setMe(data.user); setAuthOpen(false);
+      setToken(data.accessToken); setStorageScope(STORAGE_WORKSPACE);setStorageScope(STORAGE_WORKSPACE);setActiveEnvId('');setMe(data.user); setAuthOpen(false);
       setAuthForm({ displayName: '', email: '', password: '' });
       setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
     } catch (e) { setAuthError(getMessage(e)); }
@@ -1007,7 +1110,7 @@ export default function App() {
   // Fetch children for *every* expanded Neon collection, not only the selected one.
   // Fetch at most four new lists per render to avoid flooding the backend on Expand all.
   useEffect(()=>{
-    if(!token||!selectedWs||explorerTab!=='collections')return;
+    if(!token||!selectedWs||explorerTab!=='collections'||collectionsScope!==STORAGE_WORKSPACE)return;
     const next=collections.filter(col=>col.id!==selectedCol
       && isWorkspaceCollectionOpen(expandedCollections,selectedWs,col.id,selectedCol)
       && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,col.id))
@@ -1021,7 +1124,7 @@ export default function App() {
         .catch(e=>{if(epoch!==workspaceFetchEpoch.current)return;setNotice(`Cannot load ${col.name}: ${getMessage(e)}`);setWorkspaceRequestLists(old=>({...old,[key]:[]}));})
         .finally(()=>workspaceRequestsPending.current.delete(key));
     }
-  },[token,selectedWs,selectedCol,collections,explorerTab,expandedCollections,workspaceRequestLists]);
+  },[token,selectedWs,selectedCol,collections,explorerTab,collectionsScope,expandedCollections,workspaceRequestLists]);
   useEffect(() => {
     if (!token || !selectedWs || !selectedTeam) { setTeamMembers([]); return; }
     api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`, 'GET', undefined, token)
@@ -1285,8 +1388,10 @@ export default function App() {
       <div className="pp-logo pp-branding-v17" aria-label="Pakpost"><img src={isDarkAppearance(theme)?"/branding/pakpost-logo-dark.svg":"/branding/pakpost-logo-light.svg"} alt="Pakpost" width="155" height="48" decoding="async"/></div>
       <button className="pp-top-search" type="button" aria-label="Search requests and commands" onClick={()=>{setCommandQuery('');setCommandIndex(0);setCommandOpen(true);}}><Search size={15}/><span>Search requests and commands</span><kbd>Ctrl K</kbd></button>
       <div className="pp-top-right">
-        <div className="pp-env-top"><span>ENV</span>
-          <RetroSelect ariaLabel="Environment scope" title="Environment storage" className="pp-top-scope" value={envScope} onChange={updateEnvScope} options={[{value:'local',label:'Local'},{value:'workspace',label:'Workspace',disabled:!token||!selectedWs}]}/>
+        <div className="pp-env-top pp-unified-storage-top">
+          <span>STORAGE</span>
+          {token?<RetroSelect ariaLabel="Storage location for collections and environments" title="Controls storage for both Collections and Environments" className="pp-top-scope" value={storageScope} onChange={updateStorageScope} options={[{value:STORAGE_LOCAL,label:'Local · Browser'},{value:STORAGE_WORKSPACE,label:'Cloud · Neon',disabled:!selectedWs}]}/>:<span className="pp-top-env-local" title="Sign in to use Cloud · Neon">Local · Browser</span>}
+          <span className="pp-top-env-label">ENV</span>
           <RetroSelect ariaLabel="Active environment" className="pp-top-environment" value={activeEnvId} onChange={setActiveEnvId} options={[{value:'',label:'No environment'},...currentEnvironments.map(e=>({value:e.id,label:e.name}))]}/>
           <button title="Manage environments" onClick={()=>openContext('environments')}><Settings2 size={16}/></button>
         </div>
@@ -1310,43 +1415,48 @@ export default function App() {
 
       {page==='tester' && !sidebarCollapsed && <aside className="pp-explorer">
         <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Collections' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'environments' ? 'Environments' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
-        {explorerTab === 'environments' ? <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} onImportFile={importEnvironmentFile} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
+        {explorerTab === 'environments' ? <>
+          {token&&envScope===STORAGE_WORKSPACE&&<div className="pp-compact-workspace"><Layers3 size={15}/><span>Workspace</span><RetroSelect ariaLabel="Switch environment workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/><button type="button" title="Manage workspace" aria-label="Manage workspace" onClick={()=>navigate('workspace')}><Settings2 size={15}/></button></div>}
+          {!token&&<button className="pp-link-row pp-login-hint" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}><LockKeyhole size={14}/> Sign in to access Cloud environments <ChevronRight size={13}/></button>}
+          <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} onImportFile={importEnvironmentFile} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} scope={envScope===STORAGE_WORKSPACE?`Workspace: ${activeWorkspace?.name||'Private'}`:'Local · Browser'}/>
+        </> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
-            environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
+            environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
           <div className="pp-side-subhead"><span>RECENT REQUESTS</span><span>{recent.length}</span></div>
           {recent.length ? <div className="pp-side-scroll">{recent.map((r, i) => <button key={`${i}-${r.url}`} className="pp-history-item" onClick={() => loadRequest(r)}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span className="pp-history-main"><strong>{(() => { try { return new URL(r.url).pathname || '/'; } catch { return r.url; } })()}</strong><small>{r.url}</small></span><span className={r.status < 400 ? 'pp-history-ok' : 'pp-history-bad'}>{r.status}</span></button>)}</div> : <div className="pp-explorer-empty"><History size={23}/><strong>No history yet</strong><span>Requests you send during this session will appear here.</span></div>}
         </> : explorerTab === 'teams' ? <>
           {token ? <><div className="pp-side-subhead"><span>TEAMS · {activeWorkspace?.name || 'WORKSPACE'}</span></div><div className="pp-side-scroll">{teams.map(t => <button key={t.id} className={`pp-tree-row ${selectedTeam === t.id ? 'active' : ''}`} onClick={() => { setSelectedTeam(t.id); navigate('workspace'); setWsTab('teams'); }}><Users size={15}/><span>{t.name}</span></button>)}<button className="pp-add-side" onClick={() => { navigate('workspace'); setWsTab('teams'); }}><Plus size={15}/> Manage teams</button></div></> : <div className="pp-explorer-empty"><LockKeyhole size={22}/><strong>Teams are private</strong><span>Sign in to collaborate with other members.</span><button className="pp-small-primary" onClick={() => setAuthOpen(true)}>Sign in</button></div>}
         </> : <>
-          <div className="pp-scope">
-            <div className="pp-scope-logo"><Layers3 size={17}/></div>
-            <div><strong>{activeWorkspace?.name || 'Personal scratchpad'}</strong><small>{token ? 'Private workspace' : 'Local · guest mode'}</small></div>
-            {token && <RetroSelect ariaLabel="Switch workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/>}
-            <ChevronDown size={15} className="pp-scope-chevron"/>
+          {token&&collectionsScope===STORAGE_WORKSPACE&&<div className="pp-compact-workspace"><Layers3 size={15}/><span>Workspace</span><RetroSelect ariaLabel="Switch workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/><button type="button" title="Manage workspace" aria-label="Manage workspace" onClick={()=>navigate('workspace')}><Settings2 size={15}/></button></div>}
+          <div className="pp-collections-toolbar">
+            <div className="pp-explorer-search"><Search size={14}/><input placeholder="Search collections" aria-label="Search collections" value={explorerSearch} onChange={e => setExplorerSearch(e.target.value)}/></div>
+            <div className="pp-collections-toolbar-row">
+              <RetroSelect ariaLabel="Sort all collections" title="Sort collections" value={collectionSort} onChange={setCollectionSort} options={[{value:'manual',label:'Manual order'},{value:'name-asc',label:'Name A–Z'},{value:'name-desc',label:'Name Z–A'},{value:'newest',label:'Recently updated'}]}/>
+              <div className="pp-collection-expand-controls" role="group" aria-label="Expand or collapse collections">
+                <button type="button" aria-label="Expand all collections and folders" title="Expand all" onClick={()=>expandOrCollapseAllCollections(true)}><ChevronsUpDown size={15}/></button>
+                <button type="button" aria-label="Collapse all collections and folders" title="Collapse all" onClick={()=>expandOrCollapseAllCollections(false)}><ChevronsDownUp size={15}/></button>
+              </div>
+              <button type="button" className="pp-env-import-action" title="Import collection" onClick={openCollectionImport}><FileUp size={15}/> Import</button>
+              <button type="button" className="pp-env-primary" title="New collection" disabled={busyAction} onClick={()=>setCreatingLocalCollection(true)}><Plus size={15}/> New</button>
+            </div>
           </div>
-          {token && <button className="pp-link-row" onClick={() => navigate('workspace')}><Settings2 size={14}/> Manage workspace <ChevronRight size={13}/></button>}
-          <div className="pp-explorer-search"><Search size={14}/><input placeholder="Search collections" aria-label="Search collections" value={explorerSearch} onChange={e => setExplorerSearch(e.target.value)}/></div>
-          <div className="pp-global-collection-sort"><span>Sort all collections</span><RetroSelect ariaLabel="Sort all collections" value={collectionSort} onChange={setCollectionSort} options={[{value:'manual',label:'Manual order'},{value:'name-asc',label:'Name A–Z'},{value:'name-desc',label:'Name Z–A'},{value:'newest',label:'Recently updated'}]}/></div>
-          <div className="pp-collection-expand-controls" role="group" aria-label="Expand or collapse collections">
-            <button type="button" title="Expand all collections and folders" onClick={()=>expandOrCollapseAllCollections(true)}><ChevronsUpDown size={14}/> Expand all</button>
-            <button type="button" title="Collapse all collections and folders" onClick={()=>expandOrCollapseAllCollections(false)}><ChevronsDownUp size={14}/> Collapse all</button>
-          </div>
-          <div className="pp-side-subhead"><span>COLLECTIONS</span><button title="Create local collection" onClick={()=>setCreatingLocalCollection(true)}><Plus size={16}/></button></div>
-          {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createLocalCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder="Collection name"/><button type="submit" title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
+          {creatingLocalCollection&&<form className="pp-local-create" onSubmit={createExplorerCollection}><input autoFocus maxLength={120} value={localCollectionName} onChange={e=>setLocalCollectionName(e.target.value)} placeholder={storageScope===STORAGE_WORKSPACE?'Cloud collection name':'Local collection name'}/><button type="submit" disabled={busyAction} title="Create collection">Add</button><button type="button" onClick={()=>setCreatingLocalCollection(false)} title="Cancel"><X size={13}/></button></form>}
+          <div className="pp-side-subhead"><span>COLLECTIONS</span><span>{collectionsScope===STORAGE_LOCAL?localCollections.length:collections.length}</span></div>
           <div className="pp-side-scroll">
-            {localCollections.length>0&&<><div className="pp-local-subhead">LOCAL · BROWSER <span>{localCollections.length}</span></div>
+            {collectionsScope===STORAGE_LOCAL&&localCollections.length>0&&<>
               <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onOpenExample={openLocalExample} onAction={handleLocalMenu} onMove={moveLocalRequest} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
             </>}
-            {token && selectedWs ? <>
-              <div className="pp-local-subhead">WORKSPACE · NEON</div>
+            {token && collectionsScope===STORAGE_WORKSPACE ? <>
               {visibleCollections.map(c => {
                 const opened=isWorkspaceCollectionOpen(expandedCollections,selectedWs,c.id,selectedCol);
-                const requests=workspaceRequestLists[workspaceCollectionKey(selectedWs,c.id)]||[];
+                const requestKey=workspaceCollectionKey(selectedWs,c.id);
+                const requests=workspaceRequestLists[requestKey]||[];
+                const endpointCount=cloudEndpointCount(c,workspaceRequestLists,requestKey);
                 return <div key={c.id}>
                 <div className="pp-tree-item-container" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(WORKSPACE_DRAG))e.preventDefault()}} onDrop={e=>moveWorkspaceRequest(e,c.id)}>
                   <button type="button" aria-expanded={opened} className={`pp-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => toggleWorkspaceCollectionById(c.id)}>
                     {opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
-                    <FolderClosed size={15}/><span>{c.name}</span>
+                    <FolderClosed size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
                   </button>
                   <div className="pp-tree-actions">
                     <button className="pp-tree-action" type="button" title="New request in collection" aria-label={`New request in ${c.name}`} onClick={e=>{e.stopPropagation();createCollectionDraft('workspace',c.id)}}><Plus size={15}/></button>
@@ -1377,16 +1487,14 @@ export default function App() {
                 {opened && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,c.id)) && <div className="pp-tree-hint">Loading requests…</div>}
                 </div></div>
               </div>})}
-              {!collections.length && <div className="pp-tree-hint">No collections yet. Start by creating one.</div>}
-              <button className="pp-add-side" onClick={() => { navigate('workspace'); setWsTab('collections'); }}><Plus size={14}/> New collection</button>
+              {!collections.length && <div className="pp-tree-hint">{selectedWs?'No collections yet. Start by creating one.':'No workspace selected. Create one to store Cloud collections.'}</div>}
             </> : <>
-              {!localCollections.length&&<div className="pp-tree-hint">Import a Postman Collection to see its folders and requests here. Nothing is sent until you open a request and click Send.</div>}
-              <button className="pp-add-side" onClick={()=>{setExplorerTab('exchange');setSidebarCollapsed(false)}}><FileUp size={14}/> Import a collection</button>
-              <button className="pp-add-side pp-login-hint" onClick={() => setAuthOpen(true)}><LockKeyhole size={14}/> Sign in to sync to workspace</button>
+              {!localCollections.length&&<div className="pp-tree-hint">No local collections yet. Create a collection or import one from a file.</div>}
+              {!token&&<button className="pp-add-side pp-login-hint" onClick={() => setAuthOpen(true)}><LockKeyhole size={14}/> Sign in to access Cloud collections</button>}
             </>}
           </div>
           <div className="pp-explorer-bottom">
-            {token ? <button onClick={() => navigate('workspace')}><Layers3 size={15}/> Workspace settings <ArrowRight size={14}/></button> : <div className="pp-guest-notice"><span className="pp-guest-live"/><div><strong>You're in guest mode</strong><small>Sending requests doesn't require an account.</small></div></div>}
+            {token&&collectionsScope===STORAGE_WORKSPACE ? <button onClick={() => navigate('workspace')}><Layers3 size={15}/> Workspace settings <ArrowRight size={14}/></button> : token ? <div className="pp-guest-notice"><span className="pp-guest-live"/><div><strong>Local storage</strong><small>Collections stay in this browser.</small></div></div> : <div className="pp-guest-notice"><span className="pp-guest-live"/><div><strong>You're in guest mode</strong><small>Sending requests doesn't require an account.</small></div></div>}
           </div>
         </>}
       </aside>}
@@ -1435,7 +1543,7 @@ export default function App() {
               if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancelRequestRename();}
             }}
           /> : <button type="button" className="pp-editable-request-name" onClick={beginRequestRename} title="Rename request" aria-label={`Rename ${activeRequestName}`}><span>{activeRequestName}</span><Pencil size={13}/></button>}<span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
-          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} variables={varsFromEnv()} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} disabled={busyAction} title="Save changes (Ctrl/Cmd+S)"><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
+          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} {...variableUi} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} disabled={busyAction} title="Save changes (Ctrl/Cmd+S)"><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
               <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
@@ -1443,8 +1551,8 @@ export default function App() {
                 {[[ 'params','Params' ],[ 'headers','Headers' ],[ 'body','Body' ],[ 'auth','Authorization' ],[ 'scripts','Scripts' ]].map(([id, name]) => <button key={id} className={reqTab === id ? 'active' : ''} onClick={() => setReqTab(id)}>{name}{id === 'headers' && headerCount > 0 && <span className="pp-tiny-count">{headerCount}</span>}</button>)}
               </div>
               <div className="pp-panel-body pp-request-body">
-                {reqTab === 'params' && <KeyValueEditor kind="params" rows={params} onChange={setParams}/>}
-                {reqTab === 'headers' && <KeyValueEditor kind="headers" rows={rows} onChange={setRows}/>}
+                {reqTab === 'params' && <KeyValueEditor kind="params" rows={params} onChange={setParams} variableUi={variableUi}/>}
+                {reqTab === 'headers' && <KeyValueEditor kind="headers" rows={rows} onChange={setRows} variableUi={variableUi}/>}
                 {reqTab === 'body' && <div className="pp-body-composer">
                   <div className="pp-body-toolbar"><div className="pp-body-format-label"><span>Body type</span><RetroSelect ariaLabel="Body type" className="pp-body-format-select" value={format} onChange={selectFormat} options={BODY_FORMATS.map(f=>({value:f.mime,label:f.label,group:f.group}))}/></div>
                     {bodyFormat(format).mode==='raw'&&<button title="Beautify request body" onClick={beautifyBody}><WandSparkles size={15}/> Beautify</button>}
@@ -1452,16 +1560,16 @@ export default function App() {
                   </div>
                   {bodyFormat(format).mode==='none'&&<div className="pp-body-empty">This request has no body. Choose a format to start editing.</div>}
                   {bodyFormat(format).mode==='raw'&&<div className="pp-body-code">
-                    <TextEditor value={body} onChange={setBody} lang={languageFromMime(format)==='json'?'jsonc':languageFromMime(format)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="100%" placeholder="Write request body here…" allowComments fill/>
+                    <TextEditor value={body} onChange={setBody} variableUi={variableUi} lang={languageFromMime(format)==='json'?'jsonc':languageFromMime(format)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="100%" placeholder="Write request body here…" allowComments fill/>
                     {syntaxProblem(body,languageFromMime(format))&&<div className="pp-inline-validation"><AlertTriangle size={14}/><span>{syntaxProblem(body,languageFromMime(format))?.message}</span></div>}
                   </div>}
                   {(bodyFormat(format).mode==='urlencoded'||bodyFormat(format).mode==='multipart')&&<>
                     <div className="pp-form-caption"><span>{bodyFormat(format).mode==='multipart'?'MULTIPART FORM DATA':'URL ENCODED DATA'}</span><span>Up to 5 MB</span></div>
                     <div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE / FILE</span><span/></div>
                     {formFields.map((r,i)=><div className="pp-keyvalue-row pp-form-data-row" key={i}>
-                      <input placeholder="key" value={r.key} onChange={e=>setFormFields(v=>v.map((x,j)=>j===i?{...x,key:e.target.value}:x))}/>
+                      <VariableAwareInput placeholder="key" ariaLabel="Form field key" value={r.key} onChange={value=>setFormFields(v=>v.map((x,j)=>j===i?{...x,key:value}:x))} {...variableUi}/>
                       {r.fileBase64?<div className="pp-file-name"><FileUp size={14}/>{r.fileName}<button title="Detach file" onClick={()=>setFormFields(v=>v.map((x,j)=>j===i?{key:x.key,value:''}:x))}><X size={12}/></button></div>
-                        :<input placeholder="value or {{variable}}" value={r.value||''} onChange={e=>setFormFields(v=>v.map((x,j)=>j===i?{...x,value:e.target.value}:x))}/>}
+                        :<VariableAwareInput placeholder="value or {{variable}}" ariaLabel="Form field value" value={r.value||''} onChange={value=>setFormFields(v=>v.map((x,j)=>j===i?{...x,value}:x))} {...variableUi}/>}
                       <div className="pp-field-actions">
                         {bodyFormat(format).mode==='multipart'&&<label title="Attach file"><FileUp size={15}/><input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{const value=await encodeFile(file);setFormFields(v=>v.map((x,j)=>j===i?{...x,value:'',fileName:file.name,fileBase64:value,contentType:file.type}:x))}catch(err){setNotice(err.message)}}}/></label>}
                         <IconButton icon={X} label="Remove field" onClick={()=>setFormFields(v=>v.filter((_,j)=>j!==i))}/>
@@ -1472,9 +1580,9 @@ export default function App() {
                   {bodyFormat(format).mode==='binary'&&<div className="pp-binary-picker"><FileUp size={22}/><span>{binaryFile.name||'Select a binary file (up to 5 MB)'}</span><label>Choose file<input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{setBinaryFile({name:file.name,base64:await encodeFile(file)})}catch(err){setNotice(err.message)}}}/></label></div>}
                 </div>}
                 {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Applied when sending the request</span></div><div className="pp-auth-form pp-auth-v26"><div className="pp-auth-select"><span>Auth type</span><RetroSelect ariaLabel="Auth type" value={authType} onChange={setAuthType} options={AUTH_OPTIONS}/></div>
-                  {authType==='bearer'&&<label>Token<input type="text" autoComplete="off" spellCheck={false} placeholder="{{AuthToken}} or paste bearer token" value={bearerToken} onChange={e=>setBearerToken(e.target.value)}/></label>}
-                  {authType==='basic'&&<><label>Username<input type="text" autoComplete="off" spellCheck={false} placeholder="{{username}} or username" value={basicUsername} onChange={e=>setBasicUsername(e.target.value)}/></label><label>Password<input type="text" autoComplete="off" spellCheck={false} placeholder="{{password}} or password" value={basicPassword} onChange={e=>setBasicPassword(e.target.value)}/></label></>}
-                  {authType==='apiKey'&&<><label>Key<input type="text" autoComplete="off" spellCheck={false} placeholder="X-API-Key" value={apiKeyName} onChange={e=>setApiKeyName(e.target.value)}/></label><label>Value<input type="text" autoComplete="off" spellCheck={false} placeholder="{{apiKey}}" value={apiKeyValue} onChange={e=>setApiKeyValue(e.target.value)}/></label><div className="pp-auth-select"><span>Add to</span><RetroSelect ariaLabel="API Key location" value={apiKeyIn} onChange={setApiKeyIn} options={[{value:'header',label:'Header'},{value:'query',label:'Query Param'}]}/></div></>}
+                  {authType==='bearer'&&<label>Token<VariableAwareInput placeholder="{{AuthToken}} or paste bearer token" ariaLabel="Bearer token" value={bearerToken} onChange={value=>setBearerToken(value)} {...variableUi}/></label>}
+                  {authType==='basic'&&<><label>Username<VariableAwareInput placeholder="{{username}} or username" ariaLabel="Basic auth username" value={basicUsername} onChange={value=>setBasicUsername(value)} {...variableUi}/></label><label>Password<VariableAwareInput placeholder="{{password}} or password" ariaLabel="Basic auth password" value={basicPassword} onChange={value=>setBasicPassword(value)} {...variableUi}/></label></>}
+                  {authType==='apiKey'&&<><label>Key<VariableAwareInput placeholder="X-API-Key" ariaLabel="API key name" value={apiKeyName} onChange={value=>setApiKeyName(value)} {...variableUi}/></label><label>Value<VariableAwareInput placeholder="{{apiKey}}" ariaLabel="API key value" value={apiKeyValue} onChange={value=>setApiKeyValue(value)} {...variableUi}/></label><div className="pp-auth-select"><span>Add to</span><RetroSelect ariaLabel="API Key location" value={apiKeyIn} onChange={setApiKeyIn} options={[{value:'header',label:'Header'},{value:'query',label:'Query Param'}]}/></div></>}
                   {authType==='none'?<p>No automatic authorization. Custom Authorization headers remain available in Headers.</p>:<p>Use {'{{variable}}'} for credentials. Workspace saves only variable references for secrets; raw credentials are never written to Neon. Values are visible here by design—avoid screen sharing sensitive tokens.</p>}
                 </div></>}
                 {reqTab === 'scripts'&&<div className="pp-script-panel">
@@ -1560,6 +1668,14 @@ export default function App() {
       {!(saveScope==='local'?localCollections.length:saveCols.length)&&<div className="form-error">Create a collection first.</div>}
       <button className="pp-modal-submit" type="submit" disabled={!(saveScope==='local'?saveLocalCollection:saveCollection)||busyAction}><Save size={16}/> Save new request</button>
     </form></Dialog>}
+    {collectionImportOpen&&<Dialog title="Import collection" subtitle="Postman v2.1, OpenAPI JSON, Insomnia v4 JSON or cURL" onClose={()=>{if(!collectionImportBusy)setCollectionImportOpen(false)}}>
+      <div className="pp-collection-import-dialog">
+        <ImportDestinationPicker authenticated={!!token} workspaceName={activeWorkspace?.name||''} value={collectionImportDestination} onChange={setCollectionImportDestination} onLogin={()=>{setCollectionImportOpen(false);setAuthMode('login');setAuthOpen(true);}}/>
+        <label className="pp-collection-file-picker"><FileUp size={17}/><span>{collectionImportFile?.name||'Choose a collection file'}</span><input type="file" accept=".json,.txt,.curl,.sh,application/json,text/plain" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;setCollectionImportError('');if(file.size>3*1024*1024){setCollectionImportError('Maximum collection import size is 3 MB.');return;}setCollectionImportFile(file);}}/></label>
+        {collectionImportError&&<p role="alert" className="pp-env-error">{collectionImportError}</p>}
+        <div className="pp-collection-import-actions"><button type="button" disabled={collectionImportBusy} onClick={()=>setCollectionImportOpen(false)}>Cancel</button><button type="button" className="pp-env-primary" disabled={collectionImportBusy||!collectionImportFile} onClick={submitCollectionImport}><FileUp size={15}/>{collectionImportBusy?'Importing…':'Import collection'}</button></div>
+      </div>
+    </Dialog>}
     {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder',renameExample:'Rename example',deleteExample:'Delete example'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
       <form className="modal-form" onSubmit={executeActionDialog} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setActionDialog(null);}}}>
         {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required maxLength={actionDialog.action==='renameExample'?140:120} value={actionName} onChange={e=>setActionName(e.target.value)}/></label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}

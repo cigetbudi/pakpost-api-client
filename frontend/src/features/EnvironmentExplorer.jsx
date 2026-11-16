@@ -3,18 +3,23 @@ import {createPortal} from 'react-dom';
 import {Check,Eye,EyeOff,FileUp,MoreHorizontal,Plus,Search,Save,X} from 'lucide-react';
 import {RetroSelect} from './RetroSelect';
 import {MenuActionItem} from './MenuActionItem';
+import {ImportDestinationPicker} from './ImportDestinationPicker';
+import {allowedStorageScope,defaultStorageScope} from './storageScope.js';
 
 const clone=env=>({...env,variables:(env?.variables||[]).map(v=>({...v}))});
 const blank=()=>({name:'',variables:[{key:'',value:'',isSecret:false}]});
 /** Lightweight list; variable inputs mount only while the edit dialog is open. */
-export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCreate,onDelete,onDuplicate,onExport,onImportFile,scope='Guest (local)'}){
+export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCreate,onDelete,onDuplicate,onExport,onImportFile,scope='Guest (local)',authenticated=false,workspaceName='',onLogin=()=>{}}){
   const [query,setQuery]=useState('');const [sort,setSort]=useState('a-z');
   const [menu,setMenu]=useState(null);const [editor,setEditor]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);const [reveal,setReveal]=useState({});
   const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+  const [importOpen,setImportOpen]=useState(false);const [importDestination,setImportDestination]=useState(()=>defaultStorageScope(authenticated));
+  const [importFileValue,setImportFileValue]=useState(null);
   const menuRef=useRef(null);const popupRef=useRef(null);const importInputRef=useRef(null);
   const shown=useMemo(()=>items.filter(x=>x.name.toLowerCase().includes(query.toLowerCase().trim())).sort((a,b)=>sort==='z-a'?b.name.localeCompare(a.name):a.name.localeCompare(b.name)),[items,query,sort]);
   useEffect(()=>{setMenu(null);},[selected]);
+  useEffect(()=>{setImportDestination(defaultStorageScope(authenticated));},[authenticated]);
   useEffect(()=>{
     if(!menu)return;
     const close=e=>{if(!menuRef.current?.contains(e.target)&&!popupRef.current?.contains(e.target))setMenu(null)};
@@ -50,21 +55,26 @@ export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCrea
     });
     if(ok){setEditor(null);setReveal({});}
   }
-  async function importFile(event){
+  function chooseImportFile(event){
     const file=event.target.files?.[0];event.target.value='';
     if(!file)return;
     if(file.size>3*1024*1024){setError('Maximum environment import size is 3 MB.');return;}
-    await run(async()=>{
+    setError('');setImportFileValue(file);
+  }
+  async function submitImport(){
+    if(!importFileValue)return;
+    const ok=await run(async()=>{
       if(!onImportFile)throw Error('Environment import is unavailable');
-      await onImportFile(await file.text());
+      await onImportFile(await importFileValue.text(),allowedStorageScope(authenticated,importDestination));
     });
+    if(ok){setImportOpen(false);setImportFileValue(null);}
   }
   async function duplicate(env){setMenu(null);await run(()=>onDuplicate(env));}
   async function remove(env){const ok=await run(()=>onDelete(env.id));if(ok){setConfirmDelete(null);setEditor(null);}}
   return <div className="pp-env-explorer pp-env-v17" aria-label="Environment explorer">
     <div className="pp-env-toolbar">
       <div className="pp-explorer-search"><Search size={14}/><input aria-label="Search environments" placeholder="Search environments..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
-      <div className="pp-env-toolbar-row"><RetroSelect ariaLabel="Sort environments" value={sort} onChange={setSort} options={[{value:'a-z',label:'Name A–Z'},{value:'z-a',label:'Name Z–A'}]}/><button type="button" className="pp-env-import-action" disabled={busy} onClick={()=>importInputRef.current?.click()} title="Import Postman, Hoppscotch, or Insomnia JSON environment"><FileUp size={14}/> Import</button><button type="button" className="pp-env-primary" onClick={()=>openEditor(null,'create')}><Plus size={14}/> New</button><input ref={importInputRef} type="file" hidden accept=".json,application/json" aria-label="Choose environment JSON" onChange={importFile}/></div>
+      <div className="pp-env-toolbar-row"><RetroSelect ariaLabel="Sort environments" value={sort} onChange={setSort} options={[{value:'a-z',label:'Name A–Z'},{value:'z-a',label:'Name Z–A'}]}/><button type="button" className="pp-env-import-action" disabled={busy} onClick={()=>{setError('');setImportDestination(defaultStorageScope(authenticated));setImportFileValue(null);setImportOpen(true);}} title="Import Postman, Hoppscotch, or Insomnia JSON environment"><FileUp size={14}/> Import</button><button type="button" className="pp-env-primary" onClick={()=>openEditor(null,'create')}><Plus size={14}/> New</button><input ref={importInputRef} type="file" hidden accept=".json,application/json" aria-label="Choose environment JSON" onChange={chooseImportFile}/></div>
     </div>
     <div className="pp-env-list" role="listbox" aria-label="Environments">
       <button role="option" aria-selected={!selected} className={!selected?'active':''} onClick={()=>onSelect('')}>No environment</button>
@@ -86,7 +96,16 @@ export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCrea
       {!shown.length&&<p className="pp-env-empty">No matching environments.</p>}
     </div>
     <p className="pp-env-v17-hint">{scope} · Import Postman / Hoppscotch / Insomnia v4 JSON here. Names are never overwritten.</p>
-    {error&&!editor&&!confirmDelete&&<p role="alert" className="pp-env-error">{error}</p>}
+    {error&&!editor&&!confirmDelete&&!importOpen&&<p role="alert" className="pp-env-error">{error}</p>}
+    {importOpen&&createPortal(<div className="pp-env-v17-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setImportOpen(false)}}>
+      <section className="pp-env-v17-modal pp-import-modal" role="dialog" aria-modal="true" aria-label="Import environment">
+        <header><div><h2>Import environment</h2><p>Postman, Hoppscotch or Insomnia v4 JSON</p></div><button type="button" aria-label="Close environment import" disabled={busy} onClick={()=>setImportOpen(false)}><X size={17}/></button></header>
+        <ImportDestinationPicker authenticated={authenticated} workspaceName={workspaceName} value={importDestination} onChange={setImportDestination} onLogin={()=>{setImportOpen(false);onLogin();}}/>
+        <button type="button" className="pp-import-file-picker" onClick={()=>importInputRef.current?.click()} disabled={busy}><FileUp size={15}/> {importFileValue?.name||'Choose JSON file'}</button>
+        {error&&<p role="alert" className="pp-env-error">{error}</p>}
+        <footer><button type="button" disabled={busy} onClick={()=>setImportOpen(false)}>Cancel</button><button type="button" className="pp-env-primary" disabled={busy||!importFileValue} onClick={submitImport}>{busy?'Importing…':'Import environment'}</button></footer>
+      </section>
+    </div>,document.body)}
     {editor&&createPortal(<div className="pp-env-v17-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditor(null)}}>
       <section className="pp-env-v17-modal" role="dialog" aria-modal="true" aria-label={editor.mode==='create'?'Create environment':editor.mode==='rename'?'Rename environment':'Edit environment'}>
         <header><div><h2>{editor.mode==='create'?'New environment':editor.mode==='rename'?'Rename environment':'Edit environment'}</h2><p>{scope} · Changes are saved only when you confirm.</p></div><button aria-label="Close environment editor" disabled={busy} onClick={()=>setEditor(null)}><X size={17}/></button></header>

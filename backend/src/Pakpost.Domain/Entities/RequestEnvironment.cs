@@ -25,4 +25,6 @@ public sealed class RequestEnvironmentVariable
     public bool IsSecret { get; private set; }
     public RequestEnvironmentVariable(Guid environmentId, string key, string storedValue, bool isSecret)
     { Id=Guid.NewGuid();EnvironmentId=environmentId;Key=key.Trim();StoredValue=storedValue;IsSecret=isSecret; }
+    public void Update(string key, string storedValue, bool isSecret)
+    { Key=key.Trim();StoredValue=storedValue;IsSecret=isSecret; }
 }

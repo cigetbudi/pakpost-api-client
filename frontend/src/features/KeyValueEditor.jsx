@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Check,ChevronDown,Plus,X} from 'lucide-react';
 import {emptyRow,isEnabled} from './requestMetadata.js';
+import {VariableAwareInput,VariableOverlay} from './VariableAwareInput.jsx';
 
 export const MIME_SUGGESTIONS=[
  'application/json','application/ld+json','application/xml','text/xml','text/plain',
@@ -9,7 +10,7 @@ export const MIME_SUGGESTIONS=[
  'application/octet-stream','application/javascript','application/pdf','image/png','image/jpeg'
 ];
 
-function ContentTypeInput({value,onChange}){
+function ContentTypeInput({value,onChange,variableUi={}}){
   const ref=useRef(null);
   const [open,setOpen]=useState(false);
   const [active,setActive]=useState(0);
@@ -29,6 +30,7 @@ function ContentTypeInput({value,onChange}){
     <input ref={ref} spellCheck={false} aria-label="Header value" aria-autocomplete="list" aria-expanded={open} value={value}
       placeholder="application/json" onFocus={()=>{setOpen(true);setActive(0)}} onChange={e=>{onChange(e.target.value);setOpen(true);setActive(0)}}
       onKeyDown={e=>{if(e.key==='Escape'){setOpen(false)}else if(e.key==='ArrowDown'){e.preventDefault();setOpen(true);setActive(i=>Math.min(options.length-1,i+1))}else if(e.key==='ArrowUp'){e.preventDefault();setActive(i=>Math.max(0,i-1))}else if(e.key==='Enter'&&open&&options.length){e.preventDefault();choose(options[active]||options[0]);}}}/>
+    <VariableOverlay value={value} {...variableUi} className="pp-mime-highlight"/>
     <button className="pp-mime-arrow" type="button" aria-label="Suggest content types" onClick={()=>{if(open)setOpen(false);else{setOpen(true);ref.current?.focus();}setActive(0)}}><ChevronDown size={15}/></button>
     {open&&!!options.length&&createPortal(<div className="pp-mime-suggestion" style={{left:position.left,top:position.top,width:position.width}} role="listbox" aria-label="Common Content-Type values">
       {options.map((o,i)=><button key={o} type="button" role="option" aria-selected={value===o} className={i===active?'active':''} onMouseDown={e=>e.preventDefault()} onClick={()=>choose(o)}>{o}{value===o&&<Check size={13}/>}</button>)}
@@ -37,7 +39,7 @@ function ContentTypeInput({value,onChange}){
 }
 
 /** Shared Headers / Params editor. No new UI library, and no per-row timers. */
-export function KeyValueEditor({kind,rows,onChange}){
+export function KeyValueEditor({kind,rows,onChange,variableUi={}}){
   const headers=kind==='headers';
   function update(index,patch){onChange(previous=>previous.map((row,i)=>i===index?{...row,...patch}:row));}
   return <>
@@ -45,9 +47,9 @@ export function KeyValueEditor({kind,rows,onChange}){
     <div className="pp-kv21-heading"><span>ON</span><span>KEY</span><span>VALUE</span><span>DESCRIPTION (OPTIONAL)</span><span/></div>
     {(rows||[]).map((r,i)=><div className={`pp-kv21-row ${!isEnabled(r)?'disabled':''}`} key={i}>
       <label className="pp-kv21-checkbox" title={isEnabled(r)?'Disable row':'Enable row'}><input type="checkbox" aria-label={`${headers?'Header':'Query parameter'} ${i+1} enabled`} checked={isEnabled(r)} onChange={e=>update(i,{enabled:e.target.checked})}/></label>
-      <input value={r.key||''} spellCheck={false} placeholder={headers?'Content-Type':'parameter'} aria-label={headers?'Header key':'Query key'} onChange={e=>update(i,{key:e.target.value})}/>
-      {headers&&r.key?.trim().toLowerCase()==='content-type'?<ContentTypeInput value={r.value||''} onChange={value=>update(i,{value})}/>:
-        <input value={r.value||''} spellCheck={false} placeholder={headers?'value':'value'} aria-label={headers?'Header value':'Query value'} onChange={e=>update(i,{value:e.target.value})}/>}
+      <VariableAwareInput value={r.key||''} placeholder={headers?'Content-Type':'parameter'} ariaLabel={headers?'Header key':'Query key'} onChange={value=>update(i,{key:value})} {...variableUi}/>
+      {headers&&r.key?.trim().toLowerCase()==='content-type'?<ContentTypeInput value={r.value||''} onChange={value=>update(i,{value})} variableUi={variableUi}/>:
+        <VariableAwareInput value={r.value||''} placeholder="value" ariaLabel={headers?'Header value':'Query value'} onChange={value=>update(i,{value})} {...variableUi}/>}
       <input value={r.description||''} placeholder="What is this used for?" aria-label={`${headers?'Header':'Query'} description`} onChange={e=>update(i,{description:e.target.value})}/>
       <button type="button" className="icon-btn" aria-label={headers?'Remove header':'Remove query parameter'} onClick={()=>onChange(previous=>previous.filter((_,j)=>j!==i))}><X size={15}/></button>
     </div>)}

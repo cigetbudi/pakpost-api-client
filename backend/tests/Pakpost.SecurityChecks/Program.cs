@@ -56,6 +56,42 @@ var cases=new (string Name,Func<Task> Test)[]
         Assert(cipher.UnprotectCalls==1);
         return Task.CompletedTask;
     }),
+    ("Environment update preserves tracked variable rows and explicitly inserts/deletes",async()=>{
+        var ws=Guid.NewGuid();var owner=Guid.NewGuid();
+        var env=new RequestEnvironment(ws,"Old");
+        var retained=new RequestEnvironmentVariable(env.Id,"BASE_URL","https://old.test",false);
+        var removed=new RequestEnvironmentVariable(env.Id,"OLD_KEY","unused",false);
+        env.ReplaceVariables([retained,removed]);
+        var repo=new FakeEnvironments(env);
+        var handler=new UpdateEnvironmentHandler(new FakeWorkspaces(ws,owner,WorkspaceRole.Owner),repo,new FakeCipher(),new FakeUnitOfWork());
+        var updated=await handler.Handle(new UpdateEnvironmentCommand(owner,ws,env.Id,"Dev",[
+            new EnvironmentVariableDto("BASE_URL","https://new.test",false),
+            new EnvironmentVariableDto("NEW_KEY","value",false)
+        ]),CancellationToken.None);
+        Assert(env.Name=="Dev"&&updated.Variables.Count==2);
+        Assert(env.Variables.Contains(retained)&&retained.StoredValue=="https://new.test");
+        Assert(!env.Variables.Contains(removed));
+        Assert(repo.AddedVariables.Count==1&&repo.AddedVariables[0].Key=="NEW_KEY");
+        Assert(repo.RemovedVariables.Count==1&&ReferenceEquals(repo.RemovedVariables[0],removed));
+    }),
+    ("Environment create followed by update explicitly tracks first inserted child",async()=>{
+        var ws=Guid.NewGuid();var owner=Guid.NewGuid();
+        var env=new RequestEnvironment(ws,"Development");var repo=new FakeEnvironments(env);
+        var handler=new UpdateEnvironmentHandler(new FakeWorkspaces(ws,owner,WorkspaceRole.Owner),repo,new FakeCipher(),new FakeUnitOfWork());
+        await handler.Handle(new UpdateEnvironmentCommand(owner,ws,env.Id,"Development",[
+            new EnvironmentVariableDto("TOKEN","top-secret",true)
+        ]),CancellationToken.None);
+        Assert(repo.AddedVariables.Count==1&&repo.RemovedVariables.Count==0);
+        Assert(env.Variables.Count==1&&env.Variables[0].StoredValue=="sealed-payload");
+    }),
+    ("Cloud collection list returns server-side endpoint count",async()=>{
+        var ws=Guid.NewGuid();var owner=Guid.NewGuid();
+        var col=new Collection(ws,"API",owner);
+        var repo=new FakeCollections();repo.Items.Add(col);repo.RequestCounts[col.Id]=8;
+        var handler=new ListCollectionsHandler(repo,new FakeWorkspaces(ws,owner,WorkspaceRole.Owner));
+        var listed=await handler.Handle(new ListCollectionsQuery(owner,ws),CancellationToken.None);
+        Assert(listed.Count==1&&listed[0].RequestCount==8);
+    }),
     ("Member list endpoint does not expose environment secret",async()=>{
         var ws=Guid.NewGuid();var memberId=Guid.NewGuid();var repo=new FakeWorkspaces(ws,memberId,WorkspaceRole.Member);
         var env=new RequestEnvironment(ws,"DEV");
@@ -119,11 +155,15 @@ sealed class FakeCipher:IEnvironmentValueCipher
 }
 sealed class FakeEnvironments(RequestEnvironment environment):IRequestEnvironmentRepository
 {
+    public List<RequestEnvironmentVariable> AddedVariables{get;}=[];
+    public List<RequestEnvironmentVariable> RemovedVariables{get;}=[];
     public Task<IReadOnlyList<RequestEnvironment>> ListAsync(Guid workspaceId,CancellationToken ct)
         =>Task.FromResult<IReadOnlyList<RequestEnvironment>>([environment]);
     public Task<RequestEnvironment?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<RequestEnvironment?>(environment.Id==id?environment:null);
     public void Add(RequestEnvironment value){}
     public void Remove(RequestEnvironment value){}
+    public void AddVariable(RequestEnvironmentVariable value)=>AddedVariables.Add(value);
+    public void RemoveVariable(RequestEnvironmentVariable value)=>RemovedVariables.Add(value);
 }
 sealed class FakeWorkspaces(Guid workspaceId,Guid userId,WorkspaceRole role):IWorkspaceRepository
 {
@@ -140,9 +180,13 @@ sealed class FakeWorkspaces(Guid workspaceId,Guid userId,WorkspaceRole role):IWo
 
 sealed class FakeCollections:ICollectionRepository
 {
-    public Task<Collection?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<Collection?>(null);
+    public List<Collection> Items{get;}=[];
+    public Dictionary<Guid,int> RequestCounts{get;}=[];
+    public Task<Collection?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<Collection?>(Items.FirstOrDefault(x=>x.Id==id));
     public Task<IReadOnlyList<Collection>> ListAsync(Guid ws,CancellationToken ct)
-        =>Task.FromResult<IReadOnlyList<Collection>>([]);
+        =>Task.FromResult<IReadOnlyList<Collection>>(Items.Where(x=>x.WorkspaceId==ws).ToArray());
+    public Task<IReadOnlyDictionary<Guid,int>> CountRequestsAsync(Guid ws,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyDictionary<Guid,int>>(RequestCounts);
     public void Add(Collection value){}
     public void Remove(Collection value){}
 }

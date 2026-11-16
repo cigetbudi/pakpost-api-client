@@ -6,7 +6,7 @@ using Pakpost.Application.Common.Security;
 using Pakpost.Domain.Entities;
 
 namespace Pakpost.Application.Internal.Collections;
-public sealed record CollectionDto(Guid Id, Guid WorkspaceId, string Name);
+public sealed record CollectionDto(Guid Id, Guid WorkspaceId, string Name, int RequestCount=0);
 public sealed record ListCollectionsQuery(Guid ActorId, Guid WorkspaceId) : IRequest<IReadOnlyList<CollectionDto>>;
 public sealed class ListCollectionsHandler(ICollectionRepository collections, IWorkspaceRepository workspaces)
     : IRequestHandler<ListCollectionsQuery, IReadOnlyList<CollectionDto>>
@@ -15,8 +15,10 @@ public sealed class ListCollectionsHandler(ICollectionRepository collections, IW
     {
         if (await workspaces.FindMemberAsync(query.WorkspaceId, query.ActorId, ct) is null)
             throw AppException.Forbidden();
-        return (await collections.ListAsync(query.WorkspaceId, ct))
-            .Select(x => new CollectionDto(x.Id, x.WorkspaceId, x.Name)).ToArray();
+        var items=await collections.ListAsync(query.WorkspaceId, ct);
+        var counts=await collections.CountRequestsAsync(query.WorkspaceId, ct);
+        return items.Select(x=>new CollectionDto(x.Id,x.WorkspaceId,x.Name,
+            counts.TryGetValue(x.Id,out var count)?count:0)).ToArray();
     }
 }
 public sealed record CreateCollectionCommand(Guid ActorId, Guid WorkspaceId, string Name) : IRequest<CollectionDto>;

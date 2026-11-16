@@ -19,6 +19,7 @@ public interface ICollectionRepository
 {
     Task<Collection?> FindAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<Collection>> ListAsync(Guid workspaceId, CancellationToken ct);
+    Task<IReadOnlyDictionary<Guid,int>> CountRequestsAsync(Guid workspaceId, CancellationToken ct);
     void Add(Collection collection);
     void Remove(Collection collection);
 }
@@ -52,6 +53,8 @@ public interface IRequestEnvironmentRepository
     Task<RequestEnvironment?> FindAsync(Guid id,CancellationToken ct);
     void Add(RequestEnvironment environment);
     void Remove(RequestEnvironment environment);
+    void AddVariable(RequestEnvironmentVariable variable);
+    void RemoveVariable(RequestEnvironmentVariable variable);
 }
 public interface IEnvironmentValueCipher
 {
