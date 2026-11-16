@@ -17,6 +17,7 @@ import {sortCollectionRoots} from './features/collectionSort';
 import {isWorkspaceCollectionOpen, toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from './features/collectionExpansion';
 import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
 import { blankDraft, parseCurl, isCurl } from './features/importExport';
+import {parseEnvironmentDocument,uniqueEnvironmentImports} from './features/environmentImport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
 import {planTabClose,reorderTabs} from './features/tabActions';
@@ -32,6 +33,7 @@ import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource
 import { runSandbox } from './features/runScript';
 import { postmanRequestSnapshot } from './features/postmanCompat';
 import {createResponseExample,exampleToResult,renameResponseExample,sanitizeResponseExamples,statusTone,suggestExampleName,upsertResponseExample} from './features/responseExamples';
+import {applyAuthorization,AUTH_OPTIONS} from './features/authorization';
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -175,6 +177,7 @@ export default function App() {
   const resizingRight=useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(CACHED?.sidebarCollapsed || false);
   const [expandedCollections, setExpandedCollections] = useState({});
+  const [expandedWorkspaceExamples,setExpandedWorkspaceExamples] = useState({});
   const [localExpandAllSignal, setLocalExpandAllSignal] = useState(null);
   const [revealLocalDraft,setRevealLocalDraft] = useState(null);
   const [workspaceRequestLists, setWorkspaceRequestLists] = useState({});
@@ -189,6 +192,11 @@ export default function App() {
   const [params, setParams] = useState(RECOVERED.params || [{ ...EMPTY_HEADER }]);
   const [authType, setAuthType] = useState(RECOVERED.authType || 'none');
   const [bearerToken, setBearerToken] = useState(RECOVERED.bearerToken || '');
+  const [basicUsername,setBasicUsername] = useState(RECOVERED.basicUsername||'');
+  const [basicPassword,setBasicPassword] = useState(RECOVERED.basicPassword||'');
+  const [apiKeyName,setApiKeyName] = useState(RECOVERED.apiKeyName||'X-API-Key');
+  const [apiKeyValue,setApiKeyValue] = useState(RECOVERED.apiKeyValue||'');
+  const [apiKeyIn,setApiKeyIn] = useState(RECOVERED.apiKeyIn||'header');
   const [openTabs, setOpenTabs] = useState(() => (CACHED?.openTabs || [{ id: 't1', name: 'Untitled Request', method: 'GET' }]).map(t=>({
     ...t,savedName:t.savedName ?? t.name,savedFingerprint:t.savedFingerprint ?? requestFingerprint(CACHED?.drafts?.[t.id] || freshRequest(t.name),t.name)
   })));
@@ -243,7 +251,8 @@ export default function App() {
     setEditingRequestName(false);
   }
 
-  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,responseExamples:sanitizeResponseExamples(responseExamples),scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), authType, bearerToken }; }
+  const currentAuth=()=>({authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn});
+  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,responseExamples:sanitizeResponseExamples(responseExamples),scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), ...currentAuth() }; }
   function restoreDraft(next) {
     setMethod(next.method||'GET');setUrl(next.url||'');setRows(next.rows||[{...EMPTY_HEADER}]);setBody(next.body||'');setDocumentation(next.documentation||'');
     setFormat(next.format||'application/json');setFormFields(next.formFields||[{key:'',value:''}]);
@@ -252,6 +261,8 @@ export default function App() {
     setScriptLog(next.scriptLog||[]);setScriptTests(next.scriptTests||[]);setScriptError(next.scriptError||'');
     setReqTab(next.reqTab||'params');setResTab(next.resTab||'body');setResult(next.result||null);setResponsePretty(next.responsePretty??true);setPrettyResponse(next.prettyResponse||'');
     setParams(next.params||[{...EMPTY_HEADER}]);setAuthType(next.authType||'none');setBearerToken(next.bearerToken||'');
+    setBasicUsername(next.basicUsername||'');setBasicPassword(next.basicPassword||'');
+    setApiKeyName(next.apiKeyName||'X-API-Key');setApiKeyValue(next.apiKeyValue||'');setApiKeyIn(next.apiKeyIn||'header');
   }
   function stashActive() { draftsRef.current[activeTabRef.current] = snapshot(); }
   useEffect(()=>writeLocalCollections(localCollections),[localCollections]);
@@ -285,7 +296,7 @@ export default function App() {
     window.addEventListener('beforeunload',persist);
     return ()=>{clearTimeout(timer);window.removeEventListener('beforeunload',persist)};
   },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,responseExamples,scriptLog,scriptTests,scriptError,
-    reqTab,resTab,result,params,authType,bearerToken,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope]);
+    reqTab,resTab,result,params,authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope]);
   function selectTab(id) {
     setEditingRequestName(false);
     if (id === activeTabRef.current) { setPage('tester'); return; }
@@ -367,7 +378,7 @@ export default function App() {
         if(!request)throw Error('Saved request was not found');
         const meta=decodeStoredHeaders(request.headersJson);
         const saved=await api(`${base}/${target.requestId}`,'PUT',{
-          ...request,headersJson:encodeStoredHeaders(meta.headers,meta.params,value,meta.responseExamples)
+          ...request,headersJson:encodeStoredHeaders(meta.headers,meta.params,value,meta.responseExamples,meta.auth)
         },token);
         setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(target.workspaceId,target.collectionId)]:requests.map(r=>r.id===saved.id?saved:r)}));
         if(selectedCol===target.collectionId)setSavedRequests(requests.map(r=>r.id===saved.id?saved:r));
@@ -524,7 +535,7 @@ export default function App() {
   function workspaceDraft(item){
     const saved=decodeStoredHeaders(item.headersJson);
     let fields=[];try{fields=JSON.parse(item.formFieldsJson||'[]')}catch{}
-    return {...blankDraft(),...item,rows:[...saved.headers,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,format:item.contentType||'application/json',
+    return {...blankDraft(),...item,rows:[...saved.headers,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,...saved.auth,format:item.contentType||'application/json',
       formFields:fields,preScript:item.preRequestScript||'',postScript:item.postResponseScript||''};
   }
   async function handleWorkspaceMenu(action,item){
@@ -604,7 +615,7 @@ export default function App() {
     const metadata=decodeStoredHeaders(request.headersJson);
     const examples=renameResponseExample(metadata.responseExamples,exampleId,name);
     const saved=await api(`${base}/${requestId}`,'PUT',{
-      ...request,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples)
+      ...request,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples,metadata.auth)
     },token);
     const updated=latest.map(item=>item.id===requestId?saved:item);
     setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(workspaceId,collectionId)]:updated}));
@@ -651,7 +662,7 @@ export default function App() {
         const metadata=decodeStoredHeaders(original.headersJson);
         const examples=metadata.responseExamples.filter(example=>example.id!==actionDialog.exampleId);
         const saved=await api(`${base}/requests/${requestId}`,'PUT',{
-          ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples)
+          ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples,metadata.auth)
         },token);
         const updated=list.map(req=>req.id===requestId?saved:req);
         setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:updated}));
@@ -670,7 +681,10 @@ export default function App() {
       const parsed=parseCurl(value);
       setMethod(parsed.method);setUrl(parsed.url);setRows(parsed.rows);setBody(parsed.body);setFormat(parsed.format);
       setParams(parsed.params);setFormFields(parsed.formFields);setBinaryFile({name:'',base64:''});
-      setAuthType(parsed.authType);setBearerToken(parsed.bearerToken);setResult(null);setPrettyResponse('');
+      setAuthType(parsed.authType);setBearerToken(parsed.bearerToken);
+      setBasicUsername(parsed.basicUsername||'');setBasicPassword(parsed.basicPassword||'');
+      setApiKeyName(parsed.apiKeyName||'X-API-Key');setApiKeyValue(parsed.apiKeyValue||'');setApiKeyIn(parsed.apiKeyIn||'header');
+      setResult(null);setPrettyResponse('');
       setReqTab(parsed.body||parsed.formFields.some(r=>r.key)?'body':'params');
       setOpenTabs(t=>t.map(x=>x.id===activeTabRef.current?{...x,method:parsed.method,name:parsed.name,status:undefined}:x));
       setNotice(`cURL imported: ${parsed.method} ${parsed.url}. Review before sending.`);
@@ -743,7 +757,7 @@ export default function App() {
     const savedRows=saved.headers;
     let formFields = [];
     try { formFields = JSON.parse(item.formFieldsJson||'[]'); }catch{}
-    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
+    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,...saved.auth,format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
       {scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId||selectedCol,requestId:item.id});
   }
 
@@ -765,6 +779,38 @@ export default function App() {
   // Restricted workspace secrets must remain unresolved, never silently become empty credentials.
   const varsFromEnv=(allowSecrets=true)=>Object.fromEntries((activeEnvironment?.variables||[]).filter(v=>!v.isRedacted).map(v=>[v.key,v.isSecret&&!allowSecrets?'[REDACTED]':v.value]));
   function updateEnvScope(scope){setEnvScope(scope);setActiveEnvId('');}
+  async function importEnvironmentFile(sourceText){
+    let doc;
+    try{doc=JSON.parse(sourceText)}catch{throw Error('Invalid JSON environment file. Use Postman, Hoppscotch or Insomnia v4 JSON (not YAML).');}
+    const imported=parseEnvironmentDocument(doc);
+    if(!imported?.length)throw Error('No supported environments found. Choose a Postman, Hoppscotch or Insomnia v4 JSON environment export.');
+    const prepared=uniqueEnvironmentImports(imported,currentEnvironments);
+    if(envScope==='local'){
+      const added=prepared.map(env=>({...env,id:crypto.randomUUID()}));
+      setLocalEnvironments(old=>[...old,...added]);
+      setActiveEnvId(added[0].id);
+    }else{
+      if(!token||!selectedWs)throw Error('Select and sign in to a workspace first.');
+      const base=`/api/workspaces/${selectedWs}/environments`;
+      const importedRemote=[];
+      for(const env of prepared){
+        let created;
+        try{
+          created=await api(base,'POST',{name:env.name},token);
+          const saved=await api(`${base}/${created.id}`,'PUT',{name:env.name,variables:env.variables},token);
+          importedRemote.push(saved);
+        }catch(error){
+          // Avoid leaving empty environment records on validation errors.
+          if(created){try{await api(`${base}/${created.id}`,'DELETE',undefined,token)}catch{/* report original failure */}}
+          if(importedRemote.length)setWorkspaceEnvironments(old=>[...old,...importedRemote]);
+          throw Error(`${importedRemote.length} imported before failure: ${getMessage(error)}`);
+        }
+      }
+      setWorkspaceEnvironments(old=>[...old,...importedRemote]);
+      setActiveEnvId(importedRemote[0].id);
+    }
+    setNotice(`Imported ${prepared.length} environment(s) into ${envScope==='workspace'?'Workspace · Neon':'Local browser'} from JSON.`);
+  }
   async function createEnvironment(name){
     if(envScope==='workspace'){
       if(!selectedWs||!token)throw new Error('Sign in and choose a workspace');
@@ -844,8 +890,7 @@ export default function App() {
     const parsed=new URL(command.url);
     resolveRows(params,vars).forEach(p=>parsed.searchParams.append(p.key,p.value));
     command.url=parsed.toString();
-    if(authType==='bearer'&&bearerToken.trim())command.headers.Authorization=`Bearer ${resolveVars(bearerToken.trim(),vars).value}`;
-    return command;
+    return applyAuthorization(command,currentAuth(),vars);
   }
   function maskSensitiveHeaders(request) {
     for(const key of Object.keys(request.headers||{})) {
@@ -856,7 +901,17 @@ export default function App() {
   }
   function buildCodeRequest(allowSecrets=false){
     const request=buildOutgoing(varsFromEnv(allowSecrets));
-    return allowSecrets?request:maskSensitiveHeaders(request);
+    if(allowSecrets)return request;
+    maskSensitiveHeaders(request);
+    // A custom API key query name might not contain the word "key" or "token".
+    if(authType==='apiKey'&&apiKeyIn==='query'&&apiKeyName.trim()){
+      try{
+        const target=new URL(request.url);
+        target.searchParams.set(resolveVars(apiKeyName.trim(),varsFromEnv(false)).value,'{{REDACTED_SECRET}}');
+        request.url=target.toString();
+      }catch{/* Other URL diagnostics will surface in the normal request builder. */}
+    }
+    return request;
   }
   function codePreviewRequest(){
     const fmt=bodyFormat(format);
@@ -864,7 +919,11 @@ export default function App() {
     const target=url+(query?(url.includes('?')?'&':'?')+query:'');
     const headers={...requestHeaderObject()};
     if(fmt.mode==='raw'&&body&&!rows.some(x=>x.key?.trim().toLowerCase()==='content-type'&&x.enabled===false)&&!Object.keys(headers).some(x=>x.toLowerCase()==='content-type'))headers['Content-Type']=fmt.mime;
-    return {method,url:target,headers:maskSensitiveHeaders({headers}).headers,body:languageFromMime(format)==='json'?stripJsonComments(body):body,bodyMode:fmt.mode,contentType:format,
+    if(authType==='bearer'&&bearerToken.trim())headers.Authorization='Bearer {{REDACTED_SECRET}}';
+    if(authType==='basic')headers.Authorization='Basic {{REDACTED_SECRET}}';
+    if(authType==='apiKey'&&apiKeyIn==='header'&&apiKeyName.trim())headers[apiKeyName.trim()]='{{REDACTED_SECRET}}';
+    const queryAuth=authType==='apiKey'&&apiKeyIn==='query'&&apiKeyName.trim()?`${target}${target.includes('?')?'&':'?'}${encodeURIComponent(apiKeyName.trim())}={{REDACTED_SECRET}}`:target;
+    return {method,url:queryAuth,headers:maskSensitiveHeaders({headers}).headers,body:languageFromMime(format)==='json'?stripJsonComments(body):body,bodyMode:fmt.mode,contentType:format,
       formFields:formFields.map(x=>({key:x.key,value:x.value,fileName:x.fileName,base64:x.fileBase64})),fileName:binaryFile.name};
   }
   useEffect(() => {
@@ -985,7 +1044,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyboard);
     return () => window.removeEventListener('keydown', onKeyboard);
-  }, [page, loading, method, url, rows, body, documentation, params, authType, bearerToken,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,responseExamples,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,saveExampleOpen,actionDialog,documentationTarget]);
+  }, [page, loading, method, url, rows, body, documentation, params, authType, bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,responseExamples,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,saveExampleOpen,actionDialog,documentationTarget]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
   const activeTeam = teams.find(x => x.id === selectedTeam);
@@ -1048,7 +1107,7 @@ export default function App() {
   }
 
   const activeSource=()=>openTabs.find(t=>t.id===activeTabRef.current)?.source;
-  const currentSavePayload=(name,examples=responseExamples)=>({name,method,url,headersJson:encodeStoredHeaders(rows,params,documentation,examples),body,
+  const currentSavePayload=(name,examples=responseExamples)=>({name,method,url,headersJson:encodeStoredHeaders(rows,params,documentation,examples,currentAuth()),body,
     bodyMode:bodyFormat(format).mode,contentType:format,
     formFieldsJson:JSON.stringify(formFields.map(({key,value,fileName,contentType})=>({key,value,fileName,contentType}))),
     preRequestScript:preScript,postResponseScript:postScript});
@@ -1068,7 +1127,6 @@ export default function App() {
     if(!name){setNotice('Request name cannot be empty');return;}
     const tabId=activeTabRef.current;
     const savedDraft=snapshot();
-    const savedPayload=currentSavePayload(name);
     await doAction(async()=>{
       let savedSource={...origin};
       if(origin.scope==='local'){
@@ -1082,6 +1140,7 @@ export default function App() {
         if(!token)throw Error('Sign in to save workspace requests');
         const base=`/api/workspaces/${origin.workspaceId}/collections/${origin.collectionId}/requests`;
         if(!url.trim())throw Error('Request URL is required. Please enter a URL before saving.');
+        const savedPayload=currentSavePayload(name);
         if(origin.pending){
           const saved=await api(base,'POST',savedPayload,token);
           savedSource={scope:'workspace',workspaceId:origin.workspaceId,collectionId:origin.collectionId,requestId:saved.id};
@@ -1105,7 +1164,6 @@ export default function App() {
     e.preventDefault();
     if(!saveName.trim())return;
     const savedDraft=snapshot();
-    const savedPayload=currentSavePayload(saveName);
     const tabId=activeTabRef.current;
     await doAction(async()=>{
       let source;
@@ -1115,7 +1173,7 @@ export default function App() {
         source={scope:'local',collectionId:saveLocalCollection,requestId:next.request.id};
       }else{
         if(!token)throw Error('Sign in to save to workspace');
-        const saved=await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`,'POST',savedPayload,token);
+        const saved=await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`,'POST',currentSavePayload(saveName),token);
         source={scope:'workspace',workspaceId:saveWs,collectionId:saveCollection,requestId:saved.id};
         invalidateWorkspaceRequestLists(saveWs,[saveCollection]);
         if(saveWs===selectedWs){
@@ -1150,7 +1208,7 @@ export default function App() {
       if(!original)throw Error('Saved request not found');
       const metadata=decodeStoredHeaders(original.headersJson);
       const saved=await api(`${base}/${source.requestId}`,'PUT',{
-        ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,nextExamples)
+        ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,nextExamples,metadata.auth)
       },token);
       const updated=latest.map(request=>request.id===saved.id?saved:request);
       setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(source.workspaceId,source.collectionId)]:updated}));
@@ -1221,7 +1279,7 @@ export default function App() {
 
       {page==='tester' && !sidebarCollapsed && <aside className="pp-explorer">
         <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Collections' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'environments' ? 'Environments' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
-        {explorerTab === 'environments' ? <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
+        {explorerTab === 'environments' ? <EnvironmentExplorer items={currentEnvironments} selected={activeEnvId} onSelect={setActiveEnvId} onSave={persistEnvironment} onCreate={createEnvironment} onDelete={deleteEnvironment} onDuplicate={duplicateEnvironment} onExport={environment=>openExportChoice({kind:'environment',name:environment.name,environment})} onImportFile={importEnvironmentFile} scope={envScope==='workspace'?`Workspace: ${activeWorkspace?.name||'Private'}`:'Guest (local)'}/> : explorerTab === 'code' ? <CodeSidebar request={codePreviewRequest()} buildResolved={buildCodeRequest} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'exchange' ?
           <ImportExportSidebar requests={openTabs.map(t=>({...draftsRef.current[t.id],...(t.id===activeTabId?snapshot():{}),name:t.name}))}
             environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
           <div className="pp-side-subhead"><span>RECENT REQUESTS</span><span>{recent.length}</span></div>
@@ -1267,16 +1325,18 @@ export default function App() {
                 <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}><div className="pp-collection-motion-inner">
                 {[...requests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => {
                   const meta=decodeStoredHeaders(r.headersJson);
+                  const examplesOpen=expandedWorkspaceExamples[`${selectedWs}:${c.id}:${r.id}`]??!!explorerSearch;
                   return <React.Fragment key={r.id}><div className="pp-tree-item-container" draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
+                    {!!meta.responseExamples?.length&&<button type="button" className="pp-endpoint-example-toggle pp-workspace-example-toggle" aria-expanded={examplesOpen} title={`${examplesOpen?'Hide':'Show'} ${meta.responseExamples.length} response examples`} aria-label={`${examplesOpen?'Collapse':'Expand'} examples for ${r.name}`} onClick={e=>{e.stopPropagation();setExpandedWorkspaceExamples(old=>({...old,[`${selectedWs}:${c.id}:${r.id}`]:!examplesOpen}));}}>{examplesOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>}
                     <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest({...r,collectionId:c.id})}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
                     <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
                   </div>
-                  {(meta.responseExamples||[]).map(example=><div key={`${r.id}:${example.id}`} className="pp-tree-item-container">
+                  {!!meta.responseExamples?.length&&<div className={`pp-collection-motion pp-example-motion ${examplesOpen?'is-open':''}`} aria-hidden={!examplesOpen} inert={!examplesOpen}><div className="pp-collection-motion-inner">{(meta.responseExamples||[]).map(example=><div key={`${r.id}:${example.id}`} className="pp-tree-item-container">
                     <button type="button" className="pp-tree-example" style={{paddingLeft:46}} title={example.description||example.name} onContextMenu={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})} onClick={()=>openWorkspaceExample(r,c.id,example)}>
                       <span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span>{example.name}</span>
                     </button>
                     <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})}><Settings2 size={14}/></button>
-                  </div>)}
+                  </div>)}</div></div>}
                   </React.Fragment>})}
                 {openTabs.filter(t=>t.source?.pending&&t.source.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.collectionId===c.id)
                   .filter(t=>t.name.toLowerCase().includes(explorerSearch.toLowerCase()))
@@ -1380,7 +1440,12 @@ export default function App() {
                   </>}
                   {bodyFormat(format).mode==='binary'&&<div className="pp-binary-picker"><FileUp size={22}/><span>{binaryFile.name||'Select a binary file (up to 5 MB)'}</span><label>Choose file<input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{setBinaryFile({name:file.name,base64:await encodeFile(file)})}catch(err){setNotice(err.message)}}}/></label></div>}
                 </div>}
-                {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Only applied to outgoing request</span></div><div className="pp-auth-form"><div className="pp-auth-select"><span>Auth type</span><RetroSelect ariaLabel="Auth type" value={authType} onChange={setAuthType} options={[{value:'none',label:'No Auth'},{value:'bearer',label:'Bearer Token'}]}/></div>{authType === 'bearer' && <label>Token<input type="password" autoComplete="off" placeholder="Paste bearer token" value={bearerToken} onChange={e => setBearerToken(e.target.value)}/></label>}<p>Use Headers for API keys, basic authentication, or custom authorization headers. Authorization values are not saved in request history.</p></div></>}
+                {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Applied when sending the request</span></div><div className="pp-auth-form pp-auth-v26"><div className="pp-auth-select"><span>Auth type</span><RetroSelect ariaLabel="Auth type" value={authType} onChange={setAuthType} options={AUTH_OPTIONS}/></div>
+                  {authType==='bearer'&&<label>Token<input type="text" autoComplete="off" spellCheck={false} placeholder="{{AuthToken}} or paste bearer token" value={bearerToken} onChange={e=>setBearerToken(e.target.value)}/></label>}
+                  {authType==='basic'&&<><label>Username<input type="text" autoComplete="off" spellCheck={false} placeholder="{{username}} or username" value={basicUsername} onChange={e=>setBasicUsername(e.target.value)}/></label><label>Password<input type="text" autoComplete="off" spellCheck={false} placeholder="{{password}} or password" value={basicPassword} onChange={e=>setBasicPassword(e.target.value)}/></label></>}
+                  {authType==='apiKey'&&<><label>Key<input type="text" autoComplete="off" spellCheck={false} placeholder="X-API-Key" value={apiKeyName} onChange={e=>setApiKeyName(e.target.value)}/></label><label>Value<input type="text" autoComplete="off" spellCheck={false} placeholder="{{apiKey}}" value={apiKeyValue} onChange={e=>setApiKeyValue(e.target.value)}/></label><div className="pp-auth-select"><span>Add to</span><RetroSelect ariaLabel="API Key location" value={apiKeyIn} onChange={setApiKeyIn} options={[{value:'header',label:'Header'},{value:'query',label:'Query Param'}]}/></div></>}
+                  {authType==='none'?<p>No automatic authorization. Custom Authorization headers remain available in Headers.</p>:<p>Use {'{{variable}}'} for credentials. Workspace saves only variable references for secrets; raw credentials are never written to Neon. Values are visible here by design—avoid screen sharing sensitive tokens.</p>}
+                </div></>}
                 {reqTab === 'scripts'&&<div className="pp-script-panel">
                   <div className="pp-script-label"><strong>Pre-request script</strong><span>Runs before resolving and sending HTTP request</span></div>
                   <TextEditor value={preScript} onChange={setPreScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments/>

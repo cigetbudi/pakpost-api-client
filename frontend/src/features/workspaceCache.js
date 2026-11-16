@@ -17,7 +17,7 @@ function safeDraft(d){
   let sanitizedUrl=d.url||'';
   try { const url=new URL(sanitizedUrl);for(const key of url.searchParams.keys()) if(SENSITIVE_KEY.test(key))url.searchParams.set(key,'');sanitizedUrl=url.toString(); }catch{/* URL templates are permitted. */}
   return {...d,url:sanitizedUrl,rows:(d.rows||[]).map(r=>({...r,value:SENSITIVE_KEY.test(r.key||'')?'':r.value})),
-    params:(d.params||[]).map(r=>({...r,value:SENSITIVE_KEY.test(r.key||'')?'':r.value})),bearerToken:'',
+    params:(d.params||[]).map(r=>({...r,value:SENSITIVE_KEY.test(r.key||'')?'':r.value})),bearerToken:'',basicPassword:'',apiKeyValue:'',
     responseExamples:sanitizeResponseExamples(d.responseExamples),
     result:null,scriptLog:[],scriptTests:[],scriptError:''};
 }

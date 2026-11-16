@@ -43,26 +43,29 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
       const term=String(search||'').trim().toLowerCase();
       const requestLabel=String(r.requestName||r.name||'').toLowerCase();
       const examples=(r.responseExamples||[]).filter(example=>!term||requestLabel.includes(term)||`${example.name} ${example.statusCode} ${example.reasonPhrase||''}`.toLowerCase().includes(term));
+      const exampleKey=`examples:${collectionId}:${r.id}`;
+      const examplesOpen=expanded[exampleKey]??!!search;
       return <React.Fragment key={r.id}>
         <div className="pp-tree-item-container" draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(DRAG_MIME,JSON.stringify({collectionId,requestId:r.id}));}} onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(DRAG_MIME))e.preventDefault()}} onDrop={e=>{e.preventDefault();e.stopPropagation();onMove(e,collectionId,path,r.id)}}>
+          {!!examples.length&&<button type="button" className="pp-endpoint-example-toggle pp-local-example-toggle" style={{left:12+depth*14}} aria-expanded={examplesOpen} aria-label={`${examplesOpen?'Collapse':'Expand'} ${examples.length} examples for ${r.requestName||r.name}`} title={`${examplesOpen?'Hide':'Show'} ${examples.length} response examples`} onClick={e=>{e.stopPropagation();toggle(exampleKey,!!search);}}>{examplesOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>}
           <button type="button" className="pp-tree-request pp-local-request" style={{paddingLeft:12+depth*14}} title={r.url} onClick={()=>onOpen(r,collectionId)} onContextMenu={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}>
-            <GripVertical className="pp-drag-grip" size={12}/><span className={`pp-http-label ${(r.method||'GET').toLowerCase()}`}>{r.method||'GET'}</span><span>{r.requestName||r.name}</span>
+            {examples.length?<span className="pp-endpoint-chevron-slot"/>:<GripVertical className="pp-drag-grip" size={12}/>}<span className={`pp-http-label ${(r.method||'GET').toLowerCase()}`}>{r.method||'GET'}</span><span>{r.requestName||r.name}</span>
           </button>
           <button type="button" className="pp-tree-action" aria-label={`Actions for request ${r.requestName||r.name}`} onClick={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}><Ellipsis size={15}/></button>
         </div>
-        {examples.map(example=><div className="pp-tree-item-container" key={`${r.id}:${example.id}`}>
+        {!!examples.length&&<div className={`pp-collection-motion pp-example-motion ${examplesOpen?'is-open':''}`} aria-hidden={!examplesOpen} inert={!examplesOpen}><div className="pp-collection-motion-inner">{examples.map(example=><div className="pp-tree-item-container" key={`${r.id}:${example.id}`}>
           <button type="button" className="pp-tree-example" style={{paddingLeft:58+depth*14}} onClick={()=>onOpenExample(r,collectionId,example)} onContextMenu={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})} title={example.description||example.name}>
             <span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span>{example.name}</span>
           </button>
           <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})}><Ellipsis size={15}/></button>
-        </div>)}
+        </div>)}</div></div>}
       </React.Fragment>;
     })}
   </>;
 }
 export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample,onAction,onMove,expandAllSignal,revealDraft,pendingTabs=[],onOpenPending=()=>{}}){
   const [expanded,setExpanded]=useState({}),[menu,setMenu]=useState(null);
-  const toggle=key=>setExpanded(old=>({...old,[key]:old[key]===false?true:false}));
+  const toggle=(key,defaultOpen=true)=>setExpanded(old=>({...old,[key]:!(old[key]??defaultOpen)}));
   useEffect(()=>{
     if(!revealDraft)return;
     const {collectionId,folderPath=[]}=revealDraft;

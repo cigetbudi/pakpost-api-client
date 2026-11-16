@@ -1,0 +1,15 @@
+/* Environment importer inherits existing Pakpost theme tokens. */
+.pp-env-v17 .pp-env-toolbar-row .pp-env-import-action {
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:0 10px;min-height:34px;flex:none;
+  border:1px solid var(--border);border-radius:6px;
+  background:var(--surface2);color:var(--text2);
+  font-size:11px;font-weight:650;cursor:pointer;
+}
+.pp-env-v17 .pp-env-toolbar-row .pp-env-import-action:hover:not(:disabled){
+  border-color:var(--accent);color:var(--accent);background:var(--accent-soft);
+}
+.pp-env-v17 .pp-env-toolbar-row .pp-env-import-action:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:480px){
+  .pp-env-v17 .pp-env-toolbar-row .pp-env-import-action{padding:0 7px;font-size:10px}
+}

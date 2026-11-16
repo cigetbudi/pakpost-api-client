@@ -4,6 +4,7 @@
  */
 import {blankDraft,safeExportDraft} from './importExport.js';
 import {sanitizeResponseExamples} from './responseExamples.js';
+import {normalizeHoppscotchVariables} from './hoppscotchCompat.js';
 
 const METHODS=['get','post','put','patch','delete','head','options','trace'];
 const s=value=>String(value??'');
@@ -12,7 +13,7 @@ const list=value=>Array.isArray(value)?value:[];
 const row=(key,value='',description='',enabled=true)=>({key:s(key),value:s(value),description:s(description),enabled:enabled!==false});
 const MAX_REQUESTS=200;
 function trimName(name,fallback='Imported API'){return s(name||fallback).slice(0,120);}
-function toText(value){return typeof value==='string'?value:JSON.stringify(value,null,2);}
+function toText(value){return normalizeHoppscotchVariables(typeof value==='string'?value:JSON.stringify(value,null,2));}
 function uniqueId(prefix,index){return `${prefix}_pakpost_${index+1}`;}
 function parseExampleContent(source,doc,limit=15){
   const result=[];
@@ -61,19 +62,21 @@ function exampleOf(media,schema){
 function serverAddress(item,rootServers){
   const server=list(item?.servers)[0]||list(rootServers)[0];
   if(!server?.url)return '{{baseUrl}}';
-  return s(server.url).replace(/\{([A-Za-z0-9_.-]+)\}/g,(full,key)=>{
+  return normalizeHoppscotchVariables(server.url).replace(/(?<!\{)\{([A-Za-z0-9_.-]+)\}(?!\})/g,(full,key)=>{
     const fallback=server.variables?.[key]?.default;
-    return fallback===undefined?`{{${key}}}`:s(fallback);
+    return fallback===undefined||s(fallback)==='https://example.invalid'?`{{${key}}}`:normalizeHoppscotchVariables(fallback);
   }).replace(/\/$/,'');
 }
 function replacePathParams(path,parameters){
   return s(path).replace(/\{([^{}]+)\}/g,(_,name)=>{
     const candidate=parameters.find(param=>param.in==='path'&&param.name===name);
     const value=candidate?.example??candidate?.schema?.example??candidate?.schema?.default;
-    return value==null?`{{${name}}}`:encodeURIComponent(s(value));
+    if(value==null)return `{{${name}}}`;
+    const normalized=normalizeHoppscotchVariables(value);
+    return /^\{\{[A-Za-z_][A-Za-z0-9_.-]*\}\}$/.test(normalized)?normalized:encodeURIComponent(normalized);
   });
 }
-function opParamValue(param){return param?.example??param?.schema?.example??param?.schema?.default??'';}
+function opParamValue(param){return normalizeHoppscotchVariables(param?.example??param?.schema?.example??param?.schema?.default??'');}
 function checkOpenApi(doc){
   if(!/^3\.(0|1)\.\d+(?:[-+].*)?$/.test(s(doc?.openapi)))throw Error('Use OpenAPI 3.0 or 3.1 JSON. Swagger 2 and YAML are not supported yet.');
   if(!doc?.info||!doc?.paths||typeof doc.paths!=='object')throw Error('OpenAPI file must contain info and paths.');
@@ -103,14 +106,18 @@ export function parseOpenApiCollection(doc){
       request.folderPath=firstTag?firstTag.split(' / ').slice(0,8):[];
       if(firstTag&&tags.has(firstTag)&&request.folderPath.length)folderDocs[JSON.stringify(request.folderPath)]=tags.get(firstTag);
       const urlBase=serverAddress(operation?.servers?.length?operation:pathItem?.servers?.length?pathItem:doc,doc.servers);
-      request.url=`${urlBase}${replacePathParams(path,parameters)}`;
+      request.url=normalizeHoppscotchVariables(`${urlBase}${replacePathParams(path,parameters)}`);
       request.params=parameters.filter(p=>p.in==='query').map(p=>row(p.name,opParamValue(p),p.description));
       request.rows=parameters.filter(p=>p.in==='header'&&!/^(authorization|content-type)$/i.test(p.name)).map(p=>row(p.name,opParamValue(p),p.description));
       const security=list(operation.security??doc.security);
       const schemes=obj(doc?.components?.securitySchemes);
-      if(security.some(item=>Object.keys(obj(item)).some(name=>{
-        const scheme=localRef(doc,schemes[name]);return scheme?.type==='http'&&scheme?.scheme==='bearer';
-      }))){request.authType='bearer';request.bearerToken='{{token}}';}
+      for(const entry of security){
+        const match=Object.keys(obj(entry)).map(name=>localRef(doc,schemes[name])).find(scheme=>scheme?.type==='http'||scheme?.type==='apiKey');
+        if(!match)continue;
+        if(match.type==='http'&&match.scheme==='bearer'){request.authType='bearer';request.bearerToken='{{token}}';break;}
+        if(match.type==='http'&&match.scheme==='basic'){request.authType='basic';request.basicUsername='{{username}}';request.basicPassword='{{password}}';break;}
+        if(match.type==='apiKey'){request.authType='apiKey';request.apiKeyName=String(match.name||'X-API-Key');request.apiKeyIn=match.in==='query'?'query':'header';request.apiKeyValue='{{apiKey}}';break;}
+      }
       const requestBody=localRef(doc,operation.requestBody);
       const entries=Object.entries(obj(requestBody?.content));
       if(entries.length){
@@ -126,6 +133,28 @@ export function parseOpenApiCollection(doc){
       request.responseExamples=parseExampleContent(operation.responses,doc);
       requests.push(request);
     }
+  }
+  // Hoppscotch may place requests that it cannot represent as OpenAPI operations
+  // in a vendor extension. Preserve them so an import doesn't silently lose endpoints.
+  for(const dropped of list(doc['x-hoppscotch-dropped-requests'])){
+    if(requests.length>=MAX_REQUESTS)throw Error(`Import limit: maximum ${MAX_REQUESTS} requests`);
+    const source=obj(dropped?.request);
+    if(!source.endpoint||!METHODS.includes(s(source.method).toLowerCase()))continue;
+    const request=blankDraft();
+    request.method=s(source.method).toUpperCase();
+    request.name=trimName(source.name,`${request.method} ${source.endpoint}`);
+    request.requestName=request.name;
+    request.url=normalizeHoppscotchVariables(source.endpoint);
+    request.documentation=s(source.description);
+    const tagPath=dropped.tagPath;
+    request.folderPath=(Array.isArray(tagPath)?tagPath:typeof tagPath==='string'?tagPath.split(' / '):[]).filter(Boolean).slice(0,8).map(s);
+    request.params=list(source.params).map(p=>row(p.key??p.name,normalizeHoppscotchVariables(p.value),p.description,p.active!==false&&!p.disabled));
+    request.rows=list(source.headers).map(h=>row(h.key??h.name,normalizeHoppscotchVariables(h.value),h.description,h.active!==false&&!h.disabled));
+    request.authType=source.auth?.authType==='bearer'?'bearer':'none';
+    if(request.authType==='bearer')request.bearerToken=normalizeHoppscotchVariables(source.auth?.token||'');
+    if(source.body&&source.body.body!=null){request.body=toText(source.body.body);request.format=s(source.body.contentType||'application/json');}
+    request.preScript=s(source.preRequestScript||'');request.postScript=s(source.testScript||'');
+    requests.push(request);
   }
   if(!requests.length)throw Error('OpenAPI spec has no supported HTTP operations in paths.');
   return {kind:'openapi',requests,environments:[],collections:[{
@@ -186,6 +215,8 @@ export function parseInsomniaV4(doc){
     if(source.body)insomniaBody(source.body,draft);
     const auth=obj(source.authentication);
     if(auth.type==='bearer'){draft.authType='bearer';draft.bearerToken=toPakpostVariable(auth.token||'');}
+    if(auth.type==='basic'){draft.authType='basic';draft.basicUsername=toPakpostVariable(auth.username||'');draft.basicPassword=toPakpostVariable(auth.password||'');}
+    if(auth.type==='apikey'||auth.type==='apiKey'){draft.authType='apiKey';draft.apiKeyName=s(auth.key||'X-API-Key');draft.apiKeyValue=toPakpostVariable(auth.value||'');draft.apiKeyIn=auth.addTo==='query'?'query':'header';}
     // No conversion/execution of Insomnia-specific plugins/hooks.
     collection.requests.push(draft);
   }
@@ -223,7 +254,9 @@ export function exportInsomniaV4Collection(drafts,{name='Pakpost collection',inc
       name:draft.requestName||draft.name||'Request',description:s(draft.documentation),url:toInsomniaVariable(draft.url),method:draft.method||'GET',
       headers:list(draft.rows).filter(h=>h.key).map(h=>({name:h.key,value:toInsomniaVariable(h.value),description:s(h.description),disabled:h.enabled===false})),
       parameters:list(draft.params).filter(p=>p.key).map(p=>({name:p.key,value:toInsomniaVariable(p.value),description:s(p.description),disabled:p.enabled===false})),
-      body,authentication:draft.authType==='bearer'?{type:'bearer',token:toInsomniaVariable(draft.bearerToken)}:{},
+      body,authentication:draft.authType==='bearer'?{type:'bearer',token:toInsomniaVariable(draft.bearerToken)}:
+        draft.authType==='basic'?{type:'basic',username:toInsomniaVariable(draft.basicUsername),password:toInsomniaVariable(draft.basicPassword)}:
+        draft.authType==='apiKey'?{type:'apikey',key:draft.apiKeyName,value:toInsomniaVariable(draft.apiKeyValue),addTo:draft.apiKeyIn}:{},
       metaSortKey:-(index+1)};
     resources.push(request);
   }

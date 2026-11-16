@@ -17,6 +17,8 @@ export function requestFingerprint(draft={},name='') {
     formFields:rows(draft.formFields),binaryFileName:draft.binaryFile?.name||'',
     binaryFileBase64:draft.binaryFile?.base64||'',
     authType:draft.authType||'none',bearerToken:draft.bearerToken||'',
+    basicUsername:draft.basicUsername||'',basicPassword:draft.basicPassword||'',
+    apiKeyName:draft.apiKeyName||'',apiKeyValue:draft.apiKeyValue||'',apiKeyIn:draft.apiKeyIn||'header',
     preScript:draft.preScript||'',postScript:draft.postScript||'',documentation:draft.documentation||''
   });
   // The fingerprint is cached locally; never persist raw Authorization headers or secrets in it.

@@ -20,3 +20,7 @@ import './v18-menu-consistency.css';
 import './v19-inline-name.css';
 
 import './v21-documentation-headers.css';
+
+import './v25-hoppscotch-import.css';
+
+import './v26-auth-example-collapse.css';

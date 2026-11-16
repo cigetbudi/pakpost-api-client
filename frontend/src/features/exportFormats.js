@@ -86,7 +86,7 @@ function openApiResponses(examples=[]){
 /** OpenAPI represents endpoint contracts, not executable Postman scripts or crypto hooks. */
 export function exportOpenApiCollection(drafts,{name='Pakpost collection',includeSecrets=false,documentation='',folderDocs={}}={}){
   const doc={openapi:'3.1.0',info:{title:name,version:'1.0.0',description:documentation||'Exported from Pakpost. Pre/post scripts and file bytes are not translated to OpenAPI.'},paths:{}};
-  const servers=new Map();let hasAuth=false;
+  const servers=new Map();const securitySchemes={};
   for(let i=0;i<(drafts||[]).length;i++){
     const request=safeExportDraft(drafts[i],includeSecrets);
     const method=String(request.method||'GET').toLowerCase();
@@ -104,7 +104,19 @@ export function exportOpenApiCollection(drafts,{name='Pakpost collection',includ
     for(const [key,data] of queryMap)params.push({name:key,in:'query',required:false,schema:{type:'string'},...(data.description?{description:data.description}:{})});
     for(const header of request.rows||[]){if(!header.key||header.enabled===false||/^(content-type|authorization)$/i.test(header.key))continue;params.push({name:header.key,in:'header',required:false,schema:{type:'string'},...(header.description?{description:header.description}:{})});}
     if(params.length)operation.parameters=params;
-    if(request.authType==='bearer'){hasAuth=true;operation.security=[{bearerAuth:[]}];}
+    if(request.authType==='bearer'){
+      securitySchemes.bearerAuth={type:'http',scheme:'bearer'};
+      operation.security=[{bearerAuth:[]}];
+    }else if(request.authType==='basic'){
+      securitySchemes.basicAuth={type:'http',scheme:'basic'};
+      operation.security=[{basicAuth:[]}];
+    }else if(request.authType==='apiKey'){
+      const name=String(request.apiKeyName||'X-API-Key').trim();
+      const location=request.apiKeyIn==='query'?'query':'header';
+      const schemeId=`apiKey_${location}_${name.replace(/[^A-Za-z0-9]/g,'_')}`;
+      securitySchemes[schemeId]={type:'apiKey',in:location,name};
+      operation.security=[{[schemeId]:[]}];
+    }
     const mode=contentType(request);
     if(!['get','head'].includes(method)&&((request.body||'').length||(request.formFields||[]).some(v=>v.key)||request.binaryFile?.name)){
       let schema={type:'string'};
@@ -128,7 +140,7 @@ export function exportOpenApiCollection(drafts,{name='Pakpost collection',includ
     doc.paths[pathname][method]=operation;
   }
   if(servers.size)doc.servers=[...servers.values()];
-  if(hasAuth)doc.components={securitySchemes:{bearerAuth:{type:'http',scheme:'bearer'}}};
+  if(Object.keys(securitySchemes).length)doc.components={securitySchemes};
   return doc;
 }
 export function exportCollectionByFormat(drafts,{name='Pakpost collection',format='postman',includeSecrets=false,localCollection=null,documentation='',folderDocs={}}={}){

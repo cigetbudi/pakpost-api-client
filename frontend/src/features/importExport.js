@@ -1,11 +1,12 @@
 /** Portable import/export helpers. No shell commands or imported scripts execute here. */
 import {sanitizeResponseExamples} from './responseExamples.js';
 import {parseOpenApiCollection,parseInsomniaV4} from './portableFormats.js';
+import {parseEnvironmentDocument} from './environmentImport.js';
 const EMPTY = () => ({key:'',value:'',description:'',enabled:true});
 const safeString = (x) => String(x ?? '');
 const sanitizeRows = (rows) => Array.isArray(rows) ? rows.filter(x=>x&&typeof x==='object').slice(0,400).map(x=>({key:safeString(x.key),value:safeString(x.value),description:safeString(x.description),enabled:x.enabled!==false,...(x.fileName?{fileName:safeString(x.fileName)}:{})})) : [];
 const named = (key) => /^(authorization|proxy-authorization|x-api-key|api-key|cookie|set-cookie|x-signature|x-access-token|x-auth-token|x-client-secret)$/i.test(key);
-export const blankDraft = () => ({ method:'GET',url:'',rows:[EMPTY()],body:'',format:'application/json',formFields:[EMPTY()],binaryFile:{name:'',base64:''},preScript:'',postScript:'',documentation:'',responseExamples:[],reqTab:'params',resTab:'body',result:null,params:[EMPTY()],authType:'none',bearerToken:'',scriptLog:[],scriptTests:[],scriptError:'' });
+export const blankDraft = () => ({ method:'GET',url:'',rows:[EMPTY()],body:'',format:'application/json',formFields:[EMPTY()],binaryFile:{name:'',base64:''},preScript:'',postScript:'',documentation:'',responseExamples:[],reqTab:'params',resTab:'body',result:null,params:[EMPTY()],authType:'none',bearerToken:'',basicUsername:'',basicPassword:'',apiKeyName:'X-API-Key',apiKeyValue:'',apiKeyIn:'header',scriptLog:[],scriptTests:[],scriptError:'' });
 
 /** Tokenizer for pasted cURL commands, never invokes a shell. */
 export function shellWords(text) {
@@ -119,6 +120,14 @@ export function parsePostmanCollection(doc){
       const auth=req.auth===undefined?parentAuth:req.auth;
       if(auth?.type==='bearer'){
         draft.authType='bearer';draft.bearerToken=safeString((auth.bearer||[]).find?.(x=>x.key==='token')?.value||auth.bearer?.token||'');
+      }else if(auth?.type==='basic'){
+        draft.authType='basic';draft.basicUsername=safeString((auth.basic||[]).find?.(x=>x.key==='username')?.value||'');draft.basicPassword=safeString((auth.basic||[]).find?.(x=>x.key==='password')?.value||'');
+      }else if(auth?.type==='apikey'){
+        draft.authType='apiKey';
+        const items=auth.apikey||[];
+        draft.apiKeyName=safeString(items.find?.(x=>x.key==='key')?.value||'X-API-Key');
+        draft.apiKeyValue=safeString(items.find?.(x=>x.key==='value')?.value||'');
+        draft.apiKeyIn=String(items.find?.(x=>x.key==='in')?.value||'header').toLowerCase()==='query'?'query':'header';
       }
       draft.preScript=pmScript(item.event,'prerequest');draft.postScript=pmScript(item.event,'test');draft.documentation=safeString(req.description||item.description);draft.responseExamples=parsePmResponses(item.response);
       result.push(draft);
@@ -158,7 +167,7 @@ function parsePmResponses(list){
 }
 export function safeExportDraft(draft,includeSecrets=false){
   const copy={...blankDraft(),...draft,rows:sanitizeRows(draft.rows),params:sanitizeRows(draft.params),formFields:sanitizeRows(draft.formFields),binaryFile:{name:draft.binaryFile?.name||'',base64:''},responseExamples:sanitizeResponseExamples(draft.responseExamples),result:null,scriptLog:[],scriptTests:[],scriptError:''};
-  if(!includeSecrets){copy.rows=copy.rows.map(r=>({...r,value:named(r.key)?'{{REDACTED}}':r.value}));copy.bearerToken=copy.bearerToken?'{{REDACTED}}':'';}
+  if(!includeSecrets){copy.rows=copy.rows.map(r=>({...r,value:named(r.key)?'{{REDACTED}}':r.value}));copy.bearerToken=copy.bearerToken?'{{REDACTED}}':'';copy.basicPassword=copy.basicPassword?'{{REDACTED}}':'';copy.apiKeyValue=copy.apiKeyValue?'{{REDACTED}}':'';}
   return copy;
 }
 export function createPostmanCollection(drafts,{includeSecrets=false,name='Pakpost requests'}={}){
@@ -167,6 +176,8 @@ export function createPostmanCollection(drafts,{includeSecrets=false,name='Pakpo
     const enabledParams=r.params.filter(x=>x.key&&x.enabled!==false);
     const request={method:r.method||'GET',header:r.rows.filter(x=>x.key).map(x=>({key:x.key,value:x.value,type:'text',description:x.description||'',disabled:x.enabled===false})),url:{raw:r.url+(enabledParams.length?(r.url.includes('?')?'&':'?')+new URLSearchParams(enabledParams.map(x=>[x.key,x.value])).toString():'') ,query:r.params.filter(x=>x.key).map(x=>({key:x.key,value:x.value,description:x.description||'',disabled:x.enabled===false}))},description:r.documentation||'Exported from Pakpost'};
     if(r.authType==='bearer'&&r.bearerToken)request.auth={type:'bearer',bearer:[{key:'token',value:r.bearerToken,type:'string'}]};
+    if(r.authType==='basic')request.auth={type:'basic',basic:[{key:'username',value:r.basicUsername||'',type:'string'},{key:'password',value:r.basicPassword||'',type:'string'}]};
+    if(r.authType==='apiKey')request.auth={type:'apikey',apikey:[{key:'key',value:r.apiKeyName||'X-API-Key',type:'string'},{key:'value',value:r.apiKeyValue||'',type:'string'},{key:'in',value:r.apiKeyIn||'header',type:'string'}]};
     if(r.format==='multipart/form-data')request.body={mode:'formdata',formdata:r.formFields.filter(x=>x.key).map(x=>({key:x.key,...(x.fileName?{type:'file',src:x.fileName}:{type:'text',value:x.value})}))};
     else if(r.format==='application/x-www-form-urlencoded')request.body={mode:'urlencoded',urlencoded:r.formFields.filter(x=>x.key).map(x=>({key:x.key,value:x.value,type:'text'}))};
     else if(r.format==='application/octet-stream')request.body={mode:'file',file:{src:r.binaryFile?.name||''}};
@@ -190,11 +201,14 @@ export function parseImportText(text){
     throw Error('Invalid JSON. Paste cURL or choose OpenAPI 3.1, Insomnia v4, Postman, or Pakpost JSON.');
   }
   if(data?.format==='pakpost-workbench-session')return {...parseSession(data),kind:'pakpost'};
+  // Insomnia exports with HTTP requests must still import those requests, not only envs.
+  if(data?.__export_format===4&&Array.isArray(data.resources)&&data.resources.some(r=>r?._type==='request'))return parseInsomniaV4(data);
+  const importedEnvironments=parseEnvironmentDocument(data);
+  if(importedEnvironments)return {requests:[],environments:importedEnvironments,kind:'environment'};
   if(data?.openapi)return parseOpenApiCollection(data);
   if(data?.__export_format===4&&Array.isArray(data.resources))return parseInsomniaV4(data);
   if(Array.isArray(data?.item)){const requests=parsePostmanCollection(data);return {requests,environments:[],kind:'postman',collections:[{name:safeString(data.info?.name||'Imported collection'),documentation:safeString(data.info?.description),folderDocs:postmanFolderDocs(data.item),requests}]};}
-  if(Array.isArray(data?.values))return {requests:[],environments:[{name:data.name||'Imported environment',variables:data.values.filter(v=>v.enabled!==false).map(v=>({key:safeString(v.key),value:safeString(v.value),isSecret:v.type==='secret'}))}],kind:'environment'};
-  throw Error('Unsupported file. Use OpenAPI 3.1 JSON, Insomnia v4 JSON, Postman v2.1, Pakpost session, or cURL.');
+  throw Error('Unsupported file. Use Hoppscotch/Postman/Insomnia environment JSON, OpenAPI 3.1 JSON, Postman v2.1, Pakpost session, or cURL.');
 }
 
 /** Extract folder-level description into stable relative-path keys. */
