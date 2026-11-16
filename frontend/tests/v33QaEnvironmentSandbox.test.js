@@ -75,7 +75,7 @@ test('Send does not call Cloud PUT for read-only QA, Writer or Developer',()=>{
   assert.match(app,/await applyScriptVariables\(pre\.environmentVariables \|\| variables,runEnvironment\)/);
   assert.match(app,/await applyScriptVariables\(post\.environmentVariables\|\|post\.variables,runEnvironment\)/);
   assert.match(app,/const runEnvironment=\{environment:activeEnvironment,scope:envScope,sessionKey:activeSessionEnvironmentKey/);
-  assert.match(app,/const canWriteEnvironment=envScope!==STORAGE_WORKSPACE\|\|canWorkspace\(currentWorkspaceMember\(members,me\),'environment\.write'\)/);
+  assert.match(app,/const canWriteEnvironment=envScope!==STORAGE_WORKSPACE\|\|\(membersWorkspaceId===selectedWs&&canWorkspace\(currentWorkspaceMember\(members,me\),'environment\.write'\)\)/);
   assert.doesNotMatch(app,/sessionStorage\.setItem\([^\n]*sessionEnvironment/);
   assert.doesNotMatch(app,/localStorage\.setItem\([^\n]*sessionEnvironment/);
 });

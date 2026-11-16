@@ -33,13 +33,18 @@ export function readWorkbenchCache(){
   }
   return null;
 }
-export function writeWorkbenchCache({openTabs,activeTabId,drafts,active,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope}){
+export function writeWorkbenchCache({openTabs,activeTabId,drafts,active,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,sandboxTabIds=[]}){
   try{
-    const tabList=openTabs.slice(0,100).map(t=>({id:t.id,name:t.name,method:t.method,status:t.status,source:t.source||null,pendingCopy:!!t.pendingCopy,savedFingerprint:t.savedFingerprint??null}));
+    const excluded=new Set(sandboxTabIds);
+    const available=openTabs.filter(tab=>!excluded.has(tab.id)).slice(0,100);
+    // If all open tabs belong to QA's temporary Cloud sandbox, recover to an empty tester.
+    const tabList=(available.length?available:[{id:'t0',name:'Untitled Request',method:'GET',source:null}])
+      .map(t=>({id:t.id,name:t.name,method:t.method,status:t.status,source:t.source||null,pendingCopy:!!t.pendingCopy,savedFingerprint:t.savedFingerprint??null}));
+    const safeActive=tabList.some(tab=>tab.id===activeTabId)?activeTabId:tabList[0].id;
     const all={...drafts,[activeTabId]:active};
     const clean=Object.fromEntries(tabList.map(t=>[t.id,normalizeDraft(all[t.id]) ]));
     // V6 persists Cloud environment selections in account+workspace keys, not the legacy global ID.
-    const base={version:1,openTabs:tabList,activeTabId,drafts:clean,split,explorerTab,sidebarCollapsed,activeEnvId:envScope==='local'?activeEnvId:'',envScope,recent:(recent||[]).slice(0,30)};
+    const base={version:1,openTabs:tabList,activeTabId:safeActive,drafts:clean,split,explorerTab,sidebarCollapsed,activeEnvId:envScope==='local'?activeEnvId:'',envScope,recent:(recent||[]).slice(0,30)};
     const live=JSON.stringify(base);
     if(live.length<MAX_BYTES)sessionStorage.setItem(SESSION_KEY,live);
     const fallback={...base,drafts:Object.fromEntries(Object.entries(clean).map(([k,d])=>[k,safeDraft(d)])),recent:[]};

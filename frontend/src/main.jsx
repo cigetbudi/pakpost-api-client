@@ -36,3 +36,5 @@ import './v30-workspace-environments.css';
 import './v31-google-sso.css';
 
 import './v32-multi-role.css';
+
+import './v33-qa-sandbox.css';

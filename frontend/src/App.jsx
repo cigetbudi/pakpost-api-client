@@ -34,6 +34,7 @@ import {exportCollectionByFormat,exportEnvironmentByFormat,exportFileName} from 
 import {stripJsonComments,hasJsonComments} from './features/jsonComments';
 import {findBoundTab} from './features/sourceTabs';
 import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, hasUnsavedMarker, tabSaved} from './features/draftLifecycle';
+import {isReadOnlyCloudTab, sandboxCacheTabIds,sandboxDocKey} from './features/qaSandbox.js';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
 import {defaultStorageScope,allowedStorageScope,STORAGE_LOCAL,STORAGE_WORKSPACE,cloudEndpointCount,collectionImportSources,saveCloudCollections} from './features/storageScope';
 import {MenuActionItem} from './features/MenuActionItem';
@@ -153,8 +154,9 @@ export default function App() {
   const [environmentSelections,setEnvironmentSelections] = useState(()=>readEnvironmentSelections(localStorage,CACHED));
   // Never persist QA/Writer Cloud environment edits. Their script changes are RAM-only.
   const sessionEnvironmentOverlays=useRef(new Map());
+  const sessionDocumentationOverlays=useRef(new Map());
   const [,refreshSessionEnvironment]=useState(0);
-  useEffect(()=>{sessionEnvironmentOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
+  useEffect(()=>{sessionEnvironmentOverlays.current.clear();sessionDocumentationOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
   const [reqTab, setReqTab] = useState(RECOVERED.reqTab || 'params');
   const [resTab, setResTab] = useState(RECOVERED.resTab || 'body');
   const [loading, setLoading] = useState(false);
@@ -198,6 +200,7 @@ export default function App() {
   const [collectionImportBusy,setCollectionImportBusy] = useState(false);
   const [localCollectionName, setLocalCollectionName] = useState('');
   const [members, setMembers] = useState([]);
+  const [membersWorkspaceId,setMembersWorkspaceId]=useState('');
   const [teams, setTeams] = useState([]);
   const [wsTab, setWsTab] = useState('collections');
   const [selectedCol, setSelectedCol] = useState('');
@@ -355,12 +358,14 @@ export default function App() {
   // Persist drafts for refresh recovery (debounced, plus a beforeunload flush).
   useEffect(()=>{
     const persist=()=>writeWorkbenchCache({openTabs,activeTabId:activeTabRef.current,
-      drafts:draftsRef.current,active:snapshot(),recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope});
+      drafts:draftsRef.current,active:snapshot(),recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,
+      // QA/Writer Cloud drafts are RAM-only and must never enter browser recovery.
+      sandboxTabIds:sandboxCacheTabIds(openTabs,selectedWs,membersWorkspaceId===selectedWs&&canWorkspace(currentWorkspaceMember(members,me),'collection.write'))});
     const timer=setTimeout(persist,600);
     window.addEventListener('beforeunload',persist);
     return ()=>{clearTimeout(timer);window.removeEventListener('beforeunload',persist)};
   },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,responseExamples,scriptLog,scriptTests,scriptError,
-    reqTab,resTab,result,params,authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope]);
+    reqTab,resTab,result,params,authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,selectedWs,members,membersWorkspaceId,me]);
   function selectTab(id) {
     setEditingRequestName(false);
     if (id === activeTabRef.current) { setPage('tester'); return; }
@@ -492,11 +497,28 @@ export default function App() {
       const request=(workspaceRequestLists[workspaceCollectionKey(selectedWs,target.collectionId)]||savedRequests).find(r=>r.id===target.requestId);
       initial=decodeStoredHeaders(request?.headersJson).documentation||'';
     }
-    setDocumentationTarget({...target,workspaceId:selectedWs,initial});
+    const docTarget={...target,workspaceId:selectedWs};
+    const temporary=sessionDocumentationOverlays.current.get(sandboxDocKey(docTarget));
+    setDocumentationTarget({...docTarget,initial:temporary??initial});
   }
   async function saveDocumentation(text){
     if(!documentationTarget)return;
     const target=documentationTarget;const value=String(text||'').slice(0,16000);
+    if(target.scope==='workspace'&&!canEditCloud){
+      // QA / Technical Writer can prepare Markdown notes in RAM only.
+      // Do not send request documentation edits to Neon or persist to localStorage.
+      sessionDocumentationOverlays.current.set(sandboxDocKey(target),value);
+      if(target.type==='request')for(const tab of openTabs){
+        if(tab.source?.scope==='workspace'&&tab.source?.workspaceId===target.workspaceId&&
+           tab.source.collectionId===target.collectionId&&tab.source.requestId===target.requestId){
+          if(draftsRef.current[tab.id])draftsRef.current[tab.id]={...draftsRef.current[tab.id],documentation:value};
+          if(tab.id===activeTabRef.current)setDocumentation(value);
+        }
+      }
+      setDocumentationTarget(null);
+      setNotice('Documentation drafted in this sandbox only. Cloud remains unchanged.');
+      return;
+    }
     setDocBusy(true);
     try{
       if(target.scope==='local'){
@@ -917,12 +939,30 @@ export default function App() {
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
   function loadSavedRequest(item) {
-    const saved=decodeStoredHeaders(item.headersJson);
-    const savedRows=saved.headers;
-    let formFields = [];
-    try { formFields = JSON.parse(item.formFieldsJson||'[]'); }catch{}
-    openBoundRequest({ ...item,rows:[...savedRows,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,...saved.auth,format:item.contentType||'application/json',formFields:formFields.length?formFields:[{key:'',value:''}],preScript:item.preRequestScript||'',postScript:item.postResponseScript||'' },
+    openBoundRequest(workspaceDraft(item),
       {scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId||selectedCol,requestId:item.id});
+  }
+  async function resetSandboxRequest() {
+    const tab=openTabs.find(t=>t.id===activeTabRef.current);
+    if(!isReadOnlyCloudTab(tab,canEditCloud,selectedWs)||!tab?.source?.requestId)return;
+    if(tab.source.workspaceId!==selectedWs){setNotice("Switch to the request's workspace before resetting its sandbox.");return;}
+    const source=tab.source;
+    const requestTabId=tab.id;
+    const originalToken=token;
+    const currentWorkspace=selectedWs;
+    try {
+      const path=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`;
+      const requests=await api(path,'GET',undefined,originalToken);
+      if(originalToken!==currentTokenRef.current||currentWorkspace!==selectedWs)throw Error('Workspace changed. Open the Cloud request again.');
+      const saved=requests.find(r=>r.id===source.requestId);
+      if(!saved)throw Error('Cloud request no longer exists.');
+      const baseline={...freshRequest(saved.name),...workspaceDraft(saved),result:null,scriptLog:[],scriptTests:[],scriptError:'',resTab:'body'};
+      draftsRef.current[requestTabId]=baseline;
+      sessionDocumentationOverlays.current.delete(sandboxDocKey({...source,type:'request'}));
+      setOpenTabs(tabs=>tabs.map(t=>t.id===requestTabId?{...tabSaved(t,source,baseline,saved.name),status:undefined}:t));
+      if(activeTabRef.current===requestTabId)restoreDraft(baseline);
+      setNotice('Sandbox reset to the latest Cloud version. No shared data was changed.');
+    }catch(error){setNotice(`Could not reset sandbox: ${getMessage(error)}`);}
   }
 
 
@@ -951,7 +991,7 @@ export default function App() {
   // Read-only members can create temporary personal values without writing to Neon.
   const activeSessionEnvironmentKey=envScope===STORAGE_WORKSPACE?sessionEnvironmentKey(environmentContext,activeEnvId):'';
   const activeSessionOverrides=sessionEnvironmentOverlays.current.get(activeSessionEnvironmentKey)||{};
-  const canWriteEnvironment=envScope!==STORAGE_WORKSPACE||canWorkspace(currentWorkspaceMember(members,me),'environment.write');
+  const canWriteEnvironment=envScope!==STORAGE_WORKSPACE||(membersWorkspaceId===selectedWs&&canWorkspace(currentWorkspaceMember(members,me),'environment.write'));
   const varsFromEnv=(allowSecrets=true)=>{
     const base=readableEnvironmentValues(activeEnvironment);
     const variables=envScope===STORAGE_WORKSPACE?applySessionOverrides(base,activeSessionOverrides):base;
@@ -1139,7 +1179,21 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  function logout() { setCanCreateWorkspace(false);sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]); }
+  function logout() {
+    // A user signing out must not leave Cloud request drafts visible to the next account.
+    const keep=openTabs.filter(tab=>tab.source?.scope!=='workspace');
+    const next=keep.length?keep:[{id:'t0',name:'Untitled Request',method:'GET',source:null}];
+    const cleaned={};
+    for(const tab of keep){cleaned[tab.id]=tab.id===activeTabRef.current?snapshot():draftsRef.current[tab.id];}
+    if(!keep.length)cleaned.t0=freshRequest('Untitled Request');
+    draftsRef.current=cleaned;
+    activeTabRef.current=next[0].id;setActiveTabId(next[0].id);setOpenTabs(next);
+    restoreDraft(cleaned[next[0].id]);
+    setRecent([]); // previous account's request history must not survive sign-out.
+    sessionEnvironmentOverlays.current.clear();sessionDocumentationOverlays.current.clear();
+    clearWorkbenchCache(); // Never expose another account's Cloud tabs after logout.
+    setCanCreateWorkspace(false);sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]);
+  }
   function requiresLogin(target = 'workspace') {
     if (token) return true;
     setAuthMode('login'); setAuthError(''); setAuthOpen(true);
@@ -1197,18 +1251,18 @@ export default function App() {
   // Role editor state is scoped to the selected Workspace, never carried to another team.
   useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);},[selectedWs]);
   useEffect(() => {
-    if (!token || !selectedWs) { setCollections([]); setMembers([]); setTeams([]); return; }
+    if (!token || !selectedWs) { setCollections([]); setMembers([]); setMembersWorkspaceId(''); setTeams([]); return; }
     let cancelled=false;
     const epoch=workspaceFetchEpoch.current;
     // Show no stale workspace metadata while a different team is loading.
-    setCollections([]);setMembers([]);setTeams([]);
+    setCollections([]);setMembers([]);setMembersWorkspaceId('');setTeams([]);
     Promise.all([
       api(`/api/workspaces/${selectedWs}/collections`, 'GET', undefined, token),
       api(`/api/workspaces/${selectedWs}/members`, 'GET', undefined, token),
       api(`/api/workspaces/${selectedWs}/teams`, 'GET', undefined, token),
     ]).then(([cols, mems, tms]) => {
       if(cancelled||epoch!==workspaceFetchEpoch.current)return;
-      setCollections(cols); setMembers(mems); setTeams(tms);
+      setCollections(cols); setMembers(mems); setMembersWorkspaceId(selectedWs); setTeams(tms);
       setSelectedCol(current => cols.some(x => x.id === current) ? current : cols[0]?.id || '');
       setSelectedTeam(current => tms.some(x => x.id === current) ? current : tms[0]?.id || '');
     }).catch(e => {if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
@@ -1297,7 +1351,7 @@ export default function App() {
   },[url,openTabs,localCollections,workspaceRequestLists,localEnvironments,workspaceEnvironments]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
-  const selfMember=currentWorkspaceMember(members,me);
+  const selfMember=membersWorkspaceId===selectedWs?currentWorkspaceMember(members,me):null;
   const canEditCloud=canWorkspace(selfMember,'collection.write');
   const canManageMembers=canWorkspace(selfMember,'member.manage');
   const canManageTeams=canWorkspace(selfMember,'team.manage');
@@ -1351,7 +1405,9 @@ export default function App() {
       draftsRef.current[tabId]={...draftsRef.current[tabId],result:r,resTab:'body',scriptLog:logs,scriptTests:tests,scriptError:scriptErrorNext};
       if(tabId===activeTabRef.current){setResult(r);setResTab('body');setScriptLog(logs);setScriptTests(tests);setScriptError(scriptErrorNext);}
       setOpenTabs(t=>t.map(x=>x.id===tabId?{...x,status:r.statusCode}:x));
-      setRecent(old=>[{method,url:command.url,status:r.statusCode,elapsed:r.elapsedMs,body,rows:rows.map(x=>({...x}))},...old].slice(0,20));
+      // QA Sandbox requests are not stored in durable request history.
+      if(!isReadOnlyCloudTab(openTabs.find(t=>t.id===tabId),canEditCloud,selectedWs))
+        setRecent(old=>[{method,url:command.url,status:r.statusCode,elapsed:r.elapsedMs,body,rows:rows.map(x=>({...x}))},...old].slice(0,20));
     }catch(e){
       const error={error:getMessage(e)};
       draftsRef.current[tabId]={...draftsRef.current[tabId],result:error,scriptLog:logs,scriptTests:tests,scriptError:getMessage(e)};
@@ -1385,8 +1441,7 @@ export default function App() {
   async function saveCurrent(){
     const origin=activeSource();
     if(origin?.scope==='workspace' && (!canEditCloud || origin.workspaceId!==selectedWs)){
-      openSaveAs({...origin,scope:'local',collectionId:localCollections[0]?.id||''});
-      setNotice('Cloud is read-only for this role. Save a separate Local copy instead.');return;
+      setNotice('Sandbox request: Cloud save is disabled. Use Save as… to create a Local copy.');return;
     }
     if(!origin){openSaveAs();return;}
     const name=activeRequestName.trim();
@@ -1439,6 +1494,7 @@ export default function App() {
         source={scope:'local',collectionId:saveLocalCollection,requestId:next.request.id};
       }else{
         if(!token)throw Error('Sign in to save to workspace');
+        if(!canEditCloud||saveWs!==selectedWs)throw Error('Cloud destination is not writable in your current workspace.');
         const saved=await api(`/api/workspaces/${saveWs}/collections/${saveCollection}/requests`,'POST',currentSavePayload(saveName),token);
         source={scope:'workspace',workspaceId:saveWs,collectionId:saveCollection,requestId:saved.id};
         invalidateWorkspaceRequestLists(saveWs,[saveCollection]);
@@ -1466,7 +1522,7 @@ export default function App() {
     if(source?.scope==='local'&&!source.pending){
       setLocalCollections(old=>applyLocalAction(old,{type:'saveExamples',collectionId:source.collectionId,requestId:source.requestId,responseExamples:nextExamples}));
     }
-    if(source?.scope==='workspace'&&!source.pending){
+    if(source?.scope==='workspace'&&!source.pending&&!isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabRef.current),canEditCloud,selectedWs)){
       if(!token)throw Error('Sign in to update workspace examples');
       const base=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`;
       const latest=await api(base,'GET',undefined,token);
@@ -1493,7 +1549,9 @@ export default function App() {
     const source=activeSource();
     const success=await doAction(async()=>{
       await persistResponseExamples(nextExamples);
-      setNotice(!source||source.pending?`Added ${name} to draft. Save the request to keep it in a collection.`:`Saved example ${name}`);
+      const sandbox=isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabRef.current),canEditCloud,selectedWs);
+      setNotice(sandbox?`Example ${name} added to sandbox only. Cloud is unchanged.`:
+        !source||source.pending?`Added ${name} to draft. Save the request to keep it in a collection.`:`Saved example ${name}`);
     });
     if(success)setSaveExampleOpen(false);
   }
@@ -1648,7 +1706,7 @@ export default function App() {
           ]:workspaceMenu.type==='example'?[
             ['renameExample','Rename example'],['deleteExample','Delete example']
           ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
+            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
@@ -1675,8 +1733,11 @@ export default function App() {
               if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur();}
               if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancelRequestRename();}
             }}
-          /> : <button type="button" className="pp-editable-request-name" onClick={beginRequestRename} title="Rename request" aria-label={`Rename ${activeRequestName}`}><span>{activeRequestName}</span><Pencil size={13}/></button>}<span className="pp-crumb-sub">HTTP request</span><div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
-          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} {...variableUi} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button><button className="pp-save-action" onClick={saveCurrent} disabled={busyAction} title={!canEditCloud&&activeSource()?.scope==='workspace'?"Save as Local copy — Cloud is read-only":"Save changes (Ctrl/Cmd+S)"}><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title="Save as a new request">Save as…</button></div>
+          /> : <button type="button" className="pp-editable-request-name" onClick={beginRequestRename} title="Rename request" aria-label={`Rename ${activeRequestName}`}><span>{activeRequestName}</span><Pencil size={13}/></button>}<span className="pp-crumb-sub">HTTP request</span>
+            {isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)&&<span className="pp-sandbox-badge" title="QA sandbox: changes and scripts are session-only. Cloud is read-only."><ShieldCheck size={13}/> Sandbox · Cloud read-only</span>}
+            <div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
+          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} {...variableUi} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button>{isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)&&<button type="button" className="pp-sandbox-reset" onClick={resetSandboxRequest} disabled={loading||busyAction} title="Discard sandbox changes and reload the request from Cloud"><History size={14}/> Reset</button>}
+            <button className="pp-save-action" onClick={saveCurrent} disabled={busyAction||isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)} title={isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Cloud save disabled in QA sandbox. Use Save as… for a Local copy.":"Save changes (Ctrl/Cmd+S)"}><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title={isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Save sandbox request as a separate Local copy":"Save as a new request"}>Save as…</button></div>
           <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
             <section className="pp-request-pane">
               <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
@@ -1732,7 +1793,7 @@ export default function App() {
                   </div>}
                 </div>}
               </div>
-              <div className="pp-pane-footer"><ShieldCheck size={14}/><span>Public API tester · No sign-in needed</span><span className="pp-footer-tail">Proxy protected</span></div>
+              <div className="pp-pane-footer"><ShieldCheck size={14}/><span>{isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Sandbox: edits and post-scripts do not change Cloud. Real API calls still execute.":"Public API tester · No sign-in needed"}</span><span className="pp-footer-tail">Proxy protected</span></div>
             </section>
             <div role="separator" aria-label="Resize request and response panels" aria-orientation={split === 'vertical' ? 'vertical' : 'horizontal'} className="pp-splitter" onPointerDown={e => { draggingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={onSplitterMove} onPointerUp={onSplitterEnd} onPointerCancel={onSplitterEnd}><span className="pp-splitter-handle"/></div>
             <section className="pp-response-pane">
@@ -1849,7 +1910,7 @@ export default function App() {
     {saveExampleOpen && <Dialog title="Save response example" subtitle="Capture the latest response as an example for this request." onClose={()=>setSaveExampleOpen(false)}><form className="modal-form" onSubmit={saveResponseExample}>
       <label>Example name<input autoFocus required maxLength={140} value={exampleName} onChange={e=>setExampleName(e.target.value)}/></label>
       <label>Description <textarea rows={3} maxLength={1000} placeholder="Optional note, e.g. when to expect this response" value={exampleDescription} onChange={e=>setExampleDescription(e.target.value)}/></label>
-      <p className="pp-example-warning">Review the response body before saving. It can contain personal data, tokens, or account details. Known sensitive response headers are redacted; the body is saved as-is (up to 64 KB). {!activeSource()||activeSource()?.pending?'This is a draft; use Save to keep this example in a collection.':''}</p>
+      <p className="pp-example-warning">Review the response body before saving. It can contain personal data, tokens, or account details. Known sensitive response headers are redacted; the body is saved as-is (up to 64 KB). {isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?'Sandbox only: this example is not saved to Cloud and is lost when you close or refresh the session.':(!activeSource()||activeSource()?.pending?'This is a draft; use Save to keep this example in a collection.':'')}</p>
       {result && !result.error && <div className="pp-example-preview"><span className={`pp-example-status ${statusTone(result.statusCode)}`}>{result.statusCode}</span><strong>{result.reasonPhrase || 'HTTP response'}</strong><small>{new Blob([result.body || '']).size.toLocaleString()} B · {result.elapsedMs} ms</small></div>}
       <button className="pp-modal-submit" type="submit" disabled={!result||!!result.error||busyAction}><Save size={16}/> Save example</button>
     </form></Dialog>}

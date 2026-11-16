@@ -1,0 +1,6 @@
+/* V7.3 — lightweight indicators for read-only Cloud request sandbox. */
+.pp-sandbox-badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border,#30374a);border-radius:6px;padding:5px 8px;font-size:11px;font-weight:650;color:var(--text-secondary,#a1aabd);white-space:nowrap;background:var(--surface-secondary,rgba(128,128,180,.07))}
+.pp-sandbox-reset{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;min-height:35px;border:1px solid var(--border,#30374a);border-radius:7px;background:transparent;color:inherit;cursor:pointer;white-space:nowrap;font-size:12px}
+.pp-sandbox-reset:hover:not(:disabled){border-color:var(--accent,#767cff)}
+.pp-sandbox-reset:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:1160px){.pp-sandbox-badge{font-size:0;gap:0}.pp-sandbox-badge svg{width:16px;height:16px}.pp-sandbox-reset{padding:0 7px}}
