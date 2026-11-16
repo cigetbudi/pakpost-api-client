@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Pakpost Interceptor",
+  "description": "Manually approved bridge from Pakpost to your internal or public APIs.",
+  "version": "0.1.1",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Pakpost Interceptor",
+    "default_popup": "popup.html"
+  },
+  "incognito": "not_allowed"
+}

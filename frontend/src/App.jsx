@@ -34,6 +34,8 @@ import { runSandbox } from './features/runScript';
 import { postmanRequestSnapshot } from './features/postmanCompat';
 import {createResponseExample,exampleToResult,renameResponseExample,sanitizeResponseExamples,statusTone,suggestExampleName,upsertResponseExample} from './features/responseExamples';
 import {applyAuthorization,AUTH_OPTIONS} from './features/authorization';
+import {readInterceptorMode,writeInterceptorMode,probeExtension,dispatchRequest,EXTENSION_CHANNEL} from './features/interceptorClient';
+import {discoverApiDestinations} from './features/interceptorDiscovery';
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -91,6 +93,8 @@ function Dialog({ title, subtitle, onClose, children }) {
 
 export default function App() {
   const [page, setPage] = useState('tester');
+  const [interceptorMode,setInterceptorMode]=useState(()=>readInterceptorMode(localStorage));
+  const [extensionStatus,setExtensionStatus]=useState({state:'unknown',version:''});
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const [commandIndex, setCommandIndex] = useState(0);
@@ -1046,6 +1050,31 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyboard);
   }, [page, loading, method, url, rows, body, documentation, params, authType, bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,responseExamples,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,saveExampleOpen,actionDialog,documentationTarget]);
 
+  useEffect(()=>{writeInterceptorMode(localStorage,interceptorMode)},[interceptorMode]);
+  async function refreshExtensionStatus(){
+    setExtensionStatus({state:'checking',version:''});
+    try{const info=await probeExtension();setExtensionStatus({state:'connected',version:String(info?.version||'')});}
+    catch{setExtensionStatus({state:'disconnected',version:''});}
+  }
+  useEffect(()=>{if(interceptorMode==='extension')refreshExtensionStatus();},[interceptorMode]);
+
+  // User-invoked extension discovery: only scheme/host/port are exposed (no paths,
+  // headers, tokens, or environment contents). The extension still prompts for permission.
+  useEffect(()=>{
+    const onDiscover=event=>{
+      if(event.source!==window||event.origin!==window.location.origin)return;
+      const data=event.data;
+      if(data?.channel!==EXTENSION_CHANNEL||data?.type!=='DISCOVER_HOSTS_REQUEST'||typeof data.id!=='string'||data.id.length>100)return;
+      const origins=discoverApiDestinations({
+        url,openTabs,drafts:draftsRef.current,localCollections,workspaceRequestLists,
+        localEnvironments,workspaceEnvironments
+      });
+      window.postMessage({channel:EXTENSION_CHANNEL,type:'DISCOVER_HOSTS_RESPONSE',id:data.id,origins},window.location.origin);
+    };
+    window.addEventListener('message',onDiscover);
+    return ()=>window.removeEventListener('message',onDiscover);
+  },[url,openTabs,localCollections,workspaceRequestLists,localEnvironments,workspaceEnvironments]);
+
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
   const activeTeam = teams.find(x => x.id === selectedTeam);
   const headerCount = rows.filter(x => x.key.trim()&&isEnabled(x)).length;
@@ -1074,7 +1103,9 @@ export default function App() {
         const problem=syntaxProblem(command.body,languageFromMime(format));
         if(problem)throw new Error('Request body is invalid: '+problem.message);
       }
-      const r=await api('/api/proxy/send','POST',command);
+      const r=interceptorMode==='proxy'
+        ?await api('/api/proxy/send','POST',command)
+        :await dispatchRequest(command,interceptorMode);
       // An HTTP request that completed must remain visible even if the post-response script fails.
       let scriptErrorNext='';
       try {
@@ -1361,7 +1392,7 @@ export default function App() {
       </aside>}
 
       <main className="pp-content">
-        {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} split={split} onSplitChange={setSplit} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
+        {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} split={split} onSplitChange={setSplit} interceptorMode={interceptorMode} onInterceptorChange={setInterceptorMode} extensionStatus={extensionStatus} onCheckExtension={refreshExtensionStatus} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
         <div className="pp-tabs-bar">
           <div className="pp-open-tabs" role="tablist" aria-label="Open requests">
             {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const from=tabDragRef.current;if(from)setOpenTabs(ts=>reorderTabs(ts,from,t.id));tabDragRef.current=null;}} onDragEnd={()=>{tabDragRef.current=null;}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{hasUnsavedMarker(t,t.id===activeTabId?snapshot():draftsRef.current[t.id]) && <span className="pp-unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"/>}{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
@@ -1485,7 +1516,7 @@ export default function App() {
         </div>}
       </main>
     </div>
-    <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">Guest testing enabled · Private addresses blocked by proxy</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
+    <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">{interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Allowed destinations only':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
     {commandOpen && <div className="pp-command-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCommandOpen(false);}}><section className="pp-command-dialog" role="dialog" aria-modal="true" aria-label="Quick search and commands"><div className="pp-command-input-wrap"><Search size={18}/><input autoFocus aria-label="Search commands" value={commandQuery} onChange={e=>{setCommandQuery(e.target.value);setCommandIndex(0);}} onKeyDown={e=>{if(e.key==='ArrowDown'){e.preventDefault();setCommandIndex(i=>Math.min(visibleCommandItems.length-1,i+1));}else if(e.key==='ArrowUp'){e.preventDefault();setCommandIndex(i=>Math.max(0,i-1));}else if(e.key==='Enter'&&visibleCommandItems.length){e.preventDefault();setCommandOpen(false);visibleCommandItems[Math.min(commandIndex,visibleCommandItems.length-1)].run();}}} placeholder="Find a request or run a command..."/><kbd>Esc</kbd></div><div className="pp-command-results" role="listbox">{visibleCommandItems.length?visibleCommandItems.map((item,i)=><button type="button" role="option" aria-selected={commandIndex===i} onMouseEnter={()=>setCommandIndex(i)} key={item.key} onClick={()=>{setCommandOpen(false);item.run();}}>{item.method?<span className={`pp-http-label ${item.method.toLowerCase()}`}>{item.method}</span>:<Code2 size={15}/>}<span><strong>{item.title}</strong><small>{item.subtitle}</small></span><ArrowRight size={14}/></button>):<div className="pp-command-empty">No matching requests or commands.</div>}</div></section></div>}
     {notice && createPortal(<div className="pp-toast pp-toast-v17" role="status" aria-live="polite"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
     {documentationTarget&&<Dialog title={`Documentation · ${documentationTarget.type}`} subtitle="Write Markdown notes for OpenAPI/Postman exports." onClose={()=>setDocumentationTarget(null)}><DocumentationEditor key={`${documentationTarget.scope}:${documentationTarget.collectionId}:${documentationTarget.requestId||JSON.stringify(documentationTarget.folderPath||[])}`} title={documentationTarget.name||'Item'} initial={documentationTarget.initial} busy={docBusy} onCancel={()=>setDocumentationTarget(null)} onSave={saveDocumentation}/></Dialog>}

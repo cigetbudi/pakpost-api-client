@@ -24,3 +24,5 @@ import './v21-documentation-headers.css';
 import './v25-hoppscotch-import.css';
 
 import './v26-auth-example-collapse.css';
+
+import './v27-interceptor.css';

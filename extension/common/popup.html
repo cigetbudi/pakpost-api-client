@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="popup.css"><title>Pakpost Interceptor</title></head>
+<body>
+  <header><div class="logo">◇</div><div><h1>Pakpost Interceptor <small>v0.1.1</small></h1><p>Local network / VPN request bridge</p></div></header>
+  <main>
+    <section>
+      <h2>Allowed Pakpost Origins <span id="originCount">0</span></h2>
+      <p>Websites allowed to control this extension. Add the exact Pakpost origin including its port.</p>
+      <form id="originForm"><input id="originInput" type="text" placeholder="http://localhost:5173" autocomplete="off" spellcheck="false" required><button type="submit">+ Add</button></form>
+      <div id="originList" class="entries"></div>
+    </section>
+    <section>
+      <h2>Allowed API Destinations <span id="destCount">0</span></h2>
+      <p>API hosts the extension can contact. Select multiple hosts and grant permissions together.</p>
+      <form id="destForm"><input id="destInput" type="text" placeholder="https://api.internal.example.com" autocomplete="off" spellcheck="false" required><button type="submit">+ Add</button></form>
+      <div class="batch-panel">
+        <div class="batch-title"><strong>Fast setup</strong><span>No need to add hosts individually</span></div>
+        <button type="button" id="scanButton" class="wide-button primary">Scan this Pakpost tab</button>
+        <p class="batch-help">Collect unique API hosts from saved requests, open tabs and environments. No tokens, URLs with paths or request bodies are sent to the extension.</p>
+        <details id="pasteDetails"><summary>Or paste multiple URLs</summary>
+          <textarea id="bulkInput" rows="3" spellcheck="false" placeholder="https://api1.example.com/path&#10;https://api2.example.com&#10;http://127.0.0.1:8080"></textarea>
+          <button type="button" id="previewBulk" class="wide-button">Review pasted URLs</button>
+        </details>
+        <div id="reviewSection" class="review hidden">
+          <div class="review-header"><strong>Review destinations <span id="reviewCount">0</span></strong><label><input id="selectAll" type="checkbox" checked> Select all</label></div>
+          <div id="reviewList" class="review-list"></div>
+          <button type="button" id="grantSelected" class="wide-button primary">Grant selected destinations</button>
+        </div>
+      </div>
+      <div id="destList" class="entries"></div>
+    </section>
+    <p class="foot">Reload the Pakpost tab after adding its origin. Chrome and Firefox use your own network/VPN. Redirects are blocked; credentials and cookies aren't sent automatically.</p>
+    <div id="status" role="status" aria-live="polite"></div>
+  </main>
+  <script src="popup.js"></script>
+</body></html>
