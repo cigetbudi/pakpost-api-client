@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkspaceInvitationRepository, WorkspaceInvitationRepository>();
         services.AddScoped<IWorkspaceInvitationEmailSender, SmtpWorkspaceInvitationEmailSender>();
         services.AddScoped<ICollectionRepository, CollectionRepository>();
+        services.AddScoped<ICollectionFolderRepository, CollectionFolderRepository>();
         services.AddScoped<ISavedRequestRepository, SavedRequestRepository>();
         services.AddScoped<ISavedRequestRevisionRepository, SavedRequestRevisionRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();

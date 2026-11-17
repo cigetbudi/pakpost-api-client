@@ -388,6 +388,7 @@ export function useWorkbenchController() {
   function expandOrCollapseAllCollections(...args) { return collectionActions.expandOrCollapseAllCollections(...args); }
   function toggleWorkspaceCollectionById(...args) { return collectionActions.toggleWorkspaceCollectionById(...args); }
   function invalidateWorkspaceRequestLists(...args) { return collectionActions.invalidateWorkspaceRequestLists(...args); }
+  function refreshCloudCollection(...args) { return collectionActions.refreshCloudCollection(...args); }
   function moveLocalRequest(...args) { return collectionActions.moveLocalRequest(...args); }
   const WORKSPACE_DRAG='application/x-pakpost-workspace-request';
   async function moveWorkspaceRequest(...args) { return collectionActions.moveWorkspaceRequest(...args); }
@@ -744,7 +745,7 @@ export function useWorkbenchController() {
   const collectionActions = createCollectionActions({
     EMPTY_HEADER, STORAGE_LOCAL, STORAGE_WORKSPACE, WORKSPACE_DRAG, actionDialog, actionName,
     activeSource, activeTabRef, addTab, adoptSavedRevision, allowedStorageScope, api,
-    applyLocalAction, blankDraft, busyAction, canEditCloud, collectionImportBusy, collectionImportDestination,
+    applyLocalAction, blankDraft, busyAction, canEditCloud, currentTokenRef, selectedWorkspaceRef, collectionImportBusy, collectionImportDestination,
     collectionImportFile, collectionImportSources, collections, collectionsScope, decodeStoredHeaders, doAction,
     draftsRef, encodeStoredHeaders, exampleToResult, findBoundTab, freshRequest, getMessage,
     importRequestsAndEnvironments, loadSavedRequest, localCollectionName, localCollections, openCollectionRunner, openCollectionVariables,
@@ -819,7 +820,7 @@ export function useWorkbenchController() {
     createEnvironment, deleteEnvironment, duplicateEnvironment, openExportChoice, importEnvironmentFile, codePreviewRequest, buildCodeRequest,
     snapshot, importRequestsAndEnvironments, setNotice, loadRequest, setSelectedTeam, setWsTab, setExplorerSearch,
     setCollectionSort, expandOrCollapseAllCollections, openCollectionImport, setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest,
-    openLocalExample, handleLocalMenu, moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, toggleWorkspaceCollectionById,
+    openLocalExample, handleLocalMenu, moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
     createCollectionDraft, setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample, draftsRef, CodeSidebar, ImportExportSidebar,
     WorkbenchSettings, setTheme, split, setSplit, interceptorMode, setInterceptorMode, extensionStatus,
     refreshExtensionStatus, RequestTabs, requestWorkbenchStore, remoteAlerts, tabDragRef, closeTab, showTabContext,

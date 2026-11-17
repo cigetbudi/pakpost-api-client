@@ -7,9 +7,9 @@ using Pakpost.Application.Common.Security;
 using Pakpost.Domain.Entities;
 namespace Pakpost.Application.Internal.Collections;
 public sealed record SavedRequestDto(Guid Id,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body,
-    string BodyMode,string ContentType,string FormFieldsJson,string PreRequestScript,string PostResponseScript,int Revision);
+    string BodyMode,string ContentType,string FormFieldsJson,string PreRequestScript,string PostResponseScript,int Revision,Guid? FolderId=null);
 public sealed record ListSavedRequestsQuery(Guid ActorId,Guid WorkspaceId,Guid CollectionId):IRequest<IReadOnlyList<SavedRequestDto>>;
-public sealed record SaveRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body,string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript=""):IRequest<SavedRequestDto>;
+public sealed record SaveRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body,string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript="",Guid? FolderId=null):IRequest<SavedRequestDto>;
 public sealed record DeleteSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId):IRequest;
 public sealed class SaveRequestValidator:AbstractValidator<SaveRequestCommand>
 {
@@ -41,7 +41,7 @@ public abstract class SavedRequestsAccess
     }
     // Legacy JSONB may contain literal credentials. Never return those values to the browser.
     protected static SavedRequestDto ToDto(SavedRequest x)=>new(x.Id,x.CollectionId,x.Name,x.Method,x.Url,
-        SavedHeaderPolicy.RedactLegacyCredentials(x.HeadersJson),x.Body,x.BodyMode,x.ContentType,x.FormFieldsJson,x.PreRequestScript,x.PostResponseScript,x.Revision);
+        SavedHeaderPolicy.RedactLegacyCredentials(x.HeadersJson),x.Body,x.BodyMode,x.ContentType,x.FormFieldsJson,x.PreRequestScript,x.PostResponseScript,x.Revision,x.FolderId);
 }
 public sealed class ListSavedRequestsHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests)
     :SavedRequestsAccess,IRequestHandler<ListSavedRequestsQuery,IReadOnlyList<SavedRequestDto>>
@@ -50,13 +50,15 @@ public sealed class ListSavedRequestsHandler(IWorkspaceRepository workspaces,ICo
     { await Check(q.ActorId,q.WorkspaceId,q.CollectionId,workspaces,collections,ct);
       return (await requests.ListAsync(q.CollectionId,ct)).Select(ToDto).ToArray(); }
 }
-public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,ISavedRequestRevisionRepository history,IEnvironmentValueCipher cipher,IUnitOfWork uow)
+public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,ISavedRequestRevisionRepository history,IEnvironmentValueCipher cipher,IUnitOfWork uow,ICollectionFolderRepository? folders=null)
     :SavedRequestsAccess,IRequestHandler<SaveRequestCommand,SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(SaveRequestCommand c,CancellationToken ct)
     { await Check(c.ActorId,c.WorkspaceId,c.CollectionId,workspaces,collections,ct,destructive:true);
       SavedHeaderPolicy.EnsureSafe(c.HeadersJson);
-      var item=new SavedRequest(c.CollectionId,c.Name,c.Method,c.Url,c.HeadersJson,c.Body,c.BodyMode,c.ContentType,c.FormFieldsJson,c.PreRequestScript,c.PostResponseScript);
+      if(c.FolderId is Guid folderId){var folder=folders is null?null:await folders.FindAsync(folderId,ct);
+        if(folder is null||folder.CollectionId!=c.CollectionId)throw AppException.BadRequest("Folder not in collection");}
+      var item=new SavedRequest(c.CollectionId,c.Name,c.Method,c.Url,c.HeadersJson,c.Body,c.BodyMode,c.ContentType,c.FormFieldsJson,c.PreRequestScript,c.PostResponseScript,c.FolderId);
       requests.Add(item);history.Add(SavedRequestHistoryCodec.Capture(item,c.ActorId,"created",cipher));
       await uow.SaveChangesAsync(ct);return ToDto(item); }
 }
@@ -114,8 +116,8 @@ public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,IC
     }
 }
 
-public sealed record MoveSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId,Guid TargetCollectionId):IRequest<SavedRequestDto>;
-public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,ISavedRequestRevisionRepository history,IEnvironmentValueCipher cipher,IUnitOfWork uow)
+public sealed record MoveSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId,Guid TargetCollectionId,Guid? TargetFolderId=null):IRequest<SavedRequestDto>;
+public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,ISavedRequestRevisionRepository history,IEnvironmentValueCipher cipher,IUnitOfWork uow,ICollectionFolderRepository? folders=null)
     :SavedRequestsAccess,IRequestHandler<MoveSavedRequestCommand,SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(MoveSavedRequestCommand cmd,CancellationToken ct)
@@ -123,10 +125,12 @@ public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICol
         await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct,destructive:true);
         var destination=await collections.FindAsync(cmd.TargetCollectionId,ct);
         if(destination is null||destination.WorkspaceId!=cmd.WorkspaceId)throw AppException.Forbidden();
+        if(cmd.TargetFolderId is Guid folderId){var folder=folders is null?null:await folders.FindAsync(folderId,ct);
+            if(folder is null||folder.CollectionId!=cmd.TargetCollectionId)throw AppException.BadRequest("Destination folder not in target collection");}
         var item=await requests.FindAsync(cmd.RequestId,ct);
         if(item is null||item.CollectionId!=cmd.CollectionId)throw AppException.NotFound("Request not found");
         await SavedRequestHistoryCodec.CaptureUpdateAsync(item,history,cipher,ct);
-        item.MoveTo(cmd.TargetCollectionId);history.Add(SavedRequestHistoryCodec.Capture(item,cmd.ActorId,"moved",cipher));
+        item.MoveTo(cmd.TargetCollectionId,cmd.TargetFolderId);history.Add(SavedRequestHistoryCodec.Capture(item,cmd.ActorId,"moved",cipher));
         await uow.SaveChangesAsync(ct);
         return ToDto(item);
     }

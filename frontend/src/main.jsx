@@ -43,3 +43,5 @@ import './styles/layers/role-management.css';
 import './styles/layers/invitations.css';
 
 import './styles/layers/realtime-conflicts.css';
+
+import './styles/layers/cloud-folder-polish.css';

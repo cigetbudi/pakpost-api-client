@@ -29,8 +29,8 @@ export function requestFingerprint(draft={},name='') {
   }
   return `${(first>>>0).toString(16)}-${(second>>>0).toString(16)}-${serialized.length}`;
 }
-export function pendingSource(scope,collectionId,{workspaceId='',folderPath=[],pendingId}={}){
-  return {scope,collectionId,...(scope==='workspace'?{workspaceId}:{folderPath}),pending:true,pendingId};
+export function pendingSource(scope,collectionId,{workspaceId='',folderPath=[],folderId=null,pendingId}={}){
+  return {scope,collectionId,...(scope==='workspace'?{workspaceId,folderId}:{folderPath}),pending:true,pendingId};
 }
 export function hasUnsavedChanges(tab,draft){
   if(!tab)return false;

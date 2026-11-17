@@ -10,7 +10,7 @@ namespace Pakpost.Api.Controllers;
 public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePublisher realtime):ControllerBase
 {
     public sealed record SaveRequestBody(string Name,string Method,string Url,string HeadersJson,string Body,
-        string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript="",int? Revision=null);
+        string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript="",int? Revision=null,Guid? FolderId=null);
     private string Instance => Request.Headers["X-PakPost-Instance"].ToString();
     [HttpGet]
     public async Task<IActionResult> List(Guid workspaceId,Guid collectionId,CancellationToken ct)
@@ -18,7 +18,7 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
     [HttpPost]
     public async Task<IActionResult> Save(Guid workspaceId,Guid collectionId,SaveRequestBody body,CancellationToken ct)
     {
-        var result=await sender.Send(new SaveRequestCommand(User.GetUserId(),workspaceId,collectionId,body.Name,body.Method,body.Url,body.HeadersJson,body.Body,body.BodyMode,body.ContentType,body.FormFieldsJson,body.PreRequestScript,body.PostResponseScript),ct);
+        var result=await sender.Send(new SaveRequestCommand(User.GetUserId(),workspaceId,collectionId,body.Name,body.Method,body.Url,body.HeadersJson,body.Body,body.BodyMode,body.ContentType,body.FormFieldsJson,body.PreRequestScript,body.PostResponseScript,body.FolderId),ct);
         await realtime.PublishAsync(workspaceId,"request.created",collectionId,result.Id,result.Revision,Instance,ct);
         return Ok(result);
     }
@@ -44,11 +44,11 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
         await realtime.PublishAsync(workspaceId,"request.updated",collectionId,result.Id,result.Revision,Instance,ct);
         return Ok(result);
     }
-    public sealed record MoveRequestBody(Guid TargetCollectionId);
+    public sealed record MoveRequestBody(Guid TargetCollectionId,Guid? TargetFolderId=null);
     [HttpPatch("{requestId:guid}/move")]
     public async Task<IActionResult> Move(Guid workspaceId,Guid collectionId,Guid requestId,[FromBody] MoveRequestBody body,CancellationToken ct)
     {
-        var result=await sender.Send(new MoveSavedRequestCommand(User.GetUserId(),workspaceId,collectionId,requestId,body.TargetCollectionId),ct);
+        var result=await sender.Send(new MoveSavedRequestCommand(User.GetUserId(),workspaceId,collectionId,requestId,body.TargetCollectionId,body.TargetFolderId),ct);
         await realtime.PublishAsync(workspaceId,"request.moved",collectionId,requestId,result.Revision,Instance,ct);
         await realtime.PublishAsync(workspaceId,"request.created",body.TargetCollectionId,requestId,result.Revision,Instance,ct);
         return Ok(result);

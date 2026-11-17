@@ -42,6 +42,8 @@ export async function synchronizeWorkspaceChanges({events, workspaceId, token, i
   const incoming = events.filter(event => validWorkspaceEvent(event,workspaceId)
     && event.sourceInstance !== CLIENT_INSTANCE_ID);
   if (!incoming.length) return;
+  if(typeof window!=='undefined') for(const event of incoming.filter(e=>e.kind.startsWith('folder.')))
+    window.dispatchEvent(new CustomEvent('pakpost:cloud-folders-changed',{detail:{workspaceId,collectionId:event.collectionId}}));
   const updateCollections = incoming.some(event => event.kind.startsWith('collection.')
     || ['request.created','request.deleted','request.moved'].includes(event.kind));
   if (updateCollections) {

@@ -36,14 +36,14 @@ test('cloud payload rejects missing URL and literal authentication secrets, no s
   assert.throws(()=>importedRequestPayload({name:'Secret',url:'https://example.org',authType:'bearer',bearerToken:'literal-token'}),/variable/);
 });
 
-test('native Postman folder path stays present in parsed request name for flat cloud backend',()=>{
+test('native Postman folder path is preserved separately from the original request name',()=>{
   const input=JSON.stringify({info:{name:'API sample'},item:[{name:'Folder A',item:[{name:'Get user',request:{method:'GET',url:'https://example.org'}}]}]});
   const parsed=parseImportText(input);
   const sources=collectionImportSources(parsed);
   assert.equal(sources[0].name,'API sample');
   assert.deepEqual(sources[0].requests[0].folderPath,['Folder A']);
-  assert.match(importedRequestPayload(sources[0].requests[0]).name,/Folder A/);
-  assert.equal(importedRequestPayload({name:'Get user',folderPath:['Folder A'],url:'https://example.org'}).name,'Folder A / Get user');
+  assert.equal(importedRequestPayload(sources[0].requests[0]).name,'Get user');
+  assert.deepEqual(importedRequestPayload({name:'Get user',folderPath:['Folder A'],url:'https://example.org'}).folderPath,['Folder A']);
 });
 
 test('a session backup restores tabs rather than creating Cloud collections',()=>{

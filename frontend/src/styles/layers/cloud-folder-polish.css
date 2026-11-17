@@ -1,0 +1,25 @@
+/* v8.7.1 · Compact Cloud explorer, no permanent root-drop or new-folder rows. */
+.pp-cloud-folders { min-width:0; }
+.pp-cloud-folders .pp-tree-item-container { min-width:0; }
+.pp-cloud-folders .pp-cloud-folder-row { gap:9px; padding-right:34px; }
+.pp-cloud-folders .pp-cloud-folder-row>svg:first-child { flex:0 0 15px; margin-right:5px; }
+.pp-cloud-folders .pp-tree-item-container>.pp-cloud-request-row { gap:12px; padding-right:34px; }
+.pp-cloud-folders .pp-cloud-request-row>.pp-http-label { flex:0 0 auto; min-width:43px; text-align:center; }
+.pp-cloud-folders .pp-workspace-example-toggle + .pp-cloud-request-row { padding-left:33px!important; }
+/* Active request and bulk selection are different states. */
+.pp-cloud-folders .pp-cloud-tab-active {background:var(--selected)!important;color:var(--text)!important;box-shadow:inset 2px 0 var(--accent);}
+.pp-cloud-folders .pp-cloud-selected:not(.pp-cloud-tab-active) {background:var(--accent-soft)!important;color:var(--text)!important;outline:1px solid var(--accent);outline-offset:-1px;}
+/* Root collection and folders of every nesting level share the same icon tone. */
+.pp-explorer .pp-cloud-collection-row svg.pp-cloud-folder-icon,
+.pp-cloud-folders .pp-cloud-folder-row svg.pp-cloud-folder-icon {color:var(--text2);flex:none;}
+.pp-cloud-root-drop { padding:10px 12px; margin:5px 7px; border:1px dashed var(--accent); border-radius:6px; color:var(--accent); font-size:11px; }
+.pp-cloud-selection-toolbar { display:flex;align-items:center;gap:8px; margin:6px 7px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface2);font-size:11px; }
+.pp-cloud-selection-toolbar span { flex:1; color:var(--text2); }
+.pp-cloud-selection-toolbar button { display:inline-flex; align-items:center; gap:4px; color:var(--text2); }
+.pp-cloud-selection-toolbar button:hover { color:var(--red); }
+.pp-cloud-delete-explainer { padding:14px 4px 0; font-size:12px; line-height:1.7; color:var(--text2); }
+@media(prefers-reduced-motion:reduce){.pp-cloud-folders .pp-cloud-selected,.pp-cloud-folders .pp-cloud-tab-active { transition:none!important; }}
+
+/* Keep inline validation legible without expanding the folder row. */
+.pp-cloud-folder-validation {flex-basis:100%;font-size:11px;color:var(--red);padding:2px 6px;}
+.pp-rename-validation {display:block;font-size:11px;color:var(--red);margin-top:5px;}

@@ -19,6 +19,8 @@ public sealed class SavedRequestConfiguration:IEntityTypeConfiguration<SavedRequ
         b.Property(x=>x.PreRequestScript).HasColumnType("text").HasDefaultValue("").IsRequired();
         b.Property(x=>x.PostResponseScript).HasColumnType("text").HasDefaultValue("").IsRequired();
         b.HasOne<Collection>().WithMany().HasForeignKey(x=>x.CollectionId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<CollectionFolder>().WithMany().HasForeignKey(x=>x.FolderId).OnDelete(DeleteBehavior.NoAction);
         b.HasIndex(x=>x.CollectionId);
+        b.HasIndex(x=>x.FolderId);
     }
 }

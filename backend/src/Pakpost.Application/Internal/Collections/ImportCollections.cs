@@ -12,7 +12,7 @@ namespace Pakpost.Application.Internal.Collections;
 // No intermediate collections are visible if validation/encryption/database persistence fails.
 public sealed record CloudImportRequest(string Name, string Method, string Url, string HeadersJson,
     string Body, string BodyMode = "raw", string ContentType = "application/json",
-    string FormFieldsJson = "[]", string PreRequestScript = "", string PostResponseScript = "");
+    string FormFieldsJson = "[]", string PreRequestScript = "", string PostResponseScript = "", List<string>? FolderPath = null);
 public sealed record CloudImportCollection(string Name, List<CollectionVariableDto> Variables,
     List<CloudImportRequest> Requests);
 public sealed record ImportCollectionsCommand(Guid ActorId, Guid WorkspaceId,
@@ -34,7 +34,7 @@ public sealed class ImportCollectionsValidator : AbstractValidator<ImportCollect
 public sealed class ImportCollectionsHandler(IWorkspaceRepository workspaces,
     ICollectionRepository collections, ISavedRequestRepository requests,
     ISavedRequestRevisionRepository revisions, IEnvironmentValueCipher cipher,
-    IUnitOfWork uow) : IRequestHandler<ImportCollectionsCommand, CloudImportResult>
+    IUnitOfWork uow, ICollectionFolderRepository folders) : IRequestHandler<ImportCollectionsCommand, CloudImportResult>
 {
     public async ValueTask<CloudImportResult> Handle(ImportCollectionsCommand cmd, CancellationToken ct)
     {
@@ -63,6 +63,7 @@ public sealed class ImportCollectionsHandler(IWorkspaceRepository workspaces,
             var col = new Collection(cmd.WorkspaceId, item.Name, cmd.ActorId);
             if (stored.Count > 0) col.SetVariables(JsonSerializer.Serialize(stored));
             collections.Add(col);
+            var pathFolders = new Dictionary<string, CollectionFolder>(StringComparer.OrdinalIgnoreCase);
             foreach (var incoming in item.Requests)
             {
                 if (incoming is null) throw AppException.BadRequest("Request cannot be null");
@@ -73,9 +74,29 @@ public sealed class ImportCollectionsHandler(IWorkspaceRepository workspaces,
                 if (!check.IsValid)
                     throw AppException.BadRequest("Invalid imported request: " + check.Errors[0].ErrorMessage);
                 SavedHeaderPolicy.EnsureSafe(incoming.HeadersJson);
+                Guid? folderId=null;
+                if(incoming.FolderPath is { Count: > 0 } path)
+                {
+                    if(path.Count>24)throw AppException.BadRequest("Imported folder depth exceeds 24");
+                    var currentPath="";
+                    foreach(var segment in path)
+                    {
+                        if(string.IsNullOrWhiteSpace(segment)||segment.Trim().Length>120)
+                            throw AppException.BadRequest("Invalid imported folder segment");
+                        var name=segment.Trim();
+                        currentPath+=name.Length+":"+name+"/"; // unambiguous length-prefixed path key
+                        if(!pathFolders.TryGetValue(currentPath,out var folder))
+                        {
+                            if(pathFolders.Count>=500)throw AppException.BadRequest("Folder limit: 500 per collection");
+                            folder=new CollectionFolder(col.Id,folderId,name);
+                            pathFolders[currentPath]=folder;folders.Add(folder);
+                        }
+                        folderId=folder.Id;
+                    }
+                }
                 var request = new SavedRequest(col.Id, incoming.Name, incoming.Method, incoming.Url,
                     incoming.HeadersJson, incoming.Body, incoming.BodyMode, incoming.ContentType,
-                    incoming.FormFieldsJson, incoming.PreRequestScript, incoming.PostResponseScript);
+                    incoming.FormFieldsJson, incoming.PreRequestScript, incoming.PostResponseScript, folderId);
                 requests.Add(request);
                 revisions.Add(SavedRequestHistoryCodec.Capture(request, cmd.ActorId, "created", cipher));
                 count++;

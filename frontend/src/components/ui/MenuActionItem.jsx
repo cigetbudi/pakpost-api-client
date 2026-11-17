@@ -1,10 +1,14 @@
 import React from 'react';
-import {ArrowDownUp, Copy, Download, Ellipsis, FileText, GitCompareArrows, Pencil, Plus, Trash2} from 'lucide-react';
+import {ArrowDownUp, Braces, Copy, Download, Ellipsis, FileText, FolderPlus, GitCompareArrows, History, Pencil, Play, Plus, Trash2} from 'lucide-react';
 
 // One menu row shared by local collections, Neon collections, and environments.
 // Keep existing action IDs intact; these are visual icons, not new behaviors.
 const actionIcons = {
   newRequest: Plus,
+  newFolder: FolderPlus,
+  runCollection: Play,
+  variables: Braces,
+  versionHistory: History,
   documentation: FileText,
   renameCollection: Pencil,
   duplicateCollection: Copy,

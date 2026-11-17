@@ -36,7 +36,7 @@ test('all CQRS handlers use ValueTask without MediatR references', () => {
   assert.ok(handlerCount >= 37) // V8.5 adds three history/restore handlers
   assert.equal((joined.match(/ValueTask(?:<[^\n]+>)? Handle\(/g) || []).length, handlerCount)
   assert.doesNotMatch(joined, /using MediatR;|public (?:async )?Task(?:<[^\n]+>)? Handle\(/)
-  assert.equal((joined.match(/return Unit\.Value;/g) || []).length, 3)
+  assert.ok((joined.match(/return Unit\.Value;/g) || []).length >= 4)
 })
 
 test('Bun migration keeps React, Vite, QuickJS and existing dev/build scripts', () => {

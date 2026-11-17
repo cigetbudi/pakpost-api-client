@@ -1,3 +1,4 @@
+import {renameActionError} from '../services/renameValidation.js';
 // Collections workbench actions. Stateless factory: shared logic remains scoped to the mounted App.
 // Dependencies are passed from the current render; no singleton store or persist middleware.
 export function createCollectionActions(dependencies) {
@@ -18,6 +19,8 @@ export function createCollectionActions(dependencies) {
     blankDraft,
     busyAction,
     canEditCloud,
+    currentTokenRef,
+    selectedWorkspaceRef,
     collectionImportBusy,
     collectionImportDestination,
     collectionImportFile,
@@ -198,10 +201,10 @@ export function createCollectionActions(dependencies) {
       }catch(e){setNotice(getMessage(e));}
     }
 
-  function createCollectionDraft(scope,collectionId,folderPath=[]){
+  function createCollectionDraft(scope,collectionId,folderPath=[],folderId=null){
       const draft=freshRequest('New Request');
       const source=pendingSource(scope,collectionId,{
-        workspaceId:scope==='workspace'?selectedWs:'',folderPath,
+        workspaceId:scope==='workspace'?selectedWs:'',folderPath,folderId,
         pendingId:typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function'
           ?crypto.randomUUID():`draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
       });
@@ -254,6 +257,28 @@ export function createCollectionActions(dependencies) {
       setSelectedCol(id);
     }
 
+  async function refreshCloudCollection(collectionId) {
+      const workspaceId=selectedWs,auth=token;
+      const valid=()=>selectedWorkspaceRef.current===workspaceId&&currentTokenRef.current===auth;
+      const base=`/api/workspaces/${workspaceId}/collections`;
+      if(!valid())return;
+      try {
+        const latest=await api(`${base}/${collectionId}/requests`,'GET',undefined,auth);
+        if(!valid())return;
+        const current=workspaceRequestLists[workspaceCollectionKey(workspaceId,collectionId)]||[];
+        const retained=new Set(latest.map(r=>r.id));
+        const removed=new Set(current.filter(r=>!retained.has(r.id)).map(r=>r.id));
+        // Detach deleted saved sources, preserve the editor's unsaved contents.
+        if(removed.size)setOpenTabs(tabs=>tabs.map(tab=>tab.source?.scope==='workspace'&&
+          tab.source.workspaceId===workspaceId&&tab.source.collectionId===collectionId&&
+          removed.has(tab.source.requestId)?{...tab,source:null}:tab));
+        setWorkspaceRequestLists(prev=>({...prev,[workspaceCollectionKey(workspaceId,collectionId)]:latest}));
+        if(selectedCol===collectionId)setSavedRequests(latest);
+        const fresh=await api(base,'GET',undefined,auth);
+        if(valid())setCollections(fresh);
+      }catch(error){if(valid())setNotice(getMessage(error));}
+    }
+
   function invalidateWorkspaceRequestLists(workspaceId,ids) {
       setWorkspaceRequestLists(previous => {
         const next={...previous};
@@ -268,25 +293,27 @@ export function createCollectionActions(dependencies) {
         {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
     }
 
-  async function moveWorkspaceRequest(e,targetCollectionId){
+  async function moveWorkspaceRequest(e,targetCollectionId,targetFolderId=null){
       e.preventDefault();e.stopPropagation();
       if(!token)return;
       try{
         const raw=e.dataTransfer.getData(WORKSPACE_DRAG);
         if(!raw)return;
         const {collectionId,requestId}=JSON.parse(raw);
-        if(collectionId===targetCollectionId)return;
-        await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests/${requestId}/move`,'PATCH',
-          {targetCollectionId},token);
+        const sourceItem=(workspaceRequestLists[workspaceCollectionKey(selectedWs,collectionId)]||[])
+          .find(item=>item.id===requestId);
+        if(collectionId===targetCollectionId&&(sourceItem?.folderId||null)===(targetFolderId||null))return;
+        const saved=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests/${requestId}/move`,'PATCH',
+          {targetCollectionId,targetFolderId},token);
         setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.requestId===requestId?
-          {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
+          {...t,source:{...t.source,collectionId:targetCollectionId,revision:saved.revision}}:t));
         invalidateWorkspaceRequestLists(selectedWs,[collectionId,targetCollectionId]);
         if(selectedCol===collectionId){
           const latest=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
           setSavedRequests(latest);
           setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:latest}));
         }
-        setNotice('Request moved to workspace collection');
+        setNotice('Request moved in workspace');
       }catch(err){setNotice(getMessage(err));}
     }
 
@@ -321,6 +348,13 @@ export function createCollectionActions(dependencies) {
         createCollectionDraft('workspace',item.collectionId);
         return;
       }
+      if(action==='newFolder'){
+        setExpandedCollections(old=>({...old,[workspaceCollectionKey(selectedWs,item.collectionId)]:true}));
+        window.dispatchEvent(new CustomEvent('pakpost:cloud-create-folder',{
+          detail:{workspaceId:selectedWs,collectionId:item.collectionId}
+        }));
+        return;
+      }
       const base=`/api/workspaces/${selectedWs}/collections`;
       await doAction(async()=>{
         if(action==='sortCollection'){
@@ -331,20 +365,28 @@ export function createCollectionActions(dependencies) {
         if(action==='duplicateCollection'){
           if(list.length>100)throw Error('Duplicate limit: 100 saved requests');
           const source=collections.find(c=>c.id===item.collectionId);
-          const destination=await api(base,'POST',{name:`${source?.name||'Collection'} (copy)`},token);
-          setWorkspaceCollectionDocs(old=>({...old,[workspaceDocKey(selectedWs,destination.id)]:old[workspaceDocKey(selectedWs,item.collectionId)]||''}));
+          const folders=await api(`${base}/${item.collectionId}/folders`,'GET',undefined,token);
+          const {folderPathForId}=await import('../services/cloudFolderTree.js');
           const variables=await readSavedCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId});
-          if(variables.variables?.length){
-            await api(`${base}/${destination.id}/variables`,'PUT',{version:0,variables:variables.variables.filter(v=>!v.isRedacted)},token);
-          }
-          for(const req of list)await api(`${base}/${destination.id}/requests`,'POST',
-            {name:req.name,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
+          // The same atomic import endpoint handles copies; unlike the previous
+          // POST loop, failures never leave a half-created Cloud collection.
+          const result=await api(`${base}/import`,'POST',{collections:[{
+            name:`${source?.name||'Collection'} (copy)`,
+            variables:(variables.variables||[]).filter(v=>!v.isRedacted),
+            requests:list.map(req=>({name:req.name,method:req.method,url:req.url,headersJson:req.headersJson,
+              body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,
+              preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript,
+              folderPath:folderPathForId(folders,req.folderId)}))
+          }]},token);
+          const destinationId=result.firstId;
+          if(destinationId)setWorkspaceCollectionDocs(old=>({...old,
+            [workspaceDocKey(selectedWs,destinationId)]:old[workspaceDocKey(selectedWs,item.collectionId)]||''}));
           setCollections(await api(base,'GET',undefined,token));return;
         }
         if(action==='duplicateRequest'){
           const req=list.find(x=>x.id===item.requestId);if(!req)return;
           await api(`${base}/${item.collectionId}/requests`,'POST',
-            {name:`${req.name} (copy)`,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
+            {name:`${req.name} (copy)`,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript,folderId:req.folderId},token);
           invalidateWorkspaceRequestLists(selectedWs,[item.collectionId]);
           if(selectedCol===item.collectionId){
             const latest=await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token);
@@ -401,7 +443,7 @@ export function createCollectionActions(dependencies) {
       e.preventDefault();if(!actionDialog)return;
       const {scope,action,collectionId,requestId,folderPath}=actionDialog;
       const name=actionName.trim();
-      if(action.startsWith('rename')&&!name)return;
+      if(action.startsWith('rename')&&renameActionError(actionDialog,name,{collections,localCollections,workspaceRequestLists,selectedWs,workspaceCollectionKey}))return;
       if(action==='renameExample'){
         const success=await doAction(async()=>{
           await renameSavedExample(actionDialog,name);
@@ -453,5 +495,5 @@ export function createCollectionActions(dependencies) {
       }); if(!success)return; }
       setActionDialog(null);
     }
-  return { createExplorerCollection, openCollectionImport, submitCollectionImport, openBoundRequest, openLocalRequest, previewSavedExample, openLocalExample, openWorkspaceExample, downloadJson, updateLocal, createCollectionDraft, handleLocalMenu, expandOrCollapseAllCollections, toggleWorkspaceCollectionById, invalidateWorkspaceRequestLists, moveLocalRequest, moveWorkspaceRequest, showWorkspaceMenu, workspaceDraft, handleWorkspaceMenu, synchronizeSavedExamples, renameSavedExample, executeActionDialog };
+  return { refreshCloudCollection, createExplorerCollection, openCollectionImport, submitCollectionImport, openBoundRequest, openLocalRequest, previewSavedExample, openLocalExample, openWorkspaceExample, downloadJson, updateLocal, createCollectionDraft, handleLocalMenu, expandOrCollapseAllCollections, toggleWorkspaceCollectionById, invalidateWorkspaceRequestLists, moveLocalRequest, moveWorkspaceRequest, showWorkspaceMenu, workspaceDraft, handleWorkspaceMenu, synchronizeSavedExamples, renameSavedExample, executeActionDialog };
 }

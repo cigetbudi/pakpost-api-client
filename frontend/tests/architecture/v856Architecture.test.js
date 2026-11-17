@@ -11,7 +11,7 @@ const src = name => readFileSync(new URL(`../../src/${name}`, import.meta.url), 
 test('all former release-number styles have semantic filenames and a stable cascade', () => {
   const main = src('main.jsx');
   const cssImports = [...main.matchAll(/import ['"]\.\/(styles\/[^'"]+\.css)['"];?/g)].map(m => m[1]);
-  assert.equal(cssImports.length, 27);
+  assert.equal(cssImports.length, 28);
   assert.ok(cssImports[0] === 'styles/base.css');
   assert.ok(cssImports[1] === 'styles/clean-workbench.css');
   assert.ok(cssImports.indexOf('styles/layers/theme-and-surfaces.css') < cssImports.indexOf('styles/layers/qa-sandbox.css'));

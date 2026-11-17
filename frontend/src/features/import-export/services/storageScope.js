@@ -19,10 +19,9 @@ export function cloudEndpointCount(collection,requestLists,key){
 
 /** Prepare the payload accepted by the existing SavedRequestsController, without a migration. */
 export function importedRequestPayload(request){
-  const folder=Array.isArray(request?.folderPath)?request.folderPath.filter(Boolean).join(' / '):'';
-  const original=String(request?.name||request?.requestName||'Imported request').trim();
-  // The current remote API has flat requests. Keep nested folder context in the request name.
-  const name=folder&&!original.startsWith(`${folder} / `)?`${folder} / ${original}`:original;
+  const folderPath=Array.isArray(request?.folderPath)?request.folderPath.map(x=>String(x).trim()):[];
+  if(folderPath.length>24||folderPath.some(x=>!x||x.length>120))throw Error('Cloud folder path is invalid (24 levels, 120 characters each).');
+  const name=String(request?.requestName||request?.name||'Imported request').trim();
   const url=String(request?.url||'').trim();
   if(!name||name.length>120)throw Error(`Imported request name must be 1–120 characters: ${name.slice(0,80)}`);
   if(!url||url.length>2048)throw Error(`Request "${name}" needs a URL of at most 2048 characters to import into Cloud.`);
@@ -36,7 +35,7 @@ export function importedRequestPayload(request){
   if(preRequestScript.length>64000||postResponseScript.length>64000)
     throw Error(`Request "${name}" script exceeds the Cloud limit (64000 characters).`);
   return {
-    name,method,url,
+    name,method,url,folderPath,
     headersJson:encodeStoredHeaders(request.rows||[],request.params||[],request.documentation||'',request.responseExamples||[],auth),
     body,bodyMode:bodyFormat(request.format||'application/json').mode,
     contentType:request.format||'application/json',

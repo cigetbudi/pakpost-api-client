@@ -3,6 +3,8 @@ import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History,
 import { RetroSelect } from '../../../components/ui/RetroSelect.jsx';
 import { EnvironmentExplorer } from '../../environments/components/EnvironmentExplorer.jsx';
 import { LocalCollectionsTree } from './LocalCollectionsTree.jsx';
+import { CloudFolderTree } from './CloudFolderTree.jsx';
+import {activeCloudTabForCollection} from '../services/cloudActiveTab.js';
 import { isDarkAppearance } from '../../settings/services/appearance.js';
 import { canWorkspace } from '../../workspace/services/workspaceRoles.js';
 import { STORAGE_LOCAL, STORAGE_WORKSPACE, cloudEndpointCount } from '../../import-export/services/storageScope.js';
@@ -25,7 +27,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   const { codePreviewRequest, buildCodeRequest, snapshot, importRequestsAndEnvironments, setNotice, loadRequest } = actions;
   const { setSelectedTeam, setWsTab, setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport } = actions;
   const { setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu } = actions;
-  const { moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, toggleWorkspaceCollectionById, createCollectionDraft } = actions;
+  const { moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, toggleWorkspaceCollectionById, createCollectionDraft, handleWorkspaceMenu, refreshCloudCollection } = actions;
   const { setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample } = actions;
   const { draftsRef } = refs;
   const { CodeSidebar, ImportExportSidebar } = deferred;
@@ -70,11 +72,12 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                 const requestKey=workspaceCollectionKey(selectedWs,c.id);
                 const requests=workspaceRequestLists[requestKey]||[];
                 const endpointCount=cloudEndpointCount(c,workspaceRequestLists,requestKey);
+                const activeCloud=activeCloudTabForCollection(openTabs,activeTabId,selectedWs,c.id);
                 return <div key={c.id}>
                 <div className="pp-tree-item-container" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(WORKSPACE_DRAG))e.preventDefault()}} onDrop={e=>moveWorkspaceRequest(e,c.id)}>
-                  <button type="button" aria-expanded={opened} className={`pp-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => toggleWorkspaceCollectionById(c.id)}>
+                  <button type="button" aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => toggleWorkspaceCollectionById(c.id)}>
                     {opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
-                    <FolderClosed size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
+                    <FolderClosed className="pp-cloud-folder-icon" size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
                   </button>
                   <div className="pp-tree-actions">
                     <button className="pp-tree-action" type="button" title={canEditCloud?"New request in collection":"Cannot save Cloud requests with this role"} disabled={!canEditCloud} aria-label={`New request in ${c.name}`} onClick={e=>{e.stopPropagation();createCollectionDraft('workspace',c.id)}}><Plus size={15}/></button>
@@ -82,12 +85,26 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                   </div>
                 </div>
                 <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}><div className="pp-collection-motion-inner">
-                {[...requests].filter(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase())).sort((a,b)=>workspaceSorted[c.id]==='name'?a.name.localeCompare(b.name):0).map(r => {
+                <CloudFolderTree workspaceId={selectedWs} collectionId={c.id} token={token} open={opened} requests={requests}
+                  activeTabId={activeTabId} activeRequestId={activeCloud.requestId}
+                  search={explorerSearch} canEdit={canEditCloud} requestDrag={WORKSPACE_DRAG} sortByName={workspaceSorted[c.id]==='name'}
+                  onNotice={setNotice} onCreateDraft={folderId=>createCollectionDraft('workspace',c.id,[],folderId)}
+                  onMoveRequest={moveWorkspaceRequest} onRefreshRequests={()=>refreshCloudCollection(c.id)}
+                  onRenameRequest={r=>handleWorkspaceMenu('renameRequest',{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}
+                  renderDraft={(folderId,depth)=>openTabs.filter(t=>t.source?.pending&&t.source.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.collectionId===c.id&&
+                    (t.source.folderId||null)===(folderId||null)).filter(t=>t.name.toLowerCase().includes(explorerSearch.toLowerCase()))
+                    .map(t=><button key={t.id} type="button" className={`pp-tree-request pp-draft-request ${t.id===activeCloud.pendingTabId?'pp-cloud-tab-active':''}`} aria-current={t.id===activeCloud.pendingTabId?'page':undefined} style={{paddingLeft:24+depth*14}} onClick={()=>selectTab(t.id)}>
+                      <span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span>{t.name}</span><span className="pp-unsaved-dot"/>
+                    </button>)}
+                  renderRequest={(r,depth,selectionProps={})=>{
                   const meta=decodeStoredHeaders(r.headersJson);
                   const examplesOpen=expandedWorkspaceExamples[`${selectedWs}:${c.id}:${r.id}`]??!!explorerSearch;
+                  const tabActive=activeCloud.requestId===r.id;
                   return <React.Fragment key={r.id}><div className="pp-tree-item-container" draggable={canEditCloud} onDragStart={e=>{if(!canEditCloud)return;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
                     {!!meta.responseExamples?.length&&<button type="button" className="pp-endpoint-example-toggle pp-workspace-example-toggle" aria-expanded={examplesOpen} title={`${examplesOpen?'Hide':'Show'} ${meta.responseExamples.length} response examples`} aria-label={`${examplesOpen?'Collapse':'Expand'} examples for ${r.name}`} onClick={e=>{e.stopPropagation();setExpandedWorkspaceExamples(old=>({...old,[`${selectedWs}:${c.id}:${r.id}`]:!examplesOpen}));}}>{examplesOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>}
-                    <button className="pp-tree-request" title={r.url} onContextMenu={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})} onClick={() => loadSavedRequest({...r,collectionId:c.id})}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
+                    <button className={`pp-tree-request pp-cloud-request-row ${tabActive?'pp-cloud-tab-active':''} ${selectionProps.className||''}`} data-cloud-select-key={selectionProps['data-cloud-select-key']} aria-pressed={selectionProps['aria-pressed']} aria-current={tabActive?'page':undefined} style={{paddingLeft:25+depth*14}} title={r.url}
+                      onContextMenu={e=>{selectionProps.onContextMenu?.(e);showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}}
+                      onClick={e=>{if(selectionProps.onClick?.(e)!==false)loadSavedRequest({...r,collectionId:c.id});}}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
                     <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
                   </div>
                   {!!meta.responseExamples?.length&&<div className={`pp-collection-motion pp-example-motion ${examplesOpen?'is-open':''}`} aria-hidden={!examplesOpen} inert={!examplesOpen}><div className="pp-collection-motion-inner">{(meta.responseExamples||[]).map(example=><div key={`${r.id}:${example.id}`} className="pp-tree-item-container">
@@ -96,12 +113,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                     </button>
                     <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})}><Settings2 size={14}/></button>
                   </div>)}</div></div>}
-                  </React.Fragment>})}
-                {openTabs.filter(t=>t.source?.pending&&t.source.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.collectionId===c.id)
-                  .filter(t=>t.name.toLowerCase().includes(explorerSearch.toLowerCase()))
-                  .map(t=><button key={t.id} type="button" className="pp-tree-request pp-draft-request" onClick={()=>selectTab(t.id)} title="Unsaved draft — click to edit">
-                    <span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span>{t.name}</span><span className="pp-unsaved-dot" title="Not saved"/>
-                  </button>)}
+                  </React.Fragment>}} />
                 {opened && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,c.id)) && <div className="pp-tree-hint">Loading requests…</div>}
                 </div></div>
               </div>})}

@@ -58,7 +58,11 @@ export function createEnvironmentActions(dependencies) {
           drafts=localCollection.requests||[];
         }else{
           const list=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
-          drafts=list.map(workspaceDraft);
+          const {folderPathForId}=await import('../../collections/services/cloudFolderTree.js');
+          const folders=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/folders`,'GET',undefined,token);
+          drafts=list.map(r=>({...workspaceDraft(r),requestName:r.name,folderPath:folderPathForId(folders,r.folderId)}));
+          localCollection={name,documentation:workspaceCollectionDocs[workspaceDocKey(selectedWs,collectionId)]||'',
+            folderPaths:folders.map(folder=>folderPathForId(folders,folder.id)),folderDocs:{},requests:drafts};
         }
         const documentation=scope==='workspace'?workspaceCollectionDocs[workspaceDocKey(selectedWs,collectionId)]||'':'';
         const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection,documentation});

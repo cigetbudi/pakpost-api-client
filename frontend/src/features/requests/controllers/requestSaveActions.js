@@ -55,7 +55,7 @@ export function createRequestSaveActions(dependencies) {
       }else{
         if(!token)throw Error('Sign in to save workspace requests');
         if(!url.trim())throw Error('Request URL is required. Please enter a URL before saving.');
-        const savedPayload=currentSavePayload(name);
+        const savedPayload={...currentSavePayload(name),...(origin.pending&&origin.folderId?{folderId:origin.folderId}:{})};
         if(origin.pending){
           const saved=await createWorkspaceRequest(origin.workspaceId,origin.collectionId,savedPayload,token);
           savedSource={scope:'workspace',workspaceId:origin.workspaceId,collectionId:origin.collectionId,requestId:saved.id,revision:saved.revision};

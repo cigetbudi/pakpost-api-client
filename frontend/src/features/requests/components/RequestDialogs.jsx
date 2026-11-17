@@ -1,3 +1,6 @@
+import {renameActionError} from '../../collections/services/renameValidation.js';
+import {workspaceCollectionKey} from '../../collections/services/collectionExpansion.js';
+
 // Presentation-only composition: state, API calls and mutation stay in App until their controllers are extracted.
 // Each dependency is explicit so this component can be tested independently.
 export function RequestDialogs(props) {
@@ -5,7 +8,7 @@ export function RequestDialogs(props) {
     Dialog, FileUp, ImportDestinationPicker, RequestRevisionPanel, RetroSelect, Save, Suspense,
     actionDialog, actionName, activeSource, activeTabId, activeWorkspace, applyMergedRevision, busyAction,
     canEditCloud, closeConfirmation, collectionImportBusy, collectionImportDestination, collectionImportError, collectionImportFile, collectionImportOpen,
-    conflictDialog, draftsRef, exampleDescription, exampleName, executeActionDialog, isReadOnlyCloudTab, localCollections,
+    conflictDialog, draftsRef, exampleDescription, exampleName, executeActionDialog, isReadOnlyCloudTab, localCollections, collections, workspaceRequestLists,
     openTabs, performTabAction, reloadCloudConflict, restoreRequestRevision, result, saveCollection, saveCols,
     saveConflictCopy, saveExampleOpen, saveLocalCollection, saveName, saveOpen, saveRequest, saveResponseExample,
     saveScope, saveWs, selectRequestHistoryRevision, selectedWs, setActionDialog, setActionName, setAuthMode,
@@ -14,6 +17,7 @@ export function RequestDialogs(props) {
     setSaveScope, setSaveWs, setVersionDialog, snapshot, statusTone, submitCollectionImport, token,
     versionDialog, workspaceDraft, workspaces,
   } = props;
+  const renameError=renameActionError(actionDialog,actionName,{collections,localCollections,workspaceRequestLists,selectedWs,workspaceCollectionKey});
   return <>
     {closeConfirmation&&<Dialog title="Unsaved changes" subtitle="Changes in these tabs have not been saved to their collections." onClose={()=>setCloseConfirmation(null)}>
       <div className="pp-unsaved-confirm">
@@ -83,8 +87,8 @@ export function RequestDialogs(props) {
     </Dialog>}
     {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder',renameExample:'Rename example',deleteExample:'Delete example'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
       <form className="modal-form" onSubmit={executeActionDialog} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setActionDialog(null);}}}>
-        {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required maxLength={actionDialog.action==='renameExample'?140:120} value={actionName} onChange={e=>setActionName(e.target.value)}/></label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}
-        <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
+        {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required aria-invalid={!!renameError} maxLength={actionDialog.action==='renameExample'?140:120} value={actionName} onChange={e=>setActionName(e.target.value)}/>{renameError&&<span role="status" className="pp-rename-validation">{renameError}</span>}</label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}
+        <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction||!!renameError} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
       </form>
     </Dialog>}
 

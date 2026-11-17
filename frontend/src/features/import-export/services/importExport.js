@@ -227,6 +227,15 @@ export function createLocalPostmanExport(collections,{includeSecrets=false}={}){
   const root=createPostmanCollection([],{name:'Pakpost local collections',includeSecrets});
   for(const col of collections||[]){
     const parent={name:col.name,description:col.documentation||'',item:[],variable:(col.variables||[]).map(v=>({key:v.key,value:v.isSecret&&!includeSecrets?'':v.value,type:v.isSecret?'secret':'string'}))};root.item.push(parent);
+    // Create explicit empty folders as well as folders populated by requests.
+    for(const path of col.folderPaths||[]){
+      let target=parent;
+      for(const segment of path){
+        let folder=target.item.find(x=>Array.isArray(x.item)&&x.name===segment);
+        if(!folder){folder={name:segment,item:[]};target.item.push(folder);}
+        target=folder;
+      }
+    }
     for(const draft of col.requests||[]){
       const exported=createPostmanCollection([draft],{includeSecrets}).item[0];
       exported.name=draft.requestName||draft.name||'Request';

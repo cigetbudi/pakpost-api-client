@@ -65,6 +65,22 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("collections", "collection");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.CollectionFolder", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<Guid>("CollectionId").HasColumnType("uuid");
+                    b.Property<Guid?>("ParentFolderId").HasColumnType("uuid").HasColumnName("parent_folder_id");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)");
+                    b.Property<int>("Version").IsConcurrencyToken().ValueGeneratedOnAdd().HasColumnType("integer").HasColumnName("version").HasDefaultValue(1);
+                    b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone");
+                    b.HasKey("Id");
+                    b.HasIndex("ParentFolderId");
+                    b.HasIndex("CollectionId", "ParentFolderId");
+                    b.HasIndex("CollectionId", "Name").IsUnique().HasFilter("parent_folder_id IS NULL");
+                    b.HasIndex("CollectionId", "ParentFolderId", "Name").IsUnique().HasFilter("parent_folder_id IS NOT NULL");
+                    b.ToTable("collection_folders", "collection");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -153,6 +169,8 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CollectionId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("FolderId").HasColumnType("uuid");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -213,6 +231,7 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CollectionId");
+                    b.HasIndex("FolderId");
 
                     b.ToTable("saved_requests", "collection");
                 });
@@ -433,6 +452,14 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.CollectionFolder", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.Collection", null).WithMany()
+                        .HasForeignKey("CollectionId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("Pakpost.Domain.Entities.CollectionFolder", null).WithMany()
+                        .HasForeignKey("ParentFolderId").OnDelete(DeleteBehavior.NoAction);
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.RequestEnvironment", b =>
                 {
                     b.HasOne("Pakpost.Domain.Entities.Workspace", null)
@@ -462,6 +489,8 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Pakpost.Domain.Entities.SavedRequest", b =>
                 {
+                    b.HasOne("Pakpost.Domain.Entities.CollectionFolder", null).WithMany()
+                        .HasForeignKey("FolderId").OnDelete(DeleteBehavior.NoAction);
                     b.HasOne("Pakpost.Domain.Entities.Collection", null)
                         .WithMany()
                         .HasForeignKey("CollectionId")

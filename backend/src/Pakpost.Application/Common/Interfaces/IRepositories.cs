@@ -45,6 +45,14 @@ public interface ITeamRepository
     void Add(Team team);
     void AddMember(TeamMember member);
 }
+public interface ICollectionFolderRepository
+{
+    Task<CollectionFolder?> FindAsync(Guid folderId, CancellationToken ct);
+    Task<IReadOnlyList<CollectionFolder>> ListAsync(Guid collectionId, CancellationToken ct);
+    Task<bool> HasRequestsAsync(Guid folderId, CancellationToken ct);
+    void Add(CollectionFolder folder);
+    void Remove(CollectionFolder folder);
+}
 public interface ISavedRequestRepository
 {
     Task<SavedRequest?> FindAsync(Guid id, CancellationToken ct);

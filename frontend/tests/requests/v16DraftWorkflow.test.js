@@ -82,14 +82,14 @@ test('browser recovery keeps unsaved collection identity and non-plaintext finge
 });
 test('App creates in-place collection drafts, persists first Save, and confirms destructive closes',()=>{
   const app=readWorkbenchSource();
-  assert.match(app,/function createCollectionDraft\(scope,collectionId,folderPath=\[\]\)/);
+  assert.match(app,/function createCollectionDraft\(scope,collectionId,folderPath=\[\](?:,folderId=null)?\)/);
   assert.match(app,/if\(action==='newRequest'\)\{\s*createCollectionDraft\('workspace'/);
   assert.match(app,/const saved=await createWorkspaceRequest\(origin\.workspaceId,origin\.collectionId,savedPayload,token\)/);
   assert.match(app,/await updateWorkspaceRequest\(origin\.workspaceId,origin\.collectionId,origin\.requestId/);
   assert.match(app,/setCloseConfirmation\(\{action,id,unsaved\}\)/);
   assert.match(app,/Discard & close/);
   const explorer=source('../../src/features/collections/components/WorkbenchExplorer.jsx');
-  assert.match(explorer,/pendingTabs=\{openTabs.filter/);
+  assert.match(explorer,/pendingTabs=\{openTabs.filter|renderDraft=\{/);
 });
 test('Collections show pending request plus button and unsaved indicators',()=>{
   const tree=source('../../src/features/collections/components/LocalCollectionsTree.jsx');
