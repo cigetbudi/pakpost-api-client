@@ -4,7 +4,9 @@ import {json} from '@codemirror/lang-json';
 import {xml} from '@codemirror/lang-xml';
 import {html} from '@codemirror/lang-html';
 import {javascript} from '@codemirror/lang-javascript';
-import {linter} from '@codemirror/lint';
+import {linter, lintGutter, forceLinting} from '@codemirror/lint';
+import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
+import {EditorView} from '@codemirror/view';
 import {syntaxProblem} from './requestTools';
 import {extraCodeLanguage} from './extraCodeLanguages';
 import {keymap, ViewPlugin, Decoration} from '@codemirror/view';
@@ -41,8 +43,10 @@ const jsoncCommentHighlight=ViewPlugin.fromClass(class {
   }
 },{decorations:plugin=>plugin.decorations});
 
-export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false,variableUi=null}) {
+export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false,variableUi=null,scriptDiagnostics=false,scriptDiagnostic=null,jumpTo=null}) {
   const editorView=useRef(null);
+  const diagnosticRef=useRef(scriptDiagnostic);
+  diagnosticRef.current=scriptDiagnostic;
   const [hover,setHover]=useState(null);
   const hoverTimer=useRef(null);
   const variables=variableUi?.variables||{};
@@ -53,6 +57,15 @@ export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=
   const keepHover=()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);hoverTimer.current=null;};
   useEffect(()=>()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);},[]);
   useEffect(()=>{closeHover();},[variableSignature,value]);
+  useEffect(()=>{if(scriptDiagnostics&&editorView.current)forceLinting(editorView.current);},[scriptDiagnostics,scriptDiagnostic]);
+  useEffect(()=>{
+    const view=editorView.current;
+    if(!view||!jumpTo?.line)return;
+    const line=view.state.doc.line(Math.min(view.state.doc.lines,Math.max(1,jumpTo.line)));
+    const pos=Math.min(line.to,line.from+Math.max(0,(jumpTo.column||1)-1));
+    view.dispatch({selection:{anchor:pos},scrollIntoView:true});
+    view.focus();
+  },[jumpTo]);
   function handleTokenEnter(e){
     if(!variableUi)return;
     const token=e.target.closest?.('[data-pp-variable-key]');
@@ -72,6 +85,32 @@ export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=
     if(lang==='xml')ex.push(xml());
     if(lang==='html')ex.push(html());
     if(lang==='javascript')ex.push(javascript());
+    if(lang==='javascript'&&scriptDiagnostics&&!readOnly){
+      ex.push(linter(view=>{
+        const diagnostics=[];
+        const length=view.state.doc.length;
+        // CodeMirror already parses JavaScript for highlighting; reuse that parser.
+        // Bound synchronous parsing on large scripts to keep editor interaction smooth.
+        if(length<=30000){
+          const tree=ensureSyntaxTree(view.state,length,60)||syntaxTree(view.state);
+          tree.iterate({enter:node=>{
+            if(!node.type.isError||diagnostics.length>=20)return;
+            const from=Math.max(0,Math.min(node.from,length));
+            const to=Math.max(from,Math.min(length,node.to||from+1));
+            diagnostics.push({from,to,severity:'error',source:'JavaScript',message:'JavaScript syntax error near this position'});
+          }});
+        }
+        const issue=diagnosticRef.current;
+        if(issue?.line&&issue.phase&&issue.line<=view.state.doc.lines){
+          const line=view.state.doc.line(issue.line);
+          const from=Math.min(line.to,line.from+Math.max(0,(issue.column||1)-1));
+          const to=Math.min(line.to,from+1);
+          diagnostics.push({from,to,severity:'error',source:'QuickJS',message:`${issue.name}: ${issue.message}`});
+        }
+        return diagnostics;
+      },{delay:350}));
+      ex.push(lintGutter());
+    }
     if(['shell','python','go','csharp','curl'].includes(lang))ex.push(extraCodeLanguage());
     if(allowComments&&!readOnly)ex.push(keymap.of([{key:'Mod-/',run:view=>toggleLineComment(view,lang)}]));
     if(lint && !readOnly && ['json','jsonc','xml'].includes(lang)) {
@@ -81,7 +120,7 @@ export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=
       },{delay:350}));
     }
     return ex;
-  },[lang,lint,readOnly,allowComments,variableSignature]);
+  },[lang,lint,readOnly,allowComments,variableSignature,scriptDiagnostics]);
   return <div className={'pp-editor-wrap'+(fill?' pp-editor-wrap-fill':'')} onMouseOver={handleTokenEnter} onMouseOut={handleTokenLeave}>
     {allowComments&&!readOnly&&<button className="pp-editor-comment" type="button" title="Toggle comment on selected lines (Ctrl/Cmd+/)" aria-label="Toggle comment selection" onMouseDown={e=>e.preventDefault()} onClick={()=>{if(editorView.current)toggleLineComment(editorView.current,lang)}}><MessageSquareText size={14}/> <span>Comment</span></button>}
     <CodeMirror value={value} theme={theme === 'dark' ? 'dark' : 'light'}

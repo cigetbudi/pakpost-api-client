@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import {
   ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
@@ -49,6 +49,9 @@ import {createResponseExample,exampleToResult,renameResponseExample,sanitizeResp
 import {applyAuthorization,AUTH_OPTIONS} from './features/authorization';
 import {readInterceptorMode,writeInterceptorMode,probeExtension,dispatchRequest,EXTENSION_CHANNEL} from './features/interceptorClient';
 import {discoverApiDestinations} from './features/interceptorDiscovery';
+import {appendConsoleEvent, subscribeConsoleEvents, clearConsoleEvents} from './features/pakpostConsoleStore.js';
+import {collectionVariableKey, readCollectionVariables, writeCollectionVariables, resolvedScriptVariables} from './features/collectionVariableSession.js';
+const PakpostConsole = lazy(() => import('./features/PakpostConsole.jsx'));
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -108,6 +111,9 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
 
 export default function App() {
   const [page, setPage] = useState('tester');
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [consoleEvents, setConsoleEvents] = useState([]);
+  useEffect(() => subscribeConsoleEvents(setConsoleEvents), []);
   const [interceptorMode,setInterceptorMode]=useState(()=>readInterceptorMode(localStorage));
   const [extensionStatus,setExtensionStatus]=useState({state:'unknown',version:''});
   const [commandOpen, setCommandOpen] = useState(false);
@@ -154,6 +160,8 @@ export default function App() {
   const [scriptLog, setScriptLog] = useState(RECOVERED.scriptLog || []);
   const [scriptTests, setScriptTests] = useState(RECOVERED.scriptTests || []);
   const [scriptError, setScriptError] = useState(RECOVERED.scriptError || '');
+  const [scriptDiagnostic,setScriptDiagnostic] = useState(RECOVERED.scriptDiagnostic || null);
+  const [scriptJump,setScriptJump] = useState(null);
   const [responsePretty, setResponsePretty] = useState(true);
   const [prettyResponse, setPrettyResponse] = useState('');
   const [localEnvironments, setLocalEnvironments] = useState(initialLocalEnvs);
@@ -162,9 +170,10 @@ export default function App() {
   const [environmentSelections,setEnvironmentSelections] = useState(()=>readEnvironmentSelections(localStorage,CACHED));
   // Never persist QA/Writer Cloud environment edits. Their script changes are RAM-only.
   const sessionEnvironmentOverlays=useRef(new Map());
+  const sessionCollectionVariables=useRef(new Map());
   const sessionDocumentationOverlays=useRef(new Map());
   const [,refreshSessionEnvironment]=useState(0);
-  useEffect(()=>{sessionEnvironmentOverlays.current.clear();sessionDocumentationOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
+  useEffect(()=>{sessionEnvironmentOverlays.current.clear();sessionCollectionVariables.current.clear();sessionDocumentationOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
   const [reqTab, setReqTab] = useState(RECOVERED.reqTab || 'params');
   const [resTab, setResTab] = useState(RECOVERED.resTab || 'body');
   const [loading, setLoading] = useState(false);
@@ -339,13 +348,14 @@ export default function App() {
   }
 
   const currentAuth=()=>({authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn});
-  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,responseExamples:sanitizeResponseExamples(responseExamples),scriptLog,scriptTests,scriptError, reqTab, resTab, result, params: params.map(p => ({ ...p })), ...currentAuth() }; }
+  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,responseExamples:sanitizeResponseExamples(responseExamples),scriptLog,scriptTests,scriptError,scriptDiagnostic, reqTab, resTab, result, params: params.map(p => ({ ...p })), ...currentAuth() }; }
   function restoreDraft(next) {
     setMethod(next.method||'GET');setUrl(next.url||'');setRows(next.rows||[{...EMPTY_HEADER}]);setBody(next.body||'');setDocumentation(next.documentation||'');
     setFormat(next.format||'application/json');setFormFields(next.formFields||[{key:'',value:''}]);
     setBinaryFile(next.binaryFile||{name:'',base64:''});
     setPreScript(next.preScript||'');setPostScript(next.postScript||'');setResponseExamples(sanitizeResponseExamples(next.responseExamples));
     setScriptLog(next.scriptLog||[]);setScriptTests(next.scriptTests||[]);setScriptError(next.scriptError||'');
+    setScriptDiagnostic(next.scriptDiagnostic||null);setScriptJump(null);
     setReqTab(next.reqTab||'params');setResTab(next.resTab||'body');setResult(next.result||null);setResponsePretty(next.responsePretty??true);setPrettyResponse(next.prettyResponse||'');
     setParams(next.params||[{...EMPTY_HEADER}]);setAuthType(next.authType||'none');setBearerToken(next.bearerToken||'');
     setBasicUsername(next.basicUsername||'');setBasicPassword(next.basicPassword||'');
@@ -384,7 +394,7 @@ export default function App() {
     const timer=setTimeout(persist,600);
     window.addEventListener('beforeunload',persist);
     return ()=>{clearTimeout(timer);window.removeEventListener('beforeunload',persist)};
-  },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,responseExamples,scriptLog,scriptTests,scriptError,
+  },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,responseExamples,scriptLog,scriptTests,scriptError,scriptDiagnostic,
     reqTab,resTab,result,params,authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,selectedWs,members,membersWorkspaceId,me]);
   function selectTab(id) {
     setEditingRequestName(false);
@@ -1210,7 +1220,7 @@ export default function App() {
     activeTabRef.current=next[0].id;setActiveTabId(next[0].id);setOpenTabs(next);
     restoreDraft(cleaned[next[0].id]);
     setRecent([]); // previous account's request history must not survive sign-out.
-    sessionEnvironmentOverlays.current.clear();sessionDocumentationOverlays.current.clear();
+    sessionEnvironmentOverlays.current.clear();sessionCollectionVariables.current.clear();sessionDocumentationOverlays.current.clear();
     clearWorkbenchCache(); // Never expose another account's Cloud tabs after logout.
     setGoogleLinked(false);setCanCreateWorkspace(false);sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]);
   }
@@ -1432,16 +1442,35 @@ export default function App() {
     if(!url.trim()){setNotice('Enter a request URL first');return;}
     if(loading)return;
     const tabId=activeTabRef.current;
-    stashActive();setLoading(true);setResult(null);setPrettyResponse('');setResponsePretty(true);setScriptError('');setScriptLog([]);setScriptTests([]);
+    const executionId=globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const startedAt=performance.now();
+    const trace=(level,phase,message,details={})=>appendConsoleEvent({executionId,tabId,level,phase,message,...details});
+    trace('info','request','Execution started',{method});
+    stashActive();setLoading(true);setResult(null);setPrettyResponse('');setResponsePretty(true);setScriptError('');setScriptDiagnostic(null);setScriptJump(null);setScriptLog([]);setScriptTests([]);
     let variables=varsFromEnv();
     // Snapshot the workspace, selected environment and permissions at Send time.
     // A later workspace switch cannot redirect this request's script edits.
     const runEnvironment={environment:activeEnvironment,scope:envScope,sessionKey:activeSessionEnvironmentKey,
       canWrite:canWriteEnvironment,initialValues:{...variables}};
     const logs=[],tests=[];
+    // Snapshot the source on Send; navigating while the request is in-flight must not switch scopes.
+    const sourceAtSend=openTabs.find(t=>t.id===tabId)?.source;
+    const collectionKey=collectionVariableKey(sourceAtSend,tabId,me?.id||'guest');
+    let collectionVars=readCollectionVariables(sessionCollectionVariables.current,collectionKey);
     try {
-      const pre=await runSandbox(preScript,'pre',variables,postmanRequestSnapshot({method,url,headers:requestHeaderObject(),body:languageFromMime(format)==='json'?stripJsonComments(body):body,format},variables),null);
-      if(pre.error)throw new Error(`Pre-request script: ${pre.error}`);
+      const pre=await runSandbox(preScript,'pre',variables,postmanRequestSnapshot({method,url,headers:requestHeaderObject(),body:languageFromMime(format)==='json'?stripJsonComments(body):body,format},resolvedScriptVariables(collectionVars,variables)),null,collectionVars);
+      if(pre.error){
+        const failure=new Error(`Pre-request script: ${pre.error}`);
+        failure.scriptDiagnostic=pre.diagnostic||null;
+        pre.logs?.forEach(line=>trace('log','pre-script',line));
+        logs.push(...(pre.logs||[]).map(line=>'PRE: '+line));
+        trace('error','pre-script',pre.error);
+        throw failure;
+      }
+      trace('info','pre-script','Pre-request script completed');
+      pre.logs.forEach(line=>trace('log','pre-script',line));
+      collectionVars=pre.collectionVariables||collectionVars;
+      writeCollectionVariables(sessionCollectionVariables.current,collectionKey,collectionVars);
       variables=pre.variables;logs.push(...pre.logs.map(x=>'PRE: '+x));tests.push(...pre.tests);
       await applyScriptVariables(pre.environmentVariables || variables,runEnvironment);
       const command=buildOutgoing(variables);
@@ -1456,31 +1485,42 @@ export default function App() {
         const problem=syntaxProblem(command.body,languageFromMime(format));
         if(problem)throw new Error('Request body is invalid: '+problem.message);
       }
+      trace('info','network','HTTP request dispatched',{method:command.method||method,transport:interceptorMode});
       const r=interceptorMode==='proxy'
         ?await api('/api/proxy/send','POST',command)
         :await dispatchRequest(command,interceptorMode);
+      trace(r.statusCode>=400?'warn':'info','network','HTTP response received',{status:r.statusCode,elapsedMs:r.elapsedMs});
       // An HTTP request that completed must remain visible even if the post-response script fails.
       let scriptErrorNext='';
+      let scriptDiagnosticNext=null;
       try {
-        const post=await runSandbox(postScript,'post',pre.environmentVariables||varsFromEnv(),command,r,pre.localVariables||{});
+        const post=await runSandbox(postScript,'post',pre.environmentVariables||varsFromEnv(),command,r,pre.localVariables||{},collectionVars);
         logs.push(...post.logs.map(x=>'POST: '+x));tests.push(...post.tests);
-        if(post.error){scriptErrorNext=post.error;logs.push('SCRIPT ERROR: '+post.error);}
-        else await applyScriptVariables(post.environmentVariables||post.variables,runEnvironment);
+        post.logs.forEach(line=>trace('log','post-script',line));
+        post.tests.forEach(test=>trace(test.passed===false?'error':'info','test',test.name||'Assertion completed',{passed:test.passed}));
+        if(post.error){scriptErrorNext=post.error;scriptDiagnosticNext=post.diagnostic||null;logs.push('SCRIPT ERROR: '+post.error);trace('error','post-script',post.error);}
+        else {
+          writeCollectionVariables(sessionCollectionVariables.current,collectionKey,post.collectionVariables||collectionVars);
+          await applyScriptVariables(post.environmentVariables||post.variables,runEnvironment);
+        }
       }catch(scriptFailure){
         scriptErrorNext=getMessage(scriptFailure);
-        logs.push('SCRIPT ERROR: '+scriptErrorNext);
+        scriptDiagnosticNext=scriptFailure.scriptDiagnostic||null;
+        logs.push('SCRIPT ERROR: '+scriptErrorNext);trace('error','post-script',scriptErrorNext);
       }
-      draftsRef.current[tabId]={...draftsRef.current[tabId],result:r,resTab:'body',scriptLog:logs,scriptTests:tests,scriptError:scriptErrorNext};
-      if(tabId===activeTabRef.current){setResult(r);setResTab('body');setScriptLog(logs);setScriptTests(tests);setScriptError(scriptErrorNext);}
+      draftsRef.current[tabId]={...draftsRef.current[tabId],result:r,resTab:'body',scriptLog:logs,scriptTests:tests,scriptError:scriptErrorNext,scriptDiagnostic:scriptDiagnosticNext};
+      if(tabId===activeTabRef.current){setResult(r);setResTab('body');setScriptLog(logs);setScriptTests(tests);setScriptError(scriptErrorNext);setScriptDiagnostic(scriptDiagnosticNext);}
       setOpenTabs(t=>t.map(x=>x.id===tabId?{...x,status:r.statusCode}:x));
       // QA Sandbox requests are not stored in durable request history.
       if(!isReadOnlyCloudTab(openTabs.find(t=>t.id===tabId),canEditCloud,selectedWs))
         setRecent(old=>[{method,url:command.url,status:r.statusCode,elapsed:r.elapsedMs,body,rows:rows.map(x=>({...x}))},...old].slice(0,20));
     }catch(e){
+      trace('error','request','Execution failed',{errorCode:e?.name||'Error'});
       const error={error:getMessage(e)};
-      draftsRef.current[tabId]={...draftsRef.current[tabId],result:error,scriptLog:logs,scriptTests:tests,scriptError:getMessage(e)};
-      if(tabId===activeTabRef.current){setResult(error);setScriptLog(logs);setScriptTests(tests);setScriptError(getMessage(e));}
-    }finally{setLoading(false)}
+      const diagnostic=e?.scriptDiagnostic||null;
+      draftsRef.current[tabId]={...draftsRef.current[tabId],result:error,scriptLog:logs,scriptTests:tests,scriptError:getMessage(e),scriptDiagnostic:diagnostic};
+      if(tabId===activeTabRef.current){setResult(error);setScriptLog(logs);setScriptTests(tests);setScriptError(getMessage(e));setScriptDiagnostic(diagnostic);}
+    }finally{trace('info','request','Execution finished',{elapsedMs:Math.round(performance.now()-startedAt)});setLoading(false)}
   }
 
   const doAction = async fn => {
@@ -1766,7 +1806,7 @@ export default function App() {
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
           </div>
-          <div className="pp-tabs-actions"><span><span className="pp-working-dot"/> {token ? 'Synced' : 'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
+          <div className="pp-tabs-actions"><button type="button" className={consoleOpen?'pp-console-toggle active':'pp-console-toggle'} title="Toggle PakPost Console" aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={15}/> Console</button><span><span className="pp-working-dot"/> {token ? 'Synced' : 'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
         </div>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
@@ -1849,15 +1889,22 @@ export default function App() {
                 </div></>}
                 {reqTab === 'scripts'&&<div className="pp-script-panel">
                   <div className="pp-script-label"><strong>Pre-request script</strong><span>Runs before resolving and sending HTTP request</span></div>
-                  <TextEditor value={preScript} onChange={setPreScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments/>
+                  <TextEditor value={preScript} onChange={value=>{setPreScript(value);setScriptDiagnostic(previous=>previous?.phase==='pre'?null:previous);setScriptError('');}} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments scriptDiagnostics scriptDiagnostic={scriptDiagnostic?.phase==='pre'?scriptDiagnostic:null} jumpTo={scriptJump?.phase==='pre'?scriptJump:null}/>
                   <div className="pp-script-label"><strong>Post-response script</strong><span>Runs after receiving the HTTP response</span></div>
-                  <TextEditor value={postScript} onChange={setPostScript} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments/>
+                  <TextEditor value={postScript} onChange={value=>{setPostScript(value);setScriptDiagnostic(previous=>previous?.phase==='post'?null:previous);setScriptError('');}} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments scriptDiagnostics scriptDiagnostic={scriptDiagnostic?.phase==='post'?scriptDiagnostic:null} jumpTo={scriptJump?.phase==='post'?scriptJump:null}/>
                   <p className="pp-script-note">Postman-compatible subset: require('crypto-js'), pm.request.url.path, pm.request.body.raw, pm.variables.get/set, pm.environment.get/set, pm.response.json(), pm.test(), console.log().
                   Scripts run in an isolated, time-limited QuickJS worker. External npm import is not enabled yet.</p>
                   {(scriptLog.length>0||scriptTests.length>0||scriptError)&&<div className="pp-script-console"><strong>Script results</strong>
                     {scriptLog.map((l,i)=><pre key={i}>{l}</pre>)}
                     {scriptTests.map((t,i)=><div key={i} className={t.passed?'pp-test-pass':'pp-test-fail'}>{t.passed?'✓':'✕'} {t.name}{t.error&&` — ${t.error}`}</div>)}
-                    {scriptError&&<div className="pp-inline-validation">{scriptError}</div>}
+                    {scriptDiagnostic ? <button type="button" className="pp-script-diagnostic-item" disabled={!scriptDiagnostic.line}
+                      title={scriptDiagnostic.line?'Jump to the failed script line':'Location unavailable'}
+                      onClick={()=>setScriptJump({...scriptDiagnostic,serial:Date.now()})}>
+                      <AlertTriangle size={15}/><span><strong>{scriptDiagnostic.phase==='post'?'Post-response':'Pre-request'} · {scriptDiagnostic.name}</strong>
+                        <span>{scriptDiagnostic.message}</span>
+                        <small>{scriptDiagnostic.line?`Line ${scriptDiagnostic.line}${scriptDiagnostic.column?`, column ${scriptDiagnostic.column}`:''} · Click to navigate`:'Script location unavailable'}</small>
+                      </span>
+                    </button> : scriptError&&<div className="pp-inline-validation">{scriptError}</div>}
                   </div>}
                 </div>}
               </div>
@@ -2070,6 +2117,7 @@ export default function App() {
         <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
       </form>
     </Dialog>}
+  {consoleOpen && <Suspense fallback={<div className="pp-console-loading">Opening PakPost Console…</div>}><PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents}/></Suspense>}
   <FastTooltip/>
   </div>;
 }

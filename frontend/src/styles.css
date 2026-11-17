@@ -320,3 +320,15 @@ button{border:0;background:none}h1,h2,h3,p{margin:0}
 .pp-example-preview{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)}.pp-example-preview strong{font-size:12px}.pp-example-preview small{margin-left:auto;color:var(--muted);font:10px 'JetBrains Mono',monospace}
 
 .pp-example-warning{font-size:11px;line-height:1.55;color:var(--muted);margin:0;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:6px}
+
+/* V8.1.2: Script diagnostics reuse CodeMirror's lightweight lint gutter/tooltip. */
+.pp-script-panel .cm-lintRange-error {border-bottom:2px wavy var(--red,#ff6b7c);background:rgba(235,77,89,.09)}
+.pp-script-panel .cm-lint-marker-error {filter:saturate(1.2)}
+.pp-script-diagnostic-item{display:flex;align-items:flex-start;gap:9px;width:100%;text-align:left;padding:10px 11px;margin-top:8px;border:1px solid rgba(240,90,100,.38);border-radius:6px;color:var(--red,#ff7180);background:rgba(240,90,100,.09);cursor:pointer}
+.pp-script-diagnostic-item:disabled{cursor:default;opacity:1}
+.pp-script-diagnostic-item:hover:not(:disabled){background:rgba(240,90,100,.15)}
+.pp-script-diagnostic-item>svg{flex:none;margin-top:2px}
+.pp-script-diagnostic-item>span{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
+.pp-script-diagnostic-item strong{font-size:11px}
+.pp-script-diagnostic-item span span{font-size:11px}
+.pp-script-diagnostic-item small{color:var(--muted);font-size:10px}

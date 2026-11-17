@@ -19,7 +19,7 @@ function safeDraft(d){
   return {...d,url:sanitizedUrl,rows:(d.rows||[]).map(r=>({...r,value:SENSITIVE_KEY.test(r.key||'')?'':r.value})),
     params:(d.params||[]).map(r=>({...r,value:SENSITIVE_KEY.test(r.key||'')?'':r.value})),bearerToken:'',basicPassword:'',apiKeyValue:'',
     responseExamples:sanitizeResponseExamples(d.responseExamples),
-    result:null,scriptLog:[],scriptTests:[],scriptError:''};
+    result:null,scriptLog:[],scriptTests:[],scriptError:'',scriptDiagnostic:null};
 }
 export function readWorkbenchCache(){
   if(typeof sessionStorage==='undefined')return null;

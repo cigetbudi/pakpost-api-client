@@ -1,9 +1,11 @@
+import {scriptDiagnostic, formatScriptDiagnostic} from './scriptDiagnostics.js';
 import {newQuickJSWASMModuleFromVariant} from 'quickjs-emscripten-core';
 import releaseVariant from '@jitl/quickjs-singlefile-browser-release-sync';
 
 self.onmessage = async ({data}) => {
-  const {id, code, phase, variables, localVariables, request, response}=data;
+  const {id, code, phase, variables, collectionVariables, localVariables, request, response}=data;
   let runtime, vm;
+  let sourceStartLine=1;
   try {
     const QuickJS = await newQuickJSWASMModuleFromVariant(releaseVariant);
     runtime = QuickJS.newRuntime();
@@ -25,24 +27,35 @@ self.onmessage = async ({data}) => {
       libraryResult.value.dispose();
     }
 
-    const initial=JSON.stringify({phase,variables,localVariables,request,response});
+    const initial=JSON.stringify({phase,variables,collectionVariables,localVariables,request,response});
     // Code executes inside QuickJS, not the JS worker's host/global context.
-    const script=String.raw`(function(){
+    const prefix=String.raw`(function(){
       'use strict';
       const input=${initial};
       const __environment={...input.variables};
+      const __collection={...(input.collectionVariables||{})};
       const __local={...input.localVariables};
       const __logs=[]; const __tests=[];
       const __request=input.request ? {...input.request,headers:{...(input.request.headers||{})}} : null;
       const __headerOverrides={};
       const __has=(o,k)=>Object.prototype.hasOwnProperty.call(o,String(k));
-      const __allVars=()=>({...__environment,...__local});
-      const __get=(key)=>__has(__local,key)?__local[String(key)]:__environment[String(key)];
+      const __allVars=()=>({...__collection,...__environment,...__local});
+      const __get=(key)=>__has(__local,key)?__local[String(key)]:__has(__environment,key)?__environment[String(key)]:__collection[String(key)];
+      const __collectionScope={
+        get:(k)=>__collection[String(k)],
+        set:(k,v)=>{__collection[String(k)]=String(v)},
+        unset:(k)=>{delete __collection[String(k)]},
+        has:(k)=>__has(__collection,k),
+        clear:()=>{for(const k of Object.keys(__collection))delete __collection[k]},
+        toObject:()=>({...__collection})
+      };
       const __envScope={
         get:(k)=>__environment[String(k)],
         set:(k,v)=>{__environment[String(k)]=String(v)},
         unset:(k)=>{delete __environment[String(k)]},
-        has:(k)=>__has(__environment,k)
+        has:(k)=>__has(__environment,k),
+        clear:()=>{for(const k of Object.keys(__environment))delete __environment[k]},
+        toObject:()=>({...__environment})
       };
       const __headerLookup=(key)=>Object.keys(__request?.headers||{}).find(k=>k.toLowerCase()===String(key).toLowerCase());
       const __headerMethods={
@@ -60,11 +73,12 @@ self.onmessage = async ({data}) => {
       const __status=input.response?.statusCode;
       const pm={
         environment:__envScope,
+        collectionVariables:__collectionScope,
         variables:{
           get:__get,
           set:(k,v)=>{__local[String(k)]=String(v)},
           unset:(k)=>{delete __local[String(k)]},
-          has:(k)=>__has(__local,k)||__has(__environment,k),
+          has:(k)=>__has(__local,k)||__has(__environment,k)||__has(__collection,k),
           toObject:__allVars,
           replaceIn:(template)=>{
             let text=String(template);
@@ -117,20 +131,38 @@ self.onmessage = async ({data}) => {
       };
       let __scriptError=null;
       try{(function(){
-${code}
-})();}catch(e){__scriptError=String(e&&e.stack||e)}
+`;
+    sourceStartLine=prefix.split('\n').length;
+    const suffix=String.raw`
+})();}catch(e){__scriptError={name:String(e?.name||'Error'),message:String(e?.message||e),stack:String(e?.stack||'')}}
       return JSON.stringify({
         variables:__allVars(),
         environmentVariables:__environment,
+        collectionVariables:__collection,
         localVariables:__local,
         requestHeaderOverrides:__headerOverrides,
-        logs:__logs,tests:__tests,error:__scriptError
+        logs:__logs,tests:__tests,scriptFault:__scriptError
       });
     })()`;
-    const result=vm.evalCode(script);
-    if(result.error){const error=vm.dump(result.error);result.error.dispose();throw new Error(typeof error==='string'?error:JSON.stringify(error));}
+    const script=prefix+String(code)+suffix;
+    const result=vm.evalCode(script,'pakpost-script.js');
+    if(result.error){
+      const fault=vm.dump(result.error);result.error.dispose();
+      const diagnostic=scriptDiagnostic(fault,{phase,code,sourceStartLine});
+      self.postMessage({id,ok:true,data:{logs:[],tests:[],error:formatScriptDiagnostic(diagnostic),diagnostic}});
+      return;
+    }
     const output=vm.dump(result.value);result.value.dispose();
-    self.postMessage({id,ok:true,data:JSON.parse(output)});
-  }catch(error){self.postMessage({id,ok:false,error:error?.message||String(error)});}
+    const data=JSON.parse(output);
+    if(data.scriptFault){
+      data.diagnostic=scriptDiagnostic(data.scriptFault,{phase,code,sourceStartLine});
+      data.error=formatScriptDiagnostic(data.diagnostic);
+    } else data.error=null;
+    delete data.scriptFault;
+    self.postMessage({id,ok:true,data});
+  }catch(error){
+    // Worker failures (e.g. missing crypto-js) have no reliable script location.
+    self.postMessage({id,ok:false,error:error?.message||String(error)});
+  }
   finally{vm?.dispose();runtime?.dispose();}
 };
