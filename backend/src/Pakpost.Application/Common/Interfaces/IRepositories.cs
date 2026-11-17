@@ -52,6 +52,14 @@ public interface ISavedRequestRepository
     void Add(SavedRequest value);
     void Remove(SavedRequest value);
 }
+public interface ISavedRequestRevisionRepository
+{
+    Task<bool> AnyAsync(Guid requestId,CancellationToken ct);
+    Task<IReadOnlyList<SavedRequestRevision>> ListAsync(Guid requestId,int take,CancellationToken ct);
+    Task<SavedRequestRevision?> FindAsync(Guid requestId,int revision,CancellationToken ct);
+    Task TrimAsync(Guid requestId,int keepExisting,CancellationToken ct);
+    void Add(SavedRequestRevision revision);
+}
 public interface IUnitOfWork { Task<int> SaveChangesAsync(CancellationToken ct); }
 public interface IPasswordHasher
 {

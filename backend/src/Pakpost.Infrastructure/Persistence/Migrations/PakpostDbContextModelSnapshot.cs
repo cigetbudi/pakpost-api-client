@@ -119,6 +119,20 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("request_environment_variables", "organization");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.SavedRequestRevision", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<Guid>("RequestId").HasColumnType("uuid");
+                    b.Property<int>("Revision").HasColumnType("integer");
+                    b.Property<Guid>("ActorId").HasColumnType("uuid");
+                    b.Property<string>("Action").IsRequired().HasMaxLength(24).HasColumnType("character varying(24)");
+                    b.Property<string>("EncryptedSnapshot").IsRequired().HasColumnType("text").HasColumnName("encrypted_snapshot");
+                    b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone").HasColumnName("created_at");
+                    b.HasKey("Id");
+                    b.HasIndex("RequestId", "Revision").IsUnique();
+                    b.ToTable("saved_request_revisions", "collection");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.SavedRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -433,6 +447,15 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.HasOne("Pakpost.Domain.Entities.RequestEnvironment", null)
                         .WithMany("Variables")
                         .HasForeignKey("EnvironmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.SavedRequestRevision", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.SavedRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

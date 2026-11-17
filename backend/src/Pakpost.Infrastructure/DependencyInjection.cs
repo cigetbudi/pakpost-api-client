@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkspaceInvitationEmailSender, SmtpWorkspaceInvitationEmailSender>();
         services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<ISavedRequestRepository, SavedRequestRepository>();
+        services.AddScoped<ISavedRequestRevisionRepository, SavedRequestRevisionRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IRequestEnvironmentRepository, RequestEnvironmentRepository>();
         services.AddSingleton<IEnvironmentValueCipher, EnvironmentValueCipher>();

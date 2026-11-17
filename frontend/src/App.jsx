@@ -36,6 +36,7 @@ import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation,
 import {isReadOnlyCloudTab, sandboxCacheTabIds,sandboxDocKey} from './features/qaSandbox.js';
 import {validWorkspaceEvent,shouldRefreshRequestList} from './features/workspaceRealtime.js';
 import {decideCloudTabSync,conflictFields} from './features/cloudConflict.js';
+import {applyFieldMerge} from './features/requestVersionMerge.js';
 import {LocalCollectionsTree} from './features/LocalCollectionsTree';
 import {defaultStorageScope,allowedStorageScope,STORAGE_LOCAL,STORAGE_WORKSPACE,cloudEndpointCount,collectionImportSources,saveCloudCollections} from './features/storageScope';
 import {MenuActionItem} from './features/MenuActionItem';
@@ -73,6 +74,7 @@ function ImportExportSidebar(props) {
 const PakpostConsole = lazy(() => import('./features/PakpostConsole.jsx'));
 const CollectionRunner = lazy(() => import('./features/CollectionRunner.jsx'));
 const CollectionVariablesEditor = lazy(() => import('./features/CollectionVariablesEditor.jsx'));
+const RequestRevisionPanel = lazy(() => import('./features/RequestRevisionPanel.jsx'));
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -125,9 +127,9 @@ function IconButton({ icon: Icon, onClick, label, disabled = false }) {
 function Empty({ icon: Icon, title, description }) {
   return <div className="empty"><div className="empty-icon"><Icon size={23}/></div><strong>{title}</strong><p>{description}</p></div>;
 }
-function Dialog({ title, subtitle, onClose, children }) {
+function Dialog({ title, subtitle, onClose, children, wide = false }) {
   return <div className="overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+    <div className={wide?"dialog pp-v85-dialog":"dialog"} role="dialog" aria-modal="true" aria-label={title}>
       <div className="dialog-top"><div><h2>{title}</h2><p>{subtitle}</p></div><IconButton icon={X} label="Close" onClick={onClose}/></div>{children}
     </div>
   </div>;
@@ -327,7 +329,7 @@ export default function App() {
     workspaceFetchEpoch.current+=1;
     workspaceRequestsPending.current.clear();
     setWorkspaceRequestLists({});
-    setRemoteAlerts({});setConflictDialog(null);
+    setRemoteAlerts({});setConflictDialog(null);setVersionDialog(null);
   },[selectedWs,token]);
   const [params, setParams] = useState(RECOVERED.params || [{ ...EMPTY_HEADER }]);
   const [authType, setAuthType] = useState(RECOVERED.authType || 'none');
@@ -343,6 +345,7 @@ export default function App() {
   const openTabsRef=useRef(openTabs);openTabsRef.current=openTabs;
   const [remoteAlerts,setRemoteAlerts]=useState({});
   const [conflictDialog,setConflictDialog]=useState(null);
+  const [versionDialog,setVersionDialog]=useState(null);
   const [realtimeStatus,setRealtimeStatus]=useState('offline');
   const realtimeHandlerRef=useRef(null);
   const realtimeQueueRef=useRef([]);
@@ -529,12 +532,20 @@ export default function App() {
     if(!tab?.source?.requestId)return;
     if(activeTabRef.current!==tabId)selectTab(tabId);
     const source=tab.source;
-    setConflictDialog({tabId,source,loading:true,latest:null,error:''});
+    setConflictDialog({tabId,source,loading:true,latest:null,base:null,error:''});
     try{
       const rows=await api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`,'GET',undefined,currentTokenRef.current);
       if(source.workspaceId!==selectedWorkspaceRef.current)return;
       const latest=rows.find(x=>x.id===source.requestId)||null;
-      setConflictDialog({tabId,source,loading:false,latest,error:''});
+      let base=null;
+      if(source.revision>0){
+        try{
+          const detail=await api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests/${source.requestId}/history/${source.revision}`,'GET',undefined,currentTokenRef.current);
+          base=detail.request;
+        }catch{/* Older revisions may have expired or predate V8.5. Manual selection remains safe. */}
+      }
+      if(currentTokenRef.current!==token||source.workspaceId!==selectedWorkspaceRef.current)return;
+      setConflictDialog({tabId,source,loading:false,latest,base,error:''});
     }catch(e){setConflictDialog({tabId,source,loading:false,latest:null,error:getMessage(e)});}
   }
   function reloadCloudConflict(){
@@ -558,6 +569,67 @@ export default function App() {
     // Open the existing Save As flow, explicitly targeting Local.
     openSaveAs({scope:'local',collectionId:localCollections[0]?.id||''});
     setNotice('Save your draft as a Local copy. The Cloud version will not be overwritten.');
+  }
+
+  // V8.5: explicit field merge; never silently overwrite the editor or Cloud.
+  function applyMergedRevision(tabId,remote,chosen,{resolveConflict=false}={}){
+    const tab=openTabsRef.current.find(t=>t.id===tabId);
+    if(!tab||!remote)return;
+    const original=tabId===activeTabRef.current?snapshotRef.current():draftsRef.current[tabId];
+    if(!original)return;
+    const merged=applyFieldMerge({...original,name:tab.name},workspaceDraft(remote),chosen);
+    const {name,...draft}=merged;
+    draftsRef.current[tabId]=draft;
+    setOpenTabs(tabs=>tabs.map(t=>t.id!==tabId?t:{...t,name:name||t.name,
+      source:resolveConflict?{...t.source,revision:remote.revision}:t.source}));
+    if(tabId===activeTabRef.current){restoreDraft(draft);setCurrentRequestName(name||tab.name);}
+    if(resolveConflict){
+      setRemoteAlerts(old=>{const next={...old};delete next[tabId];return next;});
+      setConflictDialog(null);
+    }
+    setNotice(resolveConflict?'Merge applied to draft. Review and press Save; Cloud was NOT changed.':'Selected revision fields applied to your unsaved draft.');
+  }
+  async function openRequestHistory(tabId=activeTabRef.current,sourceOverride=null){
+    const tab=openTabsRef.current.find(t=>t.id===tabId);
+    const source=sourceOverride||tab?.source;
+    if(source?.scope!=='workspace'||source.pending||!source.requestId){setNotice('Version History is available for saved Cloud requests.');return;}
+    if(source.workspaceId!==selectedWorkspaceRef.current){setNotice('Switch to the request Workspace first.');return;}
+    if(tab&&tabId!==activeTabRef.current)selectTab(tabId);
+    const path=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests/${source.requestId}`;
+    setVersionDialog({tabId,source,path,entries:[],selectedRevision:null,detail:null,latest:null,loading:true,busy:false,error:''});
+    try{
+      const [entries,requests]=await Promise.all([
+        api(`${path}/history`,'GET',undefined,currentTokenRef.current),
+        api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`,'GET',undefined,currentTokenRef.current)]);
+      if(source.workspaceId!==selectedWorkspaceRef.current)return;
+      const latest=requests.find(req=>req.id===source.requestId);
+      setVersionDialog(old=>old?.tabId===tabId?{...old,entries,latest,loading:false}:old);
+      if(entries.length)await selectRequestHistoryRevision(tabId,path,entries[0].revision);
+    }catch(err){setVersionDialog(old=>old?.tabId===tabId?{...old,error:getMessage(err),loading:false}:old);}
+  }
+  async function selectRequestHistoryRevision(tabId,path,revision){
+    setVersionDialog(old=>old?.tabId===tabId?{...old,selectedRevision:revision,detail:null,loading:true,error:''}:old);
+    try{
+      const detail=await api(`${path}/history/${revision}`,'GET',undefined,currentTokenRef.current);
+      setVersionDialog(old=>old?.tabId===tabId&&old.selectedRevision===revision?{...old,detail,loading:false}:old);
+    }catch(err){setVersionDialog(old=>old?.tabId===tabId?{...old,error:getMessage(err),loading:false}:old);}
+  }
+  async function restoreRequestRevision(revision,expectedRevision){
+    const dialog=versionDialog;
+    if(!dialog||!canEditCloud||dialog.source.workspaceId!==selectedWorkspaceRef.current)return;
+    setVersionDialog(old=>({...old,busy:true,error:''}));
+    try{
+      await api(`${dialog.path}/history/${revision}/restore`,'POST',{expectedRevision},currentTokenRef.current);
+      setVersionDialog(null);
+      setNotice(`Revision ${revision} restored as a NEW Cloud revision. Unsaved drafts were preserved.`);
+      try{
+        const updated=await api(`/api/workspaces/${dialog.source.workspaceId}/collections/${dialog.source.collectionId}/requests`,'GET',undefined,currentTokenRef.current);
+        if(dialog.source.workspaceId!==selectedWorkspaceRef.current)return;
+        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(dialog.source.workspaceId,dialog.source.collectionId)]:updated}));
+        if(selectedColRef.current===dialog.source.collectionId)setSavedRequests(updated);
+        reconcileCloudRequests(dialog.source.workspaceId,dialog.source.collectionId,updated);
+      }catch{setNotice('Restore succeeded. Reload the Collection to see the latest revision.');}
+    }catch(err){setVersionDialog(old=>old?{...old,busy:false,error:getMessage(err)}:old);}
   }
 
   function selectTab(id) {
@@ -965,6 +1037,15 @@ export default function App() {
     const {action,collectionId,requestId,folderPath}=item;
     const collection=localCollections.find(c=>c.id===collectionId);
     if(!collection)return;
+    if(action==='versionHistory'){
+      const tab=openTabsRef.current.find(t=>t.source?.scope==='workspace'&&t.source?.requestId===item.requestId);
+      if(tab){openRequestHistory(tab.id);return;}
+      const rows=workspaceRequestLists[workspaceCollectionKey(selectedWs,item.collectionId)]||savedRequests;
+      const request=rows.find(x=>x.id===item.requestId);
+      if(!request){setNotice('Open the Cloud request first, then select Versions.');return;}
+      loadSavedRequest({...request,collectionId:item.collectionId});
+      openRequestHistory(activeTabRef.current,{scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,requestId:item.requestId,revision:request.revision});return;
+    }
     if(action==='variables'){openCollectionVariables({scope:'local',collectionId,name:collection.name});return;}
     if(action==='runCollection'){openCollectionRunner({scope:'local',collectionId,name:collection.name});return;}
     if(action==='exportCollection'){openExportChoice({kind:'collection',scope:'local',collectionId,name:collection.name});return;}
@@ -2147,15 +2228,15 @@ export default function App() {
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
           </div>
-          <div className="pp-tabs-actions"><button type="button" className="pp-runner-toolbar" onClick={openRunnerForCurrentCollection} disabled={runnerLoading} title="Run saved requests from a Collection"><Play size={15}/> {runnerLoading?'Loading…':'Runner'}</button><button type="button" className={consoleOpen?'pp-console-toggle active':'pp-console-toggle'} title="Toggle PakPost Console" aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={15}/> Console</button><span><span className="pp-working-dot"/> {token&&collectionsScope===STORAGE_WORKSPACE?({'live':'Live','connecting':'Connecting…','reconnecting':'Reconnecting…','offline':'Offline'}[realtimeStatus]||'Offline'):token?'Local':'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
+          <div className="pp-tabs-actions"><button type="button" className="pp-runner-toolbar" onClick={openRunnerForCurrentCollection} disabled={runnerLoading} title="Run saved requests from a Collection"><Play size={15}/> {runnerLoading?'Loading…':'Runner'}</button><button type="button" className={consoleOpen?'pp-console-toggle active':'pp-console-toggle'} title="Toggle PakPost Console" aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={15}/> Console</button><span><span className="pp-working-dot"/> {token&&collectionsScope===STORAGE_WORKSPACE?({'live':'Live','connecting':'Connecting…','reconnecting':'Reconnecting…','offline':'Offline'}[realtimeStatus]||'Offline'):token?'Local':'Guest'}</span><button title="Request Version History" disabled={openTabs.find(t=>t.id===activeTabId)?.source?.scope!=='workspace'||openTabs.find(t=>t.id===activeTabId)?.source?.pending} onClick={()=>openRequestHistory(activeTabId)}><History size={16}/> Versions</button></div>
         </div>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
             ['newRequest','New request'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
           ]:workspaceMenu.type==='example'?[
             ['renameExample','Rename example'],['deleteExample','Delete example']
-          ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables','runCollection'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
+          ]:[['versionHistory','Version history'],['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
+            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables','runCollection','versionHistory'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
@@ -2456,16 +2537,30 @@ export default function App() {
       {result && !result.error && <div className="pp-example-preview"><span className={`pp-example-status ${statusTone(result.statusCode)}`}>{result.statusCode}</span><strong>{result.reasonPhrase || 'HTTP response'}</strong><small>{new Blob([result.body || '']).size.toLocaleString()} B · {result.elapsedMs} ms</small></div>}
       <button className="pp-modal-submit" type="submit" disabled={!result||!!result.error||busyAction}><Save size={16}/> Save example</button>
     </form></Dialog>}
-    {conflictDialog&&<Dialog title="Cloud changes detected" subtitle="Another session has saved a newer version. Your local draft has not been overwritten." onClose={()=>setConflictDialog(null)}>
+    {versionDialog&&<Dialog wide title="Request Version History" subtitle="Encrypted revision snapshots · Field-level comparison · No silent Cloud overwrite" onClose={()=>{if(!versionDialog.busy)setVersionDialog(null)}}>
+      {versionDialog.loading&&!versionDialog.entries.length?<p className="pp-v85-empty">Loading version history…</p>:
+        <Suspense fallback={<p className="pp-v85-empty">Loading revision viewer…</p>}><RequestRevisionPanel mode="history"
+          history={versionDialog.entries} selectedRevision={versionDialog.selectedRevision}
+          localDraft={{...((versionDialog.tabId===activeTabId?snapshot():draftsRef.current[versionDialog.tabId])||{}),name:openTabs.find(t=>t.id===versionDialog.tabId)?.name}}
+          remoteDraft={versionDialog.detail?workspaceDraft(versionDialog.detail.request):null}
+          currentRevision={versionDialog.latest?.revision} canRestore={canEditCloud}
+          busy={versionDialog.busy||versionDialog.loading} error={versionDialog.error}
+          onSelectRevision={rev=>selectRequestHistoryRevision(versionDialog.tabId,versionDialog.path,rev)}
+          onMerge={chosen=>{applyMergedRevision(versionDialog.tabId,versionDialog.detail?.request,chosen);setVersionDialog(null);}}
+          onRestore={restoreRequestRevision} onClose={()=>setVersionDialog(null)}/></Suspense>}
+    </Dialog>}
+    {conflictDialog&&<Dialog wide title="Cloud changes detected" subtitle="Another session has saved a newer version. Your local draft has not been overwritten." onClose={()=>setConflictDialog(null)}>
       <div className="pp-v84-conflict-dialog">
         {conflictDialog.loading?<p>Loading latest Cloud revision…</p>:<>
           <p><strong>Local revision:</strong> {conflictDialog.source.revision||'Unknown'} · <strong>Cloud revision:</strong> {conflictDialog.latest?.revision||'Not found'}</p>
           {conflictDialog.error&&<p role="alert" className="pp-v84-error">{conflictDialog.error}</p>}
           {!conflictDialog.latest&&<p>Cloud request is missing or inaccessible. Save your current draft as a Local copy to keep it.</p>}
-          {!!conflictDialog.latest&&<div className="pp-v84-conflict-fields"><strong>Local draft compared to current Cloud</strong>
-            {conflictFields({...((conflictDialog.tabId===activeTabId?snapshot():draftsRef.current[conflictDialog.tabId])||{}),name:openTabs.find(t=>t.id===conflictDialog.tabId)?.name},workspaceDraft(conflictDialog.latest)).map(f=><div key={f.field}><span>{f.field}</span><span className={f.same?'':'pp-v84-different'}>{f.same?'Same':'Different'}</span></div>)}
-          </div>}
-          <p className="pp-v84-warning">Reload discards your unsaved local changes. Force Overwrite and three-way merge are not enabled in V8.4.</p>
+          {!!conflictDialog.latest&&<Suspense fallback={<p>Loading compare view…</p>}><RequestRevisionPanel mode="conflict"
+            localDraft={{...((conflictDialog.tabId===activeTabId?snapshot():draftsRef.current[conflictDialog.tabId])||{}),name:openTabs.find(t=>t.id===conflictDialog.tabId)?.name}}
+            remoteDraft={workspaceDraft(conflictDialog.latest)} baseDraft={conflictDialog.base?workspaceDraft(conflictDialog.base):null}
+            onMerge={chosen=>applyMergedRevision(conflictDialog.tabId,conflictDialog.latest,chosen,{resolveConflict:true})}
+            onClose={()=>setConflictDialog(null)} /></Suspense>}
+          <p className="pp-v84-warning">Reload discards your unsaved changes. Applying selected fields preserves the draft; review it and press Save separately. Force Overwrite remains unavailable.</p>
         </>}
         <div className="pp-v84-actions">
           <button type="button" onClick={()=>setConflictDialog(null)}>Keep editing</button>

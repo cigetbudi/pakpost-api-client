@@ -30,6 +30,20 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
         await realtime.PublishAsync(workspaceId,"request.updated",collectionId,result.Id,result.Revision,Instance,ct);
         return Ok(result);
     }
+    [HttpGet("{requestId:guid}/history")]
+    public async Task<IActionResult> History(Guid workspaceId,Guid collectionId,Guid requestId,CancellationToken ct)
+        =>Ok(await sender.Send(new ListSavedRequestHistoryQuery(User.GetUserId(),workspaceId,collectionId,requestId),ct));
+    [HttpGet("{requestId:guid}/history/{revision:int}")]
+    public async Task<IActionResult> HistoryDetail(Guid workspaceId,Guid collectionId,Guid requestId,int revision,CancellationToken ct)
+        =>Ok(await sender.Send(new GetSavedRequestHistoryQuery(User.GetUserId(),workspaceId,collectionId,requestId,revision),ct));
+    public sealed record RestoreRevisionBody(int ExpectedRevision);
+    [HttpPost("{requestId:guid}/history/{revision:int}/restore")]
+    public async Task<IActionResult> Restore(Guid workspaceId,Guid collectionId,Guid requestId,int revision,[FromBody] RestoreRevisionBody body,CancellationToken ct)
+    {
+        var result=await sender.Send(new RestoreSavedRequestHistoryCommand(User.GetUserId(),workspaceId,collectionId,requestId,revision,body.ExpectedRevision),ct);
+        await realtime.PublishAsync(workspaceId,"request.updated",collectionId,result.Id,result.Revision,Instance,ct);
+        return Ok(result);
+    }
     public sealed record MoveRequestBody(Guid TargetCollectionId);
     [HttpPatch("{requestId:guid}/move")]
     public async Task<IActionResult> Move(Guid workspaceId,Guid collectionId,Guid requestId,[FromBody] MoveRequestBody body,CancellationToken ct)

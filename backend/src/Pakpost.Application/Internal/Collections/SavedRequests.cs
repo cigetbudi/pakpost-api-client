@@ -50,14 +50,15 @@ public sealed class ListSavedRequestsHandler(IWorkspaceRepository workspaces,ICo
     { await Check(q.ActorId,q.WorkspaceId,q.CollectionId,workspaces,collections,ct);
       return (await requests.ListAsync(q.CollectionId,ct)).Select(ToDto).ToArray(); }
 }
-public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
+public sealed class SaveRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,ISavedRequestRevisionRepository history,IEnvironmentValueCipher cipher,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<SaveRequestCommand,SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(SaveRequestCommand c,CancellationToken ct)
     { await Check(c.ActorId,c.WorkspaceId,c.CollectionId,workspaces,collections,ct,destructive:true);
       SavedHeaderPolicy.EnsureSafe(c.HeadersJson);
       var item=new SavedRequest(c.CollectionId,c.Name,c.Method,c.Url,c.HeadersJson,c.Body,c.BodyMode,c.ContentType,c.FormFieldsJson,c.PreRequestScript,c.PostResponseScript);
-      requests.Add(item);await uow.SaveChangesAsync(ct);return ToDto(item); }
+      requests.Add(item);history.Add(SavedRequestHistoryCodec.Capture(item,c.ActorId,"created",cipher));
+      await uow.SaveChangesAsync(ct);return ToDto(item); }
 }
 public sealed class DeleteSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<DeleteSavedRequestCommand>
@@ -93,7 +94,7 @@ public sealed class UpdateSavedRequestValidator:AbstractValidator<UpdateSavedReq
     private static bool IsJsonObject(string value){try{using var data=JsonDocument.Parse(value);return data.RootElement.ValueKind==JsonValueKind.Object;}catch{return false;}}
     private static bool IsJsonArray(string value){try{using var data=JsonDocument.Parse(value);return data.RootElement.ValueKind==JsonValueKind.Array;}catch{return false;}}
 }
-public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
+public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,ISavedRequestRevisionRepository history,IEnvironmentValueCipher cipher,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<UpdateSavedRequestCommand,SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(UpdateSavedRequestCommand cmd,CancellationToken ct)
@@ -106,13 +107,15 @@ public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,IC
         if(item.Revision != cmd.ExpectedRevision.Value)
             throw AppException.Conflict("This request changed in another session. Review the latest version before saving.");
         SavedHeaderPolicy.EnsureSafe(cmd.HeadersJson);
+        await SavedRequestHistoryCodec.CaptureUpdateAsync(item,history,cipher,ct);
         item.Update(cmd.Name,cmd.Method,cmd.Url,cmd.HeadersJson,cmd.Body,cmd.BodyMode,cmd.ContentType,cmd.FormFieldsJson,cmd.PreRequestScript,cmd.PostResponseScript);
+        history.Add(SavedRequestHistoryCodec.Capture(item,cmd.ActorId,"updated",cipher));
         await uow.SaveChangesAsync(ct);return ToDto(item);
     }
 }
 
 public sealed record MoveSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId,Guid TargetCollectionId):IRequest<SavedRequestDto>;
-public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,IUnitOfWork uow)
+public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests,ISavedRequestRevisionRepository history,IEnvironmentValueCipher cipher,IUnitOfWork uow)
     :SavedRequestsAccess,IRequestHandler<MoveSavedRequestCommand,SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(MoveSavedRequestCommand cmd,CancellationToken ct)
@@ -122,7 +125,9 @@ public sealed class MoveSavedRequestHandler(IWorkspaceRepository workspaces,ICol
         if(destination is null||destination.WorkspaceId!=cmd.WorkspaceId)throw AppException.Forbidden();
         var item=await requests.FindAsync(cmd.RequestId,ct);
         if(item is null||item.CollectionId!=cmd.CollectionId)throw AppException.NotFound("Request not found");
-        item.MoveTo(cmd.TargetCollectionId);await uow.SaveChangesAsync(ct);
+        await SavedRequestHistoryCodec.CaptureUpdateAsync(item,history,cipher,ct);
+        item.MoveTo(cmd.TargetCollectionId);history.Add(SavedRequestHistoryCodec.Capture(item,cmd.ActorId,"moved",cipher));
+        await uow.SaveChangesAsync(ct);
         return ToDto(item);
     }
 }
