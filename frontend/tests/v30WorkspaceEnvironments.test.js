@@ -84,15 +84,17 @@ test('Corrupt storage and invalid selection values are ignored; no secret values
 
 test('V6 React wiring scopes requests, active IDs, and editor instances to workspace',()=>{
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const environmentView=readFileSync(new URL('../src/features/environments/hooks/useScopedEnvironmentView.js',import.meta.url),'utf8');
   const cache=readFileSync(new URL('../src/features/workspaceCache.js',import.meta.url),'utf8');
   const backend=readFileSync(new URL('../../backend/src/Pakpost.Infrastructure/Persistence/Repositories/RequestEnvironmentRepository.cs',import.meta.url),'utf8');
   const handler=readFileSync(new URL('../../backend/src/Pakpost.Application/Internal/Environments/Environments.cs',import.meta.url),'utf8');
-  assert.match(app,/environmentContextKey\(STORAGE_WORKSPACE,selectedWs,me\?\.id\)/);
-  assert.match(app,/environmentsForContext\(workspaceEnvironmentResult,cloudEnvironmentContext\)/);
-  assert.match(app,/selectionForContext\(environmentSelections,environmentContext\)/);
+  assert.match(environmentView,/environmentContextKey\(STORAGE_WORKSPACE, selectedWs, userId\)/);
+  assert.match(environmentView,/environmentsForContext\(workspaceEnvironmentResult, cloudEnvironmentContext\)/);
+  assert.match(environmentView,/selectionForContext\(environmentSelections, environmentContext\)/);
   assert.match(app,/key=\{environmentContext\|\|'cloud-pending'\}/);
   assert.match(app,/let cancelled=false/);
   assert.match(app,/cloudEnvironmentContextRef\.current===context/);
+  assert.match(environmentView,/cloudEnvironmentContextRef\.current\) return previous/);
   assert.match(app,/selectEnvironmentForContext\(STORAGE_WORKSPACE,workspaceId,me\?\.id,saved\[0\]\.id\)/);
   assert.match(app,/const existing=cloud\?await api\(`/);
   assert.doesNotMatch(app,/useEffect\(\(\)=>\{if\(envScope===STORAGE_WORKSPACE\)setActiveEnvId\(''\)/);

@@ -46,5 +46,6 @@ test('the current React editor and worker are wired for diagnostics',()=>{
   assert.match(worker,/sourceStartLine=prefix\.split/);
   assert.match(worker,/vm\.evalCode\(script,'pakpost-script\.js'\)/);
   assert.match(app,/scriptDiagnosticNext/);
-  assert.match(app,/pp-script-diagnostic-item/);
+  const scriptEditor=readFileSync(new URL('../src/features/requests/components/ScriptEditor.jsx',import.meta.url),'utf8');
+  assert.match(scriptEditor,/pp-script-diagnostic-item/);
 });

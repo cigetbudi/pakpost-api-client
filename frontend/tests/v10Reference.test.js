@@ -6,6 +6,7 @@ import { APPEARANCE_THEMES } from '../src/features/appearance.js';
 const css = readFileSync(new URL('../src/v10-reference-workbench.css', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+const scripts = readFileSync(new URL('../src/features/requests/components/ScriptEditor.jsx', import.meta.url), 'utf8');
 
 test('reference theme layer loads last and offers light/dark/AMOLED only', () => {
   assert.deepEqual(APPEARANCE_THEMES.map(theme => theme.id), ['light', 'dark', 'oled']);
@@ -20,8 +21,8 @@ test('restyled workbench retains functional request and script controls', () => 
   // v14 moves appearance into a dedicated Settings page instead of the explorer.
   assert.match(app, /<WorkbenchSettings theme=\{theme\} onThemeChange=\{setTheme\}/);
   assert.match(app, /onPointerMove=\{onSplitterMove\}/);
-  assert.match(app, /<TextEditor value=\{preScript\}/);
-  assert.match(app, /<TextEditor value=\{postScript\}/);
+  assert.match(scripts, /<TextEditor value=\{preScript\}/);
+  assert.match(scripts, /<TextEditor value=\{postScript\}/);
 });
 
 test('reference styling does not change HTTP method colors or layout via JavaScript', () => {

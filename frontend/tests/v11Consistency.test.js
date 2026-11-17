@@ -11,13 +11,13 @@ test('native browser prompt and confirm removed from Environments',()=>{
   assert.match(env,/existingNames\.some/);
 });
 test('selects in request toolbar, environment, body and auth use shared listbox',()=>{
-  const app=read('App.jsx');
+  const app=read('App.jsx')+read('features/requests/components/RequestBody.jsx');
   assert.doesNotMatch(app,/<select[\s>]/);
   for(const aria of ['HTTP method','Body type','Active environment','Auth type'])assert.ok(app.includes(`ariaLabel="${aria}"`));
   assert.match(read('features/RetroSelect.jsx'),/createPortal/);
 });
 test('request body editor is full height and does not collapse to a single line',()=>{
-  assert.match(read('App.jsx'),/placeholder="Write request body here…" allowComments fill/);
+  assert.match(read('features/requests/components/RequestBody.jsx'),/placeholder="Write request body here…" allowComments fill/);
   assert.match(read('features/Editors.jsx'),/fill\?['"]100%['"]/);
   assert.match(read('v11-retro-controls.css'),/\.pp-body-code\s*\{[^}]*min-height:260px/);
 });

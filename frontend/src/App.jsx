@@ -1,11 +1,19 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import { api } from './services/httpClient.js';
-import { toRows, prettyJson, initialLocalEnvs, rowFromFile, encodeFile } from './utils/workbenchHelpers.js';
+import { toRows, prettyJson, initialLocalEnvs, rowFromFile } from './utils/workbenchHelpers.js';
 import { IconButton, Empty, Dialog } from './components/ui/WorkbenchPrimitives.jsx';
 import { ResponsePane } from './components/workbench/ResponsePane.jsx';
+import { useStore } from 'zustand';
+import { createRequestWorkbenchStore } from './features/requests/store/createRequestWorkbenchStore.js';
+import { RequestTabs } from './features/requests/components/RequestTabs.jsx';
+import { createCollectionWorkbenchStore } from './features/collections/store/createCollectionWorkbenchStore.js';
+import { useCollectionWorkbench } from './features/collections/store/useCollectionWorkbench.js';
+import { createEnvironmentWorkbenchStore } from './features/environments/store/createEnvironmentWorkbenchStore.js';
+import { useEnvironmentWorkbench } from './features/environments/store/useEnvironmentWorkbench.js';
+import { useScopedEnvironmentView } from './features/environments/hooks/useScopedEnvironmentView.js';
 import {
-  ArrowDownToLine, ArrowRight, Braces, Play, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
+  ArrowDownToLine, ArrowRight, Braces, Play, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
 import { GoogleSignInButton } from './features/GoogleSignInButton';
 import { WorkspaceRolePicker } from './features/WorkspaceRolePicker.jsx';
@@ -23,7 +31,7 @@ import { VariableUrlInput } from './features/VariableUrlInput';
 import {VariableAwareInput} from './features/VariableAwareInput.jsx';
 import {putEnvironmentVariable,isSensitiveVariable} from './features/variableExperience.js';
 import {sessionEnvironmentKey,readableEnvironmentValues,applySessionOverrides,sessionOverridesFromValues,storeSessionOverrides} from './features/sessionEnvironment.js';
-import {environmentContextKey,environmentsForContext,readEnvironmentSelections,selectionForContext,setSelectionForContext,writeEnvironmentSelections} from './features/environmentContext.js';
+import { readEnvironmentSelections, writeEnvironmentSelections } from './features/environmentContext.js';
 import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentExplorer } from './features/EnvironmentExplorer';
 import {sortCollectionRoots} from './features/collectionSort';
@@ -32,11 +40,11 @@ import { blankDraft, parseCurl, isCurl, parseImportText } from './features/impor
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from './features/environmentImport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
-import {planTabClose,reorderTabs} from './features/tabActions';
+import {planTabClose} from './features/tabActions';
 import {applyLocalAction,updateLocalRequest,createLocalSavedRequest} from './features/localCollectionActions';
 import {stripJsonComments,hasJsonComments} from './features/jsonComments';
 import {findBoundTab} from './features/sourceTabs';
-import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, hasUnsavedMarker, tabSaved} from './features/draftLifecycle';
+import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, tabSaved} from './features/draftLifecycle';
 import {isReadOnlyCloudTab, sandboxCacheTabIds,sandboxDocKey} from './features/qaSandbox.js';
 import {validWorkspaceEvent,shouldRefreshRequestList} from './features/workspaceRealtime.js';
 import {decideCloudTabSync,conflictFields} from './features/cloudConflict.js';
@@ -45,7 +53,7 @@ import {LocalCollectionsTree} from './features/LocalCollectionsTree';
 import {defaultStorageScope,allowedStorageScope,STORAGE_LOCAL,STORAGE_WORKSPACE,cloudEndpointCount,collectionImportSources,saveCloudCollections} from './features/storageScope';
 import {MenuActionItem} from './features/MenuActionItem';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from './features/appearance';
-import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
+import { bodyFormat, languageFromMime, syntaxProblem, formatSource, resolveVars, resolveRows, buildCommand } from './features/requestTools';
 import { runSandbox } from './features/runScript';
 import { postmanRequestSnapshot } from './features/postmanCompat';
 import {createResponseExample,exampleToResult,renameResponseExample,sanitizeResponseExamples,statusTone,suggestExampleName,upsertResponseExample} from './features/responseExamples';
@@ -79,6 +87,8 @@ const PakpostConsole = lazy(() => import('./features/PakpostConsole.jsx'));
 const CollectionRunner = lazy(() => import('./features/CollectionRunner.jsx'));
 const CollectionVariablesEditor = lazy(() => import('./features/CollectionVariablesEditor.jsx'));
 const RequestRevisionPanel = lazy(() => import('./features/RequestRevisionPanel.jsx'));
+const RequestBody = lazy(() => import('./features/requests/components/RequestBody.jsx').then(m => ({default:m.RequestBody})));
+const ScriptEditor = lazy(() => import('./features/requests/components/ScriptEditor.jsx').then(m => ({default:m.ScriptEditor})));
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -92,6 +102,17 @@ const getMessage = (e) => e?.message || 'Something went wrong';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
 
 export default function App() {
+  // Scoped to this Workbench instance: no global request data and no persist middleware.
+  const [requestWorkbenchStore] = useState(() => createRequestWorkbenchStore({
+    reqTab: RECOVERED.reqTab || 'params',
+    resTab: RECOVERED.resTab || 'body',
+    activeTabId: CACHED?.activeTabId || 't1',
+    openTabs: (CACHED?.openTabs || [{ id: 't1', name: 'Untitled Request', method: 'GET' }]).map(t => ({
+      ...t,
+      savedName: t.savedName ?? t.name,
+      savedFingerprint: t.savedFingerprint ?? requestFingerprint(CACHED?.drafts?.[t.id] || freshRequest(t.name), t.name),
+    })),
+  }));
   const [page, setPage] = useState('tester');
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [runnerTarget,setRunnerTarget]=useState(null);
@@ -154,10 +175,15 @@ export default function App() {
   const [scriptJump,setScriptJump] = useState(null);
   const [responsePretty, setResponsePretty] = useState(true);
   const [prettyResponse, setPrettyResponse] = useState('');
-  const [localEnvironments, setLocalEnvironments] = useState(initialLocalEnvs);
-  // Results and selected IDs are keyed to the actual workspace (and user) to avoid cross-team leaks.
-  const [workspaceEnvironmentResult,setWorkspaceEnvironmentResult] = useState({context:'',items:[]});
-  const [environmentSelections,setEnvironmentSelections] = useState(()=>readEnvironmentSelections(localStorage,CACHED));
+  // Each workbench has its own memory-only Environment store. Existing Local
+  // persistence, Cloud authorization, and QA session overlays are unchanged.
+  const [environmentStore] = useState(() => createEnvironmentWorkbenchStore({
+    localEnvironments: initialLocalEnvs(),
+    environmentSelections: readEnvironmentSelections(localStorage, CACHED),
+  }));
+  const { localEnvironments, setLocalEnvironments,
+    workspaceEnvironmentResult, setWorkspaceEnvironmentResult,
+    environmentSelections, setEnvironmentSelections } = useEnvironmentWorkbench(environmentStore);
   // Never persist QA/Writer Cloud environment edits. Their script changes are RAM-only.
   const sessionEnvironmentOverlays=useRef(new Map());
   const sessionCollectionVariables=useRef(new Map());
@@ -172,8 +198,11 @@ export default function App() {
   const sessionDocumentationOverlays=useRef(new Map());
   const [,refreshSessionEnvironment]=useState(0);
   useEffect(()=>{sessionEnvironmentOverlays.current.clear();sessionCollectionVariables.current.clear();savedCollectionVariablesCache.current.clear();setCollectionVariablesTarget(null);sessionDocumentationOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
-  const [reqTab, setReqTab] = useState(RECOVERED.reqTab || 'params');
-  const [resTab, setResTab] = useState(RECOVERED.resTab || 'body');
+  // Request tab state comes from the per-App Zustand store, not one huge context.
+  const reqTab = useStore(requestWorkbenchStore, s => s.reqTab);
+  const setReqTab = useStore(requestWorkbenchStore, s => s.setReqTab);
+  const resTab = useStore(requestWorkbenchStore, s => s.resTab);
+  const setResTab = useStore(requestWorkbenchStore, s => s.setResTab);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(RECOVERED.result || null);
   const [recent, setRecent] = useState(CACHED?.recent || []);
@@ -181,34 +210,29 @@ export default function App() {
   const [selectedWs, setSelectedWs] = useState('');
   const selectedWorkspaceRef=useRef(selectedWs);
   selectedWorkspaceRef.current=selectedWs;
-  const cloudEnvironmentContext=environmentContextKey(STORAGE_WORKSPACE,selectedWs,me?.id);
-  const environmentContext=environmentContextKey(envScope,selectedWs,me?.id);
-  const cloudEnvironmentContextRef=useRef(cloudEnvironmentContext);
-  cloudEnvironmentContextRef.current=cloudEnvironmentContext;
-  const workspaceEnvironments=environmentsForContext(workspaceEnvironmentResult,cloudEnvironmentContext);
-  const currentEnvironments=envScope===STORAGE_WORKSPACE?workspaceEnvironments:localEnvironments;
-  const selectedEnvironmentId=selectionForContext(environmentSelections,environmentContext);
-  // An ID is never active until the matching environment has actually been loaded.
-  const activeEnvId=currentEnvironments.some(env=>env.id===selectedEnvironmentId)?selectedEnvironmentId:'';
-  function selectEnvironmentForContext(scope,workspaceId,userId,id) {
-    const context=environmentContextKey(scope,workspaceId,userId);
-    if(context)setEnvironmentSelections(previous=>setSelectionForContext(previous,context,id));
-  }
-  function setActiveEnvId(id) {
-    selectEnvironmentForContext(envScope,selectedWs,me?.id,id);
-  }
-  function setWorkspaceEnvironments(updater) {
-    const context=cloudEnvironmentContext;
-    if(!context||context!==cloudEnvironmentContextRef.current)return;
-    setWorkspaceEnvironmentResult(previous=>{
-      if(context!==cloudEnvironmentContextRef.current)return previous;
-      const before=environmentsForContext(previous,context);
-      return {context,items:typeof updater==='function'?updater(before):updater};
-    });
-  }
+  // Context selection & Cloud stale-response guards live with Environment state.
+  const {
+    cloudEnvironmentContext, environmentContext, cloudEnvironmentContextRef,
+    workspaceEnvironments, currentEnvironments, activeEnvId,
+    selectEnvironmentForContext, setActiveEnvId, setWorkspaceEnvironments,
+  } = useScopedEnvironmentView({
+    envScope, selectedWs, userId: me?.id, localEnvironments,
+    workspaceEnvironmentResult, environmentSelections,
+    setEnvironmentSelections, setWorkspaceEnvironmentResult,
+  });
   useEffect(()=>writeEnvironmentSelections(localStorage,environmentSelections),[environmentSelections]);
-  const [collections, setCollections] = useState([]);
-  const [localCollections, setLocalCollections] = useState(readLocalCollections);
+  // Collections have an independent, per-workbench Zustand store. Keeping
+  // remote API operations in App avoids bypassing workspace RBAC checks.
+  const [collectionStore] = useState(() => createCollectionWorkbenchStore({
+    localCollections: readLocalCollections(),
+    collectionSort: localStorage.getItem('pakpost_v14_global_collection_sort') || 'manual',
+  }));
+  const { collections, setCollections, localCollections, setLocalCollections,
+    selectedCol, setSelectedCol, savedRequests, setSavedRequests,
+    collectionSort, setCollectionSort, expandedCollections, setExpandedCollections,
+    expandedWorkspaceExamples, setExpandedWorkspaceExamples,
+    localExpandAllSignal, setLocalExpandAllSignal, revealLocalDraft, setRevealLocalDraft,
+    workspaceRequestLists, setWorkspaceRequestLists } = useCollectionWorkbench(collectionStore);
   const [creatingLocalCollection, setCreatingLocalCollection] = useState(false);
   const [collectionImportOpen,setCollectionImportOpen] = useState(false);
   const [collectionImportFile,setCollectionImportFile] = useState(null);
@@ -220,9 +244,7 @@ export default function App() {
   const [membersWorkspaceId,setMembersWorkspaceId]=useState('');
   const [teams, setTeams] = useState([]);
   const [wsTab, setWsTab] = useState('collections');
-  const [selectedCol, setSelectedCol] = useState('');
   const selectedColRef=useRef(selectedCol);selectedColRef.current=selectedCol;
-  const [savedRequests, setSavedRequests] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState('');
   const [teamMembers, setTeamMembers] = useState([]);
   const [newWs, setNewWs] = useState('');
@@ -267,15 +289,9 @@ export default function App() {
   const [splitPercent, setSplitPercent] = useState(56);
   const [explorerTab, setExplorerTab] = useState(CACHED?.explorerTab === 'appearance' ? 'collections' : (CACHED?.explorerTab || 'collections'));
   const [explorerSearch, setExplorerSearch] = useState('');
-  const [collectionSort,setCollectionSort] = useState(()=>localStorage.getItem('pakpost_v14_global_collection_sort')||'manual');
   const [rightWidth,setRightWidth] = useState(()=>Math.min(650,Math.max(280,Number(localStorage.getItem('pakpost_v14_right_width'))||340)));
   const resizingRight=useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(CACHED?.sidebarCollapsed || false);
-  const [expandedCollections, setExpandedCollections] = useState({});
-  const [expandedWorkspaceExamples,setExpandedWorkspaceExamples] = useState({});
-  const [localExpandAllSignal, setLocalExpandAllSignal] = useState(null);
-  const [revealLocalDraft,setRevealLocalDraft] = useState(null);
-  const [workspaceRequestLists, setWorkspaceRequestLists] = useState({});
   const workspaceRequestsPending = useRef(new Set());
   const workspaceFetchEpoch = useRef(0);
   useEffect(()=>{
@@ -293,9 +309,8 @@ export default function App() {
   const [apiKeyName,setApiKeyName] = useState(RECOVERED.apiKeyName||'X-API-Key');
   const [apiKeyValue,setApiKeyValue] = useState(RECOVERED.apiKeyValue||'');
   const [apiKeyIn,setApiKeyIn] = useState(RECOVERED.apiKeyIn||'header');
-  const [openTabs, setOpenTabs] = useState(() => (CACHED?.openTabs || [{ id: 't1', name: 'Untitled Request', method: 'GET' }]).map(t=>({
-    ...t,savedName:t.savedName ?? t.name,savedFingerprint:t.savedFingerprint ?? requestFingerprint(CACHED?.drafts?.[t.id] || freshRequest(t.name),t.name)
-  })));
+  const openTabs = useStore(requestWorkbenchStore, s => s.openTabs);
+  const setOpenTabs = useStore(requestWorkbenchStore, s => s.setOpenTabs);
   const openTabsRef=useRef(openTabs);openTabsRef.current=openTabs;
   const [remoteAlerts,setRemoteAlerts]=useState({});
   const [conflictDialog,setConflictDialog]=useState(null);
@@ -310,7 +325,8 @@ export default function App() {
   const originalRequestNameRef = useRef('');
   const cancelledRequestNameRef = useRef(false);
   const [closeConfirmation, setCloseConfirmation] = useState(null);
-  const [activeTabId, setActiveTabId] = useState(CACHED?.activeTabId || 't1');
+  const activeTabId = useStore(requestWorkbenchStore, s => s.activeTabId);
+  const setActiveTabId = useStore(requestWorkbenchStore, s => s.setActiveTabId);
   const activeTabRef = useRef(CACHED?.activeTabId || 't1');
   const tabSequence = useRef(Math.max(1,...(CACHED?.openTabs || []).map(t=>Number(String(t.id).replace(/^t/,'')) || 0)));
   const draftsRef = useRef(CACHED?.drafts || {});
@@ -2176,14 +2192,7 @@ export default function App() {
 
       <main className="pp-content">
         {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} split={split} onSplitChange={setSplit} interceptorMode={interceptorMode} onInterceptorChange={setInterceptorMode} extensionStatus={extensionStatus} onCheckExtension={refreshExtensionStatus} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
-        <div className="pp-tabs-bar">
-          <div className="pp-open-tabs" role="tablist" aria-label="Open requests">
-            {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const from=tabDragRef.current;if(from)setOpenTabs(ts=>reorderTabs(ts,from,t.id));tabDragRef.current=null;}} onDragEnd={()=>{tabDragRef.current=null;}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{remoteAlerts[t.id]&&<AlertTriangle size={13} className="pp-v84-conflict-icon" aria-label="Cloud changed elsewhere"/>}{hasUnsavedMarker(t,t.id===activeTabId?snapshot():draftsRef.current[t.id]) && <span className="pp-unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"/>}{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
-            {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
-            <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
-          </div>
-          <div className="pp-tabs-actions"><button type="button" className="pp-runner-toolbar" onClick={openRunnerForCurrentCollection} disabled={runnerLoading} title="Run saved requests from a Collection"><Play size={15}/> {runnerLoading?'Loading…':'Runner'}</button><button type="button" className={consoleOpen?'pp-console-toggle active':'pp-console-toggle'} title="Toggle PakPost Console" aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={15}/> Console</button><span><span className="pp-working-dot"/> {token&&collectionsScope===STORAGE_WORKSPACE?({'live':'Live','connecting':'Connecting…','reconnecting':'Reconnecting…','offline':'Offline'}[realtimeStatus]||'Offline'):token?'Local':'Guest'}</span><button title="Request Version History" disabled={openTabs.find(t=>t.id===activeTabId)?.source?.scope!=='workspace'||openTabs.find(t=>t.id===activeTabId)?.source?.pending} onClick={()=>openRequestHistory(activeTabId)}><History size={16}/> Versions</button></div>
-        </div>
+        <RequestTabs store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} runnerLoading={runnerLoading} openRunnerForCurrentCollection={openRunnerForCurrentCollection} consoleOpen={consoleOpen} setConsoleOpen={setConsoleOpen} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
             ['newRequest','New request'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
@@ -2235,58 +2244,14 @@ export default function App() {
               <div className="pp-panel-body pp-request-body">
                 {reqTab === 'params' && <KeyValueEditor kind="params" rows={params} onChange={setParams} variableUi={variableUi}/>}
                 {reqTab === 'headers' && <KeyValueEditor kind="headers" rows={rows} onChange={setRows} variableUi={variableUi}/>}
-                {reqTab === 'body' && <div className="pp-body-composer">
-                  <div className="pp-body-toolbar"><div className="pp-body-format-label"><span>Body type</span><RetroSelect ariaLabel="Body type" className="pp-body-format-select" value={format} onChange={selectFormat} options={BODY_FORMATS.map(f=>({value:f.mime,label:f.label,group:f.group}))}/></div>
-                    {bodyFormat(format).mode==='raw'&&<button title="Beautify request body" onClick={beautifyBody}><WandSparkles size={15}/> Beautify</button>}
-                    <span>UTF-8</span>
-                  </div>
-                  {bodyFormat(format).mode==='none'&&<div className="pp-body-empty">This request has no body. Choose a format to start editing.</div>}
-                  {bodyFormat(format).mode==='raw'&&<div className="pp-body-code">
-                    <TextEditor value={body} onChange={setBody} variableUi={variableUi} lang={languageFromMime(format)==='json'?'jsonc':languageFromMime(format)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="100%" placeholder="Write request body here…" allowComments fill/>
-                    {syntaxProblem(body,languageFromMime(format))&&<div className="pp-inline-validation"><AlertTriangle size={14}/><span>{syntaxProblem(body,languageFromMime(format))?.message}</span></div>}
-                  </div>}
-                  {(bodyFormat(format).mode==='urlencoded'||bodyFormat(format).mode==='multipart')&&<>
-                    <div className="pp-form-caption"><span>{bodyFormat(format).mode==='multipart'?'MULTIPART FORM DATA':'URL ENCODED DATA'}</span><span>Up to 5 MB</span></div>
-                    <div className="pp-keyvalue-heading"><span>KEY</span><span>VALUE / FILE</span><span/></div>
-                    {formFields.map((r,i)=><div className="pp-keyvalue-row pp-form-data-row" key={i}>
-                      <VariableAwareInput placeholder="key" ariaLabel="Form field key" value={r.key} onChange={value=>setFormFields(v=>v.map((x,j)=>j===i?{...x,key:value}:x))} {...variableUi}/>
-                      {r.fileBase64?<div className="pp-file-name"><FileUp size={14}/>{r.fileName}<button title="Detach file" onClick={()=>setFormFields(v=>v.map((x,j)=>j===i?{key:x.key,value:''}:x))}><X size={12}/></button></div>
-                        :<VariableAwareInput placeholder="value or {{variable}}" ariaLabel="Form field value" value={r.value||''} onChange={value=>setFormFields(v=>v.map((x,j)=>j===i?{...x,value}:x))} {...variableUi}/>}
-                      <div className="pp-field-actions">
-                        {bodyFormat(format).mode==='multipart'&&<label title="Attach file"><FileUp size={15}/><input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{const value=await encodeFile(file);setFormFields(v=>v.map((x,j)=>j===i?{...x,value:'',fileName:file.name,fileBase64:value,contentType:file.type}:x))}catch(err){setNotice(err.message)}}}/></label>}
-                        <IconButton icon={X} label="Remove field" onClick={()=>setFormFields(v=>v.filter((_,j)=>j!==i))}/>
-                      </div>
-                    </div>)}
-                    <button className="pp-inline-add" onClick={()=>setFormFields(v=>[...v,{key:'',value:''}])}><Plus size={14}/> Add field</button>
-                  </>}
-                  {bodyFormat(format).mode==='binary'&&<div className="pp-binary-picker"><FileUp size={22}/><span>{binaryFile.name||'Select a binary file (up to 5 MB)'}</span><label>Choose file<input type="file" hidden onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{setBinaryFile({name:file.name,base64:await encodeFile(file)})}catch(err){setNotice(err.message)}}}/></label></div>}
-                </div>}
+                {reqTab === 'body' && <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Body…</div>}><RequestBody format={format} selectFormat={selectFormat} beautifyBody={beautifyBody} body={body} setBody={setBody} theme={theme} variableUi={variableUi} formFields={formFields} setFormFields={setFormFields} binaryFile={binaryFile} setBinaryFile={setBinaryFile} setNotice={setNotice} TextEditor={TextEditor} /></Suspense>}
                 {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Applied when sending the request</span></div><div className="pp-auth-form pp-auth-v26"><div className="pp-auth-select"><span>Auth type</span><RetroSelect ariaLabel="Auth type" value={authType} onChange={setAuthType} options={AUTH_OPTIONS}/></div>
                   {authType==='bearer'&&<label>Token<VariableAwareInput placeholder="{{AuthToken}} or paste bearer token" ariaLabel="Bearer token" value={bearerToken} onChange={value=>setBearerToken(value)} {...variableUi}/></label>}
                   {authType==='basic'&&<><label>Username<VariableAwareInput placeholder="{{username}} or username" ariaLabel="Basic auth username" value={basicUsername} onChange={value=>setBasicUsername(value)} {...variableUi}/></label><label>Password<VariableAwareInput placeholder="{{password}} or password" ariaLabel="Basic auth password" value={basicPassword} onChange={value=>setBasicPassword(value)} {...variableUi}/></label></>}
                   {authType==='apiKey'&&<><label>Key<VariableAwareInput placeholder="X-API-Key" ariaLabel="API key name" value={apiKeyName} onChange={value=>setApiKeyName(value)} {...variableUi}/></label><label>Value<VariableAwareInput placeholder="{{apiKey}}" ariaLabel="API key value" value={apiKeyValue} onChange={value=>setApiKeyValue(value)} {...variableUi}/></label><div className="pp-auth-select"><span>Add to</span><RetroSelect ariaLabel="API Key location" value={apiKeyIn} onChange={setApiKeyIn} options={[{value:'header',label:'Header'},{value:'query',label:'Query Param'}]}/></div></>}
                   {authType==='none'?<p>No automatic authorization. Custom Authorization headers remain available in Headers.</p>:<p>Use {'{{variable}}'} for credentials. Workspace saves only variable references for secrets; raw credentials are never written to Neon. Values are visible here by design—avoid screen sharing sensitive tokens.</p>}
                 </div></>}
-                {reqTab === 'scripts'&&<div className="pp-script-panel">
-                  <div className="pp-script-label"><strong>Pre-request script</strong><span>Runs before resolving and sending HTTP request</span></div>
-                  <TextEditor value={preScript} onChange={value=>{setPreScript(value);setScriptDiagnostic(previous=>previous?.phase==='pre'?null:previous);setScriptError('');}} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments scriptDiagnostics scriptDiagnostic={scriptDiagnostic?.phase==='pre'?scriptDiagnostic:null} jumpTo={scriptJump?.phase==='pre'?scriptJump:null}/>
-                  <div className="pp-script-label"><strong>Post-response script</strong><span>Runs after receiving the HTTP response</span></div>
-                  <TextEditor value={postScript} onChange={value=>{setPostScript(value);setScriptDiagnostic(previous=>previous?.phase==='post'?null:previous);setScriptError('');}} lang="javascript" theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="180px" lint={false} allowComments scriptDiagnostics scriptDiagnostic={scriptDiagnostic?.phase==='post'?scriptDiagnostic:null} jumpTo={scriptJump?.phase==='post'?scriptJump:null}/>
-                  <p className="pp-script-note">Postman-compatible subset: require('crypto-js'), pm.request.url.path, pm.request.body.raw, pm.variables.get/set, pm.environment.get/set, pm.response.json(), pm.test(), console.log().
-                  Scripts run in an isolated, time-limited QuickJS worker. External npm import is not enabled yet.</p>
-                  {(scriptLog.length>0||scriptTests.length>0||scriptError)&&<div className="pp-script-console"><strong>Script results</strong>
-                    {scriptLog.map((l,i)=><pre key={i}>{l}</pre>)}
-                    {scriptTests.map((t,i)=><div key={i} className={t.passed?'pp-test-pass':'pp-test-fail'}>{t.passed?'✓':'✕'} {t.name}{t.error&&` — ${t.error}`}</div>)}
-                    {scriptDiagnostic ? <button type="button" className="pp-script-diagnostic-item" disabled={!scriptDiagnostic.line}
-                      title={scriptDiagnostic.line?'Jump to the failed script line':'Location unavailable'}
-                      onClick={()=>setScriptJump({...scriptDiagnostic,serial:Date.now()})}>
-                      <AlertTriangle size={15}/><span><strong>{scriptDiagnostic.phase==='post'?'Post-response':'Pre-request'} · {scriptDiagnostic.name}</strong>
-                        <span>{scriptDiagnostic.message}</span>
-                        <small>{scriptDiagnostic.line?`Line ${scriptDiagnostic.line}${scriptDiagnostic.column?`, column ${scriptDiagnostic.column}`:''} · Click to navigate`:'Script location unavailable'}</small>
-                      </span>
-                    </button> : scriptError&&<div className="pp-inline-validation">{scriptError}</div>}
-                  </div>}
-                </div>}
+                {reqTab === 'scripts' && <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Scripts…</div>}><ScriptEditor preScript={preScript} setPreScript={setPreScript} postScript={postScript} setPostScript={setPostScript} scriptDiagnostic={scriptDiagnostic} setScriptDiagnostic={setScriptDiagnostic} scriptError={scriptError} setScriptError={setScriptError} scriptJump={scriptJump} setScriptJump={setScriptJump} scriptLog={scriptLog} scriptTests={scriptTests} theme={theme} TextEditor={TextEditor} /></Suspense>}
               </div>
               <div className="pp-pane-footer"><ShieldCheck size={14}/><span>{isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Sandbox: edits and post-scripts do not change Cloud. Real API calls still execute.":"Public API tester · No sign-in needed"}</span><span className="pp-footer-tail">Proxy protected</span></div>
             </section>

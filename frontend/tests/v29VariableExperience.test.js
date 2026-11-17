@@ -45,7 +45,7 @@ test('URL, param/header, authorization, form data and raw body share variable su
   assert.match(app,/<KeyValueEditor kind="params"[^\n]*variableUi=\{variableUi\}/);
   assert.match(app,/<KeyValueEditor kind="headers"[^\n]*variableUi=\{variableUi\}/);
   assert.match(app,/ariaLabel="Bearer token"/);
-  assert.match(app,/ariaLabel="Form field value"/);
+  assert.match(read('../src/features/requests/components/RequestBody.jsx'),/ariaLabel="Form field value"/);
   assert.match(kv,/VariableAwareInput/);
   assert.match(url,/VariableAwareInput/);
   assert.match(cm,/codeMirrorVariableDecoration/);
