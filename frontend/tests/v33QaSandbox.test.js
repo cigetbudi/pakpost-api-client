@@ -77,5 +77,5 @@ test('Cloud write path of QA sandbox is disabled and reset reads the stored requ
   assert.match(app,/const requests=await api\(path,'GET',undefined,originalToken\)/);
   assert.match(app,/!isReadOnlyCloudTab\(openTabs\.find\(t=>t\.id===activeTabRef\.current\),canEditCloud,selectedWs\)/);
   assert.match(app,/sessionDocumentationOverlays\.current\.set/);
-  assert.match(app,/clearWorkbenchCache\(\)/);
+  assert.match(app,/invalidateBrowserSession\(sessionStorage, clearWorkbenchCache\)/);
 });

@@ -33,8 +33,10 @@ test('Cloud mutations are secured in handlers, not just client buttons',()=>{
 });
 test('member management supports multi-role selection and server-side update',()=>{
   const app=read('frontend/src/App.jsx');
-  assert.match(app,/WorkspaceRolePicker/);
-  assert.match(app,/\/members\/\$\{m\.userId\}\/roles/);
-  assert.match(app,/canManageMembers/);
-  assert.match(app,/canCreateWorkspace/);
+  const workspace=read('frontend/src/features/workspace/components/WorkspaceManager.jsx');
+  assert.match(app,/WorkspaceManager/);
+  assert.match(workspace,/WorkspaceRolePicker/);
+  assert.match(workspace,/\/members\/\$\{m\.userId\}\/roles/);
+  assert.match(workspace,/canManageMembers/);
+  assert.match(workspace,/canCreateWorkspace/);
 });

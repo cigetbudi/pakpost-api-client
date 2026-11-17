@@ -35,11 +35,13 @@ test('Effective permission display relies on backend permissions, not role label
 });
 test('UI shows backend effective permissions and preserves server-side role assignment',()=>{
   const app=source('src/App.jsx');
+  const workspace=source('src/features/workspace/components/WorkspaceManager.jsx');
   const access=source('src/features/WorkspaceAccessBreakdown.jsx');
-  assert.match(app,/WorkspaceAccessBreakdown permissions=\{m\.permissions\|\|\[\]\}/);
+  assert.match(app,/WorkspaceManager/);
+  assert.match(workspace,/WorkspaceAccessBreakdown permissions=\{m\.permissions\|\|\[\]\}/);
   assert.match(access,/From PakPost backend/);
-  assert.match(app,/members\/\$\{m\.userId\}\/roles/);
-  assert.match(app,/canAssignRoles&&!founder&&!self/);
-  assert.match(app,/roleSelectionChanged\(m\.roles,editingMemberRoles\)/);
+  assert.match(workspace,/members\/\$\{m\.userId\}\/roles/);
+  assert.match(workspace,/canAssignRoles&&!founder&&!self/);
+  assert.match(workspace,/roleSelectionChanged\(m\.roles,editingMemberRoles\)/);
   assert.match(app,/selectedWorkspaceRef\.current/);
 });

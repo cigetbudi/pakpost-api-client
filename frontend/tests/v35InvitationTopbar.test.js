@@ -45,10 +45,14 @@ test('SMTP fails closed when unconfigured and does not return invitation URL as 
  assert.doesNotMatch(source,/Console\.WriteLine\(.*invitationUrl/);
 });
 test('frontend exposes Invite, Pending, Resend, Revoke, Accept flows',()=>{
- const src=read('frontend/src/App.jsx');
- for(const phrase of ['Invite via email','Pending invitations','Resend','Revoke','Accept invitation','/api/invitations/accept','/invitations'])assert.ok(src.includes(phrase),phrase);
- assert.match(src,/window\.history\.replaceState/);
- assert.match(src,/googleLinked/);
+ const app=read('frontend/src/App.jsx');
+ const workspace=read('frontend/src/features/workspace/components/WorkspaceManager.jsx');
+ const auth=read('frontend/src/features/auth/components/AuthOverlays.jsx');
+ for(const phrase of ['Invite via email','Pending invitations','Resend','Revoke'])assert.ok(workspace.includes(phrase),phrase);
+ assert.ok(auth.includes('Accept invitation'));
+ for(const phrase of ['/api/invitations/accept','/invitations'])assert.ok(app.includes(phrase),phrase);
+ assert.match(app,/window\.history\.replaceState/);
+ assert.match(auth,/googleLinked/);
 });
 test('final header CSS declares deliberate flex sizes and truncates names',()=>{
  const css=read('frontend/src/v35-invitations-topbar.css');

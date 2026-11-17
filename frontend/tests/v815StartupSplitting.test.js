@@ -19,8 +19,9 @@ test('optional workbench panels are dynamically imported only when visible',()=>
   assert.match(app,/lazy\(\(\) => import\('\.\/features\/WorkbenchSidebars\.jsx'\)/);
   assert.match(app,/lazy\(\(\) => import\('\.\/features\/WorkbenchSettings\.jsx'\)/);
   assert.match(sidebars,/import\s+\{TextEditor\}\s+from\s+'\.\/Editors'/);
-  assert.match(app,/explorerTab === 'code' \? <CodeSidebar/);
-  assert.match(app,/explorerTab === 'exchange'/);
+  const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
+  assert.match(explorer,/explorerTab === 'code' \? <CodeSidebar/);
+  assert.match(explorer,/explorerTab === 'exchange'/);
 });
 
 test('exports are requested on demand and keep format selection unchanged',()=>{

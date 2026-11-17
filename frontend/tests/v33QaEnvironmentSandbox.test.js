@@ -72,8 +72,10 @@ test('session overlay memory cache has a bounded size',()=>{
 test('Send does not call Cloud PUT for read-only QA, Writer or Developer',()=>{
   const app=read('frontend/src/App.jsx');
   assert.match(app,/if\(scope===STORAGE_WORKSPACE&&!canWrite\)\{[\s\S]*?rememberSessionValues\(sessionKey,environment,values\);[\s\S]*?return;/);
-  assert.match(app,/await applyScriptVariables\(pre\.environmentVariables \|\| variables,runEnvironment\)/);
-  assert.match(app,/await applyScriptVariables\(post\.environmentVariables\|\|post\.variables,runEnvironment\)/);
+  const executor=read('frontend/src/features/requests/services/executeWorkbenchRequest.js');
+  assert.match(app,/saveEnvironmentValues:values=>runToken===currentTokenRef\.current\?applyScriptVariables\(values,runEnvironment\)/);
+  assert.match(executor,/await saveEnvironmentValues\(pre\.environmentVariables \|\| variables\)/);
+  assert.match(executor,/await saveEnvironmentValues\(post\.environmentVariables \|\| post\.variables\)/);
   assert.match(app,/const runEnvironment=\{environment:activeEnvironment,scope:envScope,sessionKey:activeSessionEnvironmentKey/);
   assert.match(app,/const canWriteEnvironment=envScope!==STORAGE_WORKSPACE\|\|\(membersWorkspaceId===selectedWs&&canWorkspace\(currentWorkspaceMember\(members,me\),'environment\.write'\)\)/);
   assert.doesNotMatch(app,/sessionStorage\.setItem\([^\n]*sessionEnvironment/);

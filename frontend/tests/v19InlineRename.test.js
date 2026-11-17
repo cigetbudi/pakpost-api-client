@@ -32,6 +32,6 @@ test('request name supports in-place edit and keyboard save with existing reques
   assert.match(app,/function createCollectionDraft/);
   assert.match(app,/addTab\(draft,source,\{focusName:true\}\)/);
   assert.match(app,/if \(\(e.ctrlKey \|\| e.metaKey\) && e.key.toLowerCase\(\) === 's'\)/);
-  assert.match(app,/await api\(`\$\{base\}\/\$\{origin.requestId\}`,'PUT'/);
+  assert.match(app,/await updateWorkspaceRequest\(origin\.workspaceId,origin\.collectionId,origin\.requestId/);
   assert.match(css,/pp-inline-request-name/);
 });

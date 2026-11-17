@@ -38,8 +38,9 @@ test('Postman collection preserves script while not exposing known authorization
 test('v17 app connects export, environment dialog, branding, and global toast portal',()=>{
  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
  const explorer=readFileSync(new URL('../src/features/EnvironmentExplorer.jsx',import.meta.url),'utf8');
- assert.match(app,/onDuplicate=\{duplicateEnvironment\}/);
- assert.match(app,/onExport=\{environment=>openExportChoice/);
+ const panel=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
+ assert.match(panel,/onDuplicate=\{duplicateEnvironment\}/);
+ assert.match(panel,/onExport=\{environment=>openExportChoice/);
  assert.match(app,/createPortal\(<div className="pp-toast pp-toast-v17"/);
  assert.match(explorer,/pp-env-v17-modal-backdrop/);
  assert.match(explorer,/Export as/);

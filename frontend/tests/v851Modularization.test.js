@@ -11,7 +11,10 @@ const primitives = readFileSync(new URL('../src/components/ui/WorkbenchPrimitive
 test('App delegates rendering of response pane and reusable primitives', () => {
   assert.match(app, /<ResponsePane\b/);
   assert.doesNotMatch(app, /<section className="pp-response-pane">/);
-  assert.match(app, /import \{ IconButton, Empty, Dialog \}/);
+  assert.match(app, /import \{ Dialog \}/);
+  const manager=readFileSync(new URL('../src/features/workspace/components/WorkspaceManager.jsx',import.meta.url),'utf8');
+  assert.match(manager,/IconButton/);
+  assert.match(manager,/Empty/);
   assert.match(primitives, /role="dialog" aria-modal="true"/);
   assert.match(pane, /readOnly/);
 });

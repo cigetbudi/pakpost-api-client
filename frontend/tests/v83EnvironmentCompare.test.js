@@ -89,6 +89,7 @@ test('feature is on-demand and read-only, including for QA cloud users',()=>{
   assert.match(explorer,/onClick=\{\(\)=>openCompare\(\)\}/);
   assert.match(explorer,/Compare with\.\.\./);
   assert.match(explorer,/disabled=\{readOnly\}/); // editing is still permission-checked
-  assert.match(app,/key=\{environmentContext\|\|'cloud-pending'\}/); // remount per workspace
+  const panel=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
+  assert.match(panel,/key=\{environmentContext\|\|'cloud-pending'\}/); // remount per workspace
   assert.doesNotMatch(view,/onSave|onDelete|onCreate|api\(|localStorage|sessionStorage|\.setItem\(/);
 });

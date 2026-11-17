@@ -83,11 +83,12 @@ test('App creates in-place collection drafts, persists first Save, and confirms 
   const app=source('../src/App.jsx');
   assert.match(app,/function createCollectionDraft\(scope,collectionId,folderPath=\[\]\)/);
   assert.match(app,/if\(action==='newRequest'\)\{\s*createCollectionDraft\('workspace'/);
-  assert.match(app,/const saved=await api\(base,'POST',savedPayload,token\)/);
-  assert.match(app,/await api\(`\$\{base\}\/\$\{origin.requestId\}`,'PUT'/);
+  assert.match(app,/const saved=await createWorkspaceRequest\(origin\.workspaceId,origin\.collectionId,savedPayload,token\)/);
+  assert.match(app,/await updateWorkspaceRequest\(origin\.workspaceId,origin\.collectionId,origin\.requestId/);
   assert.match(app,/setCloseConfirmation\(\{action,id,unsaved\}\)/);
   assert.match(app,/Discard & close/);
-  assert.match(app,/pendingTabs=\{openTabs.filter/);
+  const explorer=source('../src/features/collections/components/WorkbenchExplorer.jsx');
+  assert.match(explorer,/pendingTabs=\{openTabs.filter/);
 });
 test('Collections show pending request plus button and unsaved indicators',()=>{
   const tree=source('../src/features/LocalCollectionsTree.jsx');
@@ -95,7 +96,8 @@ test('Collections show pending request plus button and unsaved indicators',()=>{
   const style=source('../src/v16-draft-requests.css');
   assert.match(tree,/New request in collection/);
   assert.match(tree,/pp-draft-request/);
-  assert.match(app,/New request in collection/);
-  assert.match(app,/pp-unsaved-dot/);
+  const explorer=source('../src/features/collections/components/WorkbenchExplorer.jsx');
+  assert.match(explorer,/New request in collection/);
+  assert.match(explorer,/pp-unsaved-dot/);
   assert.match(style,/\.pp-tree-actions/);
 });

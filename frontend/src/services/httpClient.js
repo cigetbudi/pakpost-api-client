@@ -1,6 +1,6 @@
 // A unique instance per browser tab prevents SignalR events from being
 // mistaken for changes coming from another tab. Do not persist this value.
-const CLIENT_INSTANCE_ID =
+export const CLIENT_INSTANCE_ID =
   globalThis.crypto?.randomUUID?.() || `tab-${Math.random().toString(36).slice(2)}`;
 
 /**

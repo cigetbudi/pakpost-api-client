@@ -9,10 +9,11 @@ const css = src('../src/v13-horizon-workbench.css');
 test('v13 skin is appended after v12 without replacing theme or runtime code', () => {
   assert.match(main, /import '\.\/v12-collection-workflow\.css';\s*import '\.\/v13-horizon-workbench\.css';/);
   for (const theme of ['light', 'dark', 'oled']) assert.match(css, new RegExp(`:root\\[data-theme='${theme}'\\]`));
-  assert.match(app, /runSandbox/);
+  assert.match(app, /executeWorkbenchRequest/);
   assert.match(app, /sendRequest/);
   assert.match(app, /saveCurrent/);
-  assert.match(app, /LocalCollectionsTree/);
+  const explorer=src('../src/features/collections/components/WorkbenchExplorer.jsx');
+  assert.match(explorer, /LocalCollectionsTree/);
 });
 
 test('collections are visually ordered to the right, while editor keeps split modes', () => {

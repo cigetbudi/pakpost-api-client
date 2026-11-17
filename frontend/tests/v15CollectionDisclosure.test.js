@@ -49,12 +49,14 @@ test('Expand all local collects nested folder keys recursively',()=>{
 
 test('React UI exposes bulk controls and independent animated disclosure regions',()=>{
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
   const tree=readFileSync(new URL('../src/features/LocalCollectionsTree.jsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
-  assert.match(app,/expandOrCollapseAllCollections\(true\)/);
-  assert.match(app,/expandOrCollapseAllCollections\(false\)/);
-  assert.match(app,/toggleWorkspaceCollectionById\(c\.id\)/);
-  assert.match(app,/workspaceRequestLists\[workspaceCollectionKey\(selectedWs,c\.id\)\]/);
+  assert.match(explorer,/expandOrCollapseAllCollections\(true\)/);
+  assert.match(explorer,/expandOrCollapseAllCollections\(false\)/);
+  assert.match(explorer,/toggleWorkspaceCollectionById\(c\.id\)/);
+  assert.match(explorer,/const requestKey=workspaceCollectionKey\(selectedWs,c\.id\)/);
+  assert.match(explorer,/workspaceRequestLists\[requestKey\]/);
   assert.match(tree,/expandAllSignal/);
   assert.match(tree,/pp-collection-motion/);
   assert.match(css,/grid-template-rows:0fr/);

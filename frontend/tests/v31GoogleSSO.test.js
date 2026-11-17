@@ -8,7 +8,8 @@ test('Google Sign-In uses public client id and posts credential to backend', () 
   assert.match(app,/VITE_GOOGLE_CLIENT_ID/);
   assert.match(app,/api\/auth\/google'/);
   assert.match(app,/completeSignIn\(await api/);
-  assert.match(app,/GoogleSignInButton/);
+  const auth=read('src/features/auth/components/AuthOverlays.jsx');
+  assert.match(auth,/GoogleSignInButton/);
 });
 test('Existing account linking requires PakPost password and authenticated token', () => {
   const app=read('src/App.jsx');

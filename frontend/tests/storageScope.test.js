@@ -96,22 +96,24 @@ test('Header controls ONE shared storage scope for Collections and Environments'
   assert.match(app,/onChange={updateStorageScope}/);
   assert.match(app,/Storage location for collections and environments/);
   assert.doesNotMatch(app,/<StorageScopeTabs/);
-  assert.match(app,/Switch environment workspace/);
-  assert.match(app,/Sign in to access Cloud environments/);
-  assert.match(app,/cloudEndpointCount\(c,workspaceRequestLists,requestKey\)/);
+  const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
+  assert.match(explorer,/Switch environment workspace/);
+  assert.match(explorer,/Sign in to access Cloud environments/);
+  assert.match(explorer,/cloudEndpointCount\(c,workspaceRequestLists,requestKey\)/);
 });
 
 test('Collections toolbar keeps all four sorts, provides compact expand/collapse and import/new actions',()=>{
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
-  const toolbar=app.split('<div className="pp-collections-toolbar-row">')[1]?.split('</div>')[0];
+  const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
+  const toolbar=explorer.split('<div className="pp-collections-toolbar-row">')[1]?.split('</div>')[0];
   assert.ok(toolbar);
   for(const label of ['Manual order','Name A–Z','Name Z–A','Recently updated'])assert.ok(toolbar.includes(label));
   assert.match(toolbar,/Expand all collections and folders/);
   assert.match(toolbar,/Collapse all collections and folders/);
-  assert.match(app,/onClick={openCollectionImport}/);
-  assert.match(app,/onSubmit={createExplorerCollection}/);
+  assert.match(explorer,/onClick={openCollectionImport}/);
+  assert.match(explorer,/onSubmit={createExplorerCollection}/);
   assert.doesNotMatch(app,/pp-global-collection-sort/);
-  assert.doesNotMatch(app,/pp-add-side.*New collection/);
+  assert.doesNotMatch(explorer,/pp-add-side.*New collection/);
 });
 
 test('Import dialog keeps explicit Local/Cloud destination and guards against env-only files',()=>{

@@ -60,8 +60,9 @@ test('local and Neon collection examples collapse by default and provide accessi
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
   assert.match(local,/expanded\[exampleKey\]\?\?!!search/);
   assert.match(local,/pp-endpoint-example-toggle/);
-  assert.match(app,/expandedWorkspaceExamples\[/);
-  assert.match(app,/pp-workspace-example-toggle/);
+  const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
+  assert.match(explorer,/expandedWorkspaceExamples\[/);
+  assert.match(explorer,/pp-workspace-example-toggle/);
   assert.match(app, /<VariableAwareInput placeholder="\{\{AuthToken\}\}/);
   assert.match(app, /ariaLabel="Bearer token"/);
 });

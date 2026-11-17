@@ -91,7 +91,8 @@ test('V6 React wiring scopes requests, active IDs, and editor instances to works
   assert.match(environmentView,/environmentContextKey\(STORAGE_WORKSPACE, selectedWs, userId\)/);
   assert.match(environmentView,/environmentsForContext\(workspaceEnvironmentResult, cloudEnvironmentContext\)/);
   assert.match(environmentView,/selectionForContext\(environmentSelections, environmentContext\)/);
-  assert.match(app,/key=\{environmentContext\|\|'cloud-pending'\}/);
+  const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
+  assert.match(explorer,/key=\{environmentContext\|\|'cloud-pending'\}/);
   assert.match(app,/let cancelled=false/);
   assert.match(app,/cloudEnvironmentContextRef\.current===context/);
   assert.match(environmentView,/cloudEnvironmentContextRef\.current\) return previous/);
