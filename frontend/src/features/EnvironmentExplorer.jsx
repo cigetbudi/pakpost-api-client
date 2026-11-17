@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Check,Eye,EyeOff,FileUp,MoreHorizontal,Plus,Search,Save,X} from 'lucide-react';
+import {Check,Eye,EyeOff,FileUp,GitCompareArrows,MoreHorizontal,Plus,Search,Save,X} from 'lucide-react';
 import {RetroSelect} from './RetroSelect';
 import {MenuActionItem} from './MenuActionItem';
 import {ImportDestinationPicker} from './ImportDestinationPicker';
@@ -8,11 +8,14 @@ import {allowedStorageScope,defaultStorageScope} from './storageScope.js';
 
 const clone=env=>({...env,variables:(env?.variables||[]).map(v=>({...v}))});
 const blank=()=>({name:'',variables:[{key:'',value:'',isSecret:false}]});
+// Import the compare interface only when the user requests it.
+const EnvironmentCompare=React.lazy(()=>import('./EnvironmentCompare.jsx'));
 /** Lightweight list; variable inputs mount only while the edit dialog is open. */
 export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCreate,onDelete,onDuplicate,onExport,onImportFile,scope='Guest (local)',authenticated=false,workspaceName='',onLogin=()=>{},readOnly=false}){
   const [query,setQuery]=useState('');const [sort,setSort]=useState('a-z');
   const [menu,setMenu]=useState(null);const [editor,setEditor]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);const [reveal,setReveal]=useState({});
+  const [compareOpen,setCompareOpen]=useState(false);const [compareLeft,setCompareLeft]=useState('');
   const [busy,setBusy]=useState(false);const [error,setError]=useState('');
   const [importOpen,setImportOpen]=useState(false);const [importDestination,setImportDestination]=useState(()=>defaultStorageScope(authenticated));
   const [importFileValue,setImportFileValue]=useState(null);
@@ -33,6 +36,10 @@ export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCrea
     document.addEventListener('keydown',key);
     return()=>document.removeEventListener('keydown',key);
   },[editor,confirmDelete,busy]);
+  function openCompare(initialId=''){
+    if(items.length<2){setError('Create at least two environments in this storage location to compare.');return;}
+    setMenu(null);setError('');setCompareLeft(initialId||selected||items[0].id);setCompareOpen(true);
+  }
   function openEditor(item=null,mode='edit'){
     if(readOnly){setError('Cloud environment is read-only for this role. Select Local to edit your own environment.');return;}
     setError('');setMenu(null);setReveal({});
@@ -75,7 +82,7 @@ export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCrea
   return <div className="pp-env-explorer pp-env-v17" aria-label="Environment explorer">
     <div className="pp-env-toolbar">
       <div className="pp-explorer-search"><Search size={14}/><input aria-label="Search environments" placeholder="Search environments..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
-      <div className="pp-env-toolbar-row"><RetroSelect ariaLabel="Sort environments" value={sort} onChange={setSort} options={[{value:'a-z',label:'Name A–Z'},{value:'z-a',label:'Name Z–A'}]}/><button type="button" className="pp-env-import-action" disabled={busy} onClick={()=>{setError('');setImportDestination(readOnly?'local':defaultStorageScope(authenticated));setImportFileValue(null);setImportOpen(true);}} title="Import Postman, Hoppscotch, or Insomnia JSON environment"><FileUp size={14}/> Import</button><button type="button" className="pp-env-primary" disabled={readOnly} title={readOnly?"Read-only Cloud environment":"New environment"} onClick={()=>openEditor(null,'create')}><Plus size={14}/> New</button><input ref={importInputRef} type="file" hidden accept=".json,application/json" aria-label="Choose environment JSON" onChange={chooseImportFile}/></div>
+      <div className="pp-env-toolbar-row"><button type="button" className="pp-env-import-action" disabled={items.length<2} title="Compare two environments in this storage location" onClick={()=>openCompare()}><GitCompareArrows size={14}/> Compare</button><RetroSelect ariaLabel="Sort environments" value={sort} onChange={setSort} options={[{value:'a-z',label:'Name A–Z'},{value:'z-a',label:'Name Z–A'}]}/><button type="button" className="pp-env-import-action" disabled={busy} onClick={()=>{setError('');setImportDestination(readOnly?'local':defaultStorageScope(authenticated));setImportFileValue(null);setImportOpen(true);}} title="Import Postman, Hoppscotch, or Insomnia JSON environment"><FileUp size={14}/> Import</button><button type="button" className="pp-env-primary" disabled={readOnly} title={readOnly?"Read-only Cloud environment":"New environment"} onClick={()=>openEditor(null,'create')}><Plus size={14}/> New</button><input ref={importInputRef} type="file" hidden accept=".json,application/json" aria-label="Choose environment JSON" onChange={chooseImportFile}/></div>
     </div>
     <div className="pp-env-list" role="listbox" aria-label="Environments">
       <button role="option" aria-selected={!selected} className={!selected?'active':''} onClick={()=>onSelect('')}>No environment</button>
@@ -86,6 +93,7 @@ export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCrea
         <div className="pp-env-v17-actions" ref={menu?.id===env.id?menuRef:undefined}>
           <button aria-label={`Actions for ${env.name}`} title="Environment actions" className="pp-env-more" aria-expanded={menu?.id===env.id} onClick={e=>{if(menu?.id===env.id){setMenu(null);return;}const box=e.currentTarget.getBoundingClientRect();setMenu({id:env.id,x:Math.max(10,Math.min(window.innerWidth-245,box.right-230)),y:Math.max(10,Math.min(window.innerHeight-255,box.bottom+3))});}}><MoreHorizontal size={16}/></button>
           {menu?.id===env.id&&createPortal(<div ref={popupRef} className="pp-env-v17-menu" role="menu" style={{left:menu.x,top:menu.y}}>
+            <MenuActionItem action="compare" disabled={items.length<2} onClick={()=>openCompare(env.id)}>Compare with...</MenuActionItem>
             <MenuActionItem action="editVariables" disabled={readOnly} onClick={()=>openEditor(env)}>Edit variables</MenuActionItem>
             <MenuActionItem action="rename" disabled={readOnly} onClick={()=>openEditor(env,'rename')}>Rename</MenuActionItem>
             <MenuActionItem action="duplicate" disabled={busy||readOnly} onClick={()=>duplicate(env)}>Duplicate</MenuActionItem>
@@ -126,6 +134,7 @@ export function EnvironmentExplorer({items=[],selected='',onSelect,onSave,onCrea
         </form>
       </section>
     </div>,document.body)}
+    {compareOpen&&<React.Suspense fallback={<div role="status" className="pp-env-v17-hint">Opening compare…</div>}><EnvironmentCompare items={items} initialLeftId={compareLeft} scope={scope} onClose={()=>setCompareOpen(false)}/></React.Suspense>}
     {confirmDelete&&createPortal(<div className="pp-env-v17-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setConfirmDelete(null)}}><section className="pp-env-v17-confirm" role="dialog" aria-modal="true" aria-label="Delete environment"><h2>Delete environment?</h2><p>Delete <strong>{confirmDelete.name}</strong> and its variables? This cannot be undone.</p>{error&&<p role="alert" className="pp-env-error">{error}</p>}<footer><button disabled={busy} onClick={()=>setConfirmDelete(null)}>Cancel</button><button className="danger" disabled={busy} onClick={()=>remove(confirmDelete)}>Delete environment</button></footer></section></div>,document.body)}
   </div>;
 }
