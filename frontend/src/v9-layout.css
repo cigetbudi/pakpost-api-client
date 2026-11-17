@@ -152,3 +152,8 @@
 /* V8.1.5: lightweight placeholders for optional editor/tool chunks. */
 .pp-editor-loading,.pp-feature-loading{display:flex;align-items:center;justify-content:center;color:var(--muted, #8290a0);font-size:12px;padding:18px;min-height:95px;}
 .pp-editor-loading{background:var(--surface-2, transparent);border-radius:8px;}
+
+/* Collection Runner launcher only; the Runner UI/CSS is lazy loaded. */
+.pp-runner-toolbar{display:inline-flex;gap:5px;align-items:center;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--text);font-size:12px;white-space:nowrap;cursor:pointer}
+.pp-runner-toolbar:disabled{opacity:.55;cursor:wait}
+.pp-runner-toolbar:hover:not(:disabled){background:var(--hover)}

@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import {
-  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
+  ArrowDownToLine, ArrowRight, Braces, Play, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
 import { GoogleSignInButton } from './features/GoogleSignInButton';
 import { WorkspaceRolePicker } from './features/WorkspaceRolePicker.jsx';
@@ -69,6 +69,7 @@ function ImportExportSidebar(props) {
   return <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Import / Export…</div>}><DeferredImportExportSidebar {...props}/></Suspense>;
 }
 const PakpostConsole = lazy(() => import('./features/PakpostConsole.jsx'));
+const CollectionRunner = lazy(() => import('./features/CollectionRunner.jsx'));
 const CollectionVariablesEditor = lazy(() => import('./features/CollectionVariablesEditor.jsx'));
 
 const CACHED = readWorkbenchCache();
@@ -130,6 +131,9 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
 export default function App() {
   const [page, setPage] = useState('tester');
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [runnerTarget,setRunnerTarget]=useState(null);
+  const [runnerLoading,setRunnerLoading]=useState(false);
+  const runnerFetchId=useRef(0);
   const [consoleEvents, setConsoleEvents] = useState([]);
   // Keep the ring buffer alive, but do not re-render the entire workbench for
   // every log line when the Console drawer is closed.
@@ -785,11 +789,54 @@ export default function App() {
     resetCollectionVariables(sessionCollectionVariables.current,collectionTargetKey(collectionVariablesTarget));
     refreshSessionEnvironment(v=>v+1);
   }
+  async function openCollectionRunner(target){
+    const fetchId=++runnerFetchId.current;
+    setRunnerLoading(true);
+    try{
+      const source={...target};
+      let items=[];
+      if(source.scope==='local'){
+        const collection=localCollections.find(c=>c.id===source.collectionId);
+        if(!collection)throw Error('Local collection not found');
+        items=(collection.requests||[]).map(r=>({...r,name:r.requestName||r.name}));
+      }else{
+        if(!token||!source.workspaceId)throw Error('Sign in and choose a Workspace first');
+        items=(await api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`,'GET',undefined,token))
+          .map(item=>workspaceDraft(item));
+      }
+      const saved=await readSavedCollectionVariables(source);
+      const key=collectionVariableKey(source,'',me?.id||'guest');
+      const collectionVars=readCollectionVariables(sessionCollectionVariables.current,key,savedCollectionVariableMap(saved.variables));
+      // Snapshot is intentionally private to this single run. Runner scripts never
+      // call applyScriptVariables or write Collection/Environment Cloud defaults.
+      if(fetchId!==runnerFetchId.current)return;
+      setRunnerTarget({...source,requests:items,environmentVariables:{...varsFromEnv()},
+        collectionVariables:collectionVars,transport:interceptorMode,environmentName:activeEnvironment?.name||'No environment'});
+    }catch(error){if(fetchId===runnerFetchId.current)setNotice(`Collection Runner: ${getMessage(error)}`);}
+    finally{if(fetchId===runnerFetchId.current)setRunnerLoading(false);}
+  }
+  function openRunnerForCurrentCollection(){
+    if(collectionsScope===STORAGE_WORKSPACE){
+      const col=collections.find(c=>c.id===selectedCol);
+      if(!col){setNotice('Select a Cloud Collection to run first.');return;}
+      openCollectionRunner({scope:'workspace',workspaceId:selectedWs,collectionId:col.id,name:col.name});
+    }else{
+      const source=openTabs.find(t=>t.id===activeTabRef.current)?.source;
+      const col=localCollections.find(c=>c.id===source?.collectionId)||localCollections[0];
+      if(!col){setNotice('Create or select a Local Collection first.');return;}
+      openCollectionRunner({scope:'local',collectionId:col.id,name:col.name});
+    }
+  }
+  function closeRunner(){runnerFetchId.current++;setRunnerTarget(null);}
+  // Switching account/workspace/storage must stop the old Runner and discard
+  // its private variable snapshot, even when Cloud and Local IDs overlap.
+  useEffect(()=>{runnerFetchId.current++;setRunnerTarget(null);},[token,selectedWs,storageScope,activeEnvId]);
   function handleLocalMenu(item){
     const {action,collectionId,requestId,folderPath}=item;
     const collection=localCollections.find(c=>c.id===collectionId);
     if(!collection)return;
     if(action==='variables'){openCollectionVariables({scope:'local',collectionId,name:collection.name});return;}
+    if(action==='runCollection'){openCollectionRunner({scope:'local',collectionId,name:collection.name});return;}
     if(action==='exportCollection'){openExportChoice({kind:'collection',scope:'local',collectionId,name:collection.name});return;}
     if(action==='documentation'){openDocumentation({scope:'local',type:requestId?'request':folderPath?.length?'folder':'collection',collectionId,requestId,folderPath,name:item.name||collection.name});return;}
     if(action==='newRequest'){
@@ -863,6 +910,7 @@ export default function App() {
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
     }
     if(action==='variables'){openCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,name:collections.find(c=>c.id===item.collectionId)?.name||item.name});return;}
+    if(action==='runCollection'){openCollectionRunner({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,name:collections.find(c=>c.id===item.collectionId)?.name||item.name});return;}
     if(action==='documentation'){openDocumentation({scope:'workspace',type:item.type==='request'?'request':'collection',collectionId:item.collectionId,requestId:item.requestId,name:item.name});return;}
     if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
@@ -1931,15 +1979,15 @@ export default function App() {
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
           </div>
-          <div className="pp-tabs-actions"><button type="button" className={consoleOpen?'pp-console-toggle active':'pp-console-toggle'} title="Toggle PakPost Console" aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={15}/> Console</button><span><span className="pp-working-dot"/> {token ? 'Synced' : 'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
+          <div className="pp-tabs-actions"><button type="button" className="pp-runner-toolbar" onClick={openRunnerForCurrentCollection} disabled={runnerLoading} title="Run saved requests from a Collection"><Play size={15}/> {runnerLoading?'Loading…':'Runner'}</button><button type="button" className={consoleOpen?'pp-console-toggle active':'pp-console-toggle'} title="Toggle PakPost Console" aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={15}/> Console</button><span><span className="pp-working-dot"/> {token ? 'Synced' : 'Guest'}</span><button title="Open history" onClick={() => { setExplorerTab('history'); setSidebarCollapsed(false); }}><History size={16}/></button></div>
         </div>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
-            ['newRequest','New request'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
+            ['newRequest','New request'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
           ]:workspaceMenu.type==='example'?[
             ['renameExample','Rename example'],['deleteExample','Delete example']
           ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
+            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables','runCollection'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
@@ -2258,6 +2306,14 @@ export default function App() {
         <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
       </form>
     </Dialog>}
+  {runnerTarget&&<Suspense fallback={<div className="pp-console-loading">Opening Collection Runner…</div>}>
+    <CollectionRunner key={`${runnerTarget.scope}:${runnerTarget.workspaceId||''}:${runnerTarget.collectionId}`}
+      target={runnerTarget} requests={runnerTarget.requests} environmentVariables={runnerTarget.environmentVariables}
+      collectionVariables={runnerTarget.collectionVariables} onClose={closeRunner}
+      send={command=>runnerTarget.transport==='proxy'
+        ?api('/api/proxy/send','POST',command)
+        :dispatchRequest(command,runnerTarget.transport)}/>
+  </Suspense>}
   {consoleOpen && <Suspense fallback={<div className="pp-console-loading">Opening PakPost Console…</div>}><PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents} onNavigate={navigateConsoleEvent}/></Suspense>}
   <FastTooltip/>
   </div>;
