@@ -3,7 +3,6 @@ import {createPortal} from 'react-dom';
 import {
   ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
-import { TextEditor } from './features/Editors';
 import { GoogleSignInButton } from './features/GoogleSignInButton';
 import { WorkspaceRolePicker } from './features/WorkspaceRolePicker.jsx';
 import { WorkspaceAccessBreakdown } from './features/WorkspaceAccessBreakdown.jsx';
@@ -23,17 +22,14 @@ import {sessionEnvironmentKey,readableEnvironmentValues,applySessionOverrides,se
 import {environmentContextKey,environmentsForContext,readEnvironmentSelections,selectionForContext,setSelectionForContext,writeEnvironmentSelections} from './features/environmentContext.js';
 import { FastTooltip } from './features/FastTooltip';
 import { EnvironmentExplorer } from './features/EnvironmentExplorer';
-import { WorkbenchSettings } from './features/WorkbenchSettings';
 import {sortCollectionRoots} from './features/collectionSort';
 import {isWorkspaceCollectionOpen, toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from './features/collectionExpansion';
-import { CodeSidebar, ImportExportSidebar } from './features/WorkbenchSidebars';
 import { blankDraft, parseCurl, isCurl, parseImportText } from './features/importExport';
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from './features/environmentImport';
 import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
 import {planTabClose,reorderTabs} from './features/tabActions';
 import {applyLocalAction,updateLocalRequest,createLocalSavedRequest} from './features/localCollectionActions';
-import {exportCollectionByFormat,exportEnvironmentByFormat,exportFileName} from './features/exportFormats';
 import {stripJsonComments,hasJsonComments} from './features/jsonComments';
 import {findBoundTab} from './features/sourceTabs';
 import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, hasUnsavedMarker, tabSaved} from './features/draftLifecycle';
@@ -51,6 +47,27 @@ import {readInterceptorMode,writeInterceptorMode,probeExtension,dispatchRequest,
 import {discoverApiDestinations} from './features/interceptorDiscovery';
 import {appendConsoleEvent, subscribeConsoleEvents, clearConsoleEvents, scriptConsoleLevel} from './features/pakpostConsoleStore.js';
 import {collectionVariableKey, readCollectionVariables, writeCollectionVariables, resetCollectionVariables, savedCollectionVariableMap, validateCollectionVariableRows, resolvedScriptVariables} from './features/collectionVariableSession.js';
+// Keep the common GET/Params/Headers startup path free of CodeMirror and optional tools.
+// Opening Body, Scripts, a formatted response or Import/Export loads the editor
+// on demand; the same instance is cached by the browser for subsequent tabs.
+const DeferredCodeEditor = lazy(() => import('./features/Editors.jsx').then(module => ({default:module.TextEditor})));
+function TextEditor(props) {
+  return <Suspense fallback={<div className="pp-editor-loading" role="status" style={{minHeight:props.minHeight==='100%'?'200px':props.minHeight||'180px'}}>Loading editor…</div>}>
+    <DeferredCodeEditor {...props}/>
+  </Suspense>;
+}
+const DeferredSettings = lazy(() => import('./features/WorkbenchSettings.jsx').then(module => ({default:module.WorkbenchSettings})));
+function WorkbenchSettings(props) {
+  return <Suspense fallback={<div className="pp-feature-loading" role="status">Opening settings…</div>}><DeferredSettings {...props}/></Suspense>;
+}
+const DeferredCodeSidebar = lazy(() => import('./features/WorkbenchSidebars.jsx').then(module => ({default:module.CodeSidebar})));
+function CodeSidebar(props) {
+  return <Suspense fallback={<div className="pp-feature-loading" role="status">Opening code generator…</div>}><DeferredCodeSidebar {...props}/></Suspense>;
+}
+const DeferredImportExportSidebar = lazy(() => import('./features/WorkbenchSidebars.jsx').then(module => ({default:module.ImportExportSidebar})));
+function ImportExportSidebar(props) {
+  return <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Import / Export…</div>}><DeferredImportExportSidebar {...props}/></Suspense>;
+}
 const PakpostConsole = lazy(() => import('./features/PakpostConsole.jsx'));
 const CollectionVariablesEditor = lazy(() => import('./features/CollectionVariablesEditor.jsx'));
 
@@ -1183,6 +1200,9 @@ export default function App() {
   async function confirmExport(){
     if(!exportChoice)return;
     try{
+      // Export formats (Postman/OpenAPI/Insomnia) are not required to open
+      // PakPost or send a request; load the converters only when exporting.
+      const {exportCollectionByFormat,exportEnvironmentByFormat,exportFileName}=await import('./features/exportFormats.js');
       const {kind,scope,collectionId,environment,name}=exportChoice;
       if(kind==='environment'){
         downloadJson(exportEnvironmentByFormat(environment,{format:exportFormat,includeSecrets:exportIncludeSecrets}),exportFileName(name,exportFormat,'environment'));

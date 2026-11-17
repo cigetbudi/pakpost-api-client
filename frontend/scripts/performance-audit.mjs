@@ -36,6 +36,8 @@ export function collectBundleMetrics(distDir) {
     allJsGzipBytes:sum(js,'gzipBytes'),
     allCssGzipBytes:sum(css,'gzipBytes'),
     consoleChunkGzipBytes:sum(js.filter(f=>/PakpostConsole/i.test(f.name)),'gzipBytes'),
+    editorChunkGzipBytes:sum(js.filter(f=>/(?:^|\/)Editors-[^/]+\.js$/i.test(f.name)),'gzipBytes'),
+    toolsChunkGzipBytes:sum(js.filter(f=>/(?:^|\/)WorkbenchSidebars-[^/]+\.js$/i.test(f.name)),'gzipBytes'),
     initialAssets:initial.map(f=>f.name),
     jsFiles:js.length,
     cssFiles:css.length
@@ -61,11 +63,14 @@ export function reportBundleMetrics(metrics,baseline=null){
     `  Initial JS:       ${KiB(metrics.initialJsGzipBytes)}`,
     `  Initial CSS:      ${KiB(metrics.initialCssGzipBytes)}`,
     `  Total JS chunks:  ${KiB(metrics.allJsGzipBytes)} (${metrics.jsFiles} files)`,
-    `  Console chunk:    ${KiB(metrics.consoleChunkGzipBytes)} (should load only on demand)`,
+    `  Console chunk:    ${KiB(metrics.consoleChunkGzipBytes)} (loads on demand)`,
+    `  Editor chunk:     ${KiB(metrics.editorChunkGzipBytes||0)} (loads on Body / Scripts / Response)`,
+    `  Tools chunk:      ${KiB(metrics.toolsChunkGzipBytes||0)} (loads on Code / Import-Export)`,
     `  Entry assets:     ${metrics.initialAssets.join(', ')||'not detected'}`
   ];
   if(metrics.initialJsGzipBytes>300*1024)lines.push('  NOTE: Initial JS exceeds the provisional 300 KiB target. Profile before adjusting the budget.');
   if(metrics.consoleChunkGzipBytes===0)lines.push('  NOTE: No named Console chunk detected; inspect Vite output to confirm lazy loading.');
+  if(!metrics.editorChunkGzipBytes)lines.push('  NOTE: No named Editor chunk detected; inspect Vite output to confirm code splitting.');
   if(baseline){
     const delta=metrics.initialJsGzipBytes-(baseline.initialJsGzipBytes||0);
     const sign=delta>=0?'+':'';

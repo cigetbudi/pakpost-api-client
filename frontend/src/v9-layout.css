@@ -148,3 +148,7 @@
 @media (prefers-reduced-motion: reduce) {
   .pp-url-entry { transition: none !important; }
 }
+
+/* V8.1.5: lightweight placeholders for optional editor/tool chunks. */
+.pp-editor-loading,.pp-feature-loading{display:flex;align-items:center;justify-content:center;color:var(--muted, #8290a0);font-size:12px;padding:18px;min-height:95px;}
+.pp-editor-loading{background:var(--surface-2, transparent);border-radius:8px;}
