@@ -1,6 +1,7 @@
 /** Storage is an explicit destination. It must never change on a failed remote write. */
 import {encodeStoredHeaders} from './requestMetadata.js';
 import {bodyFormat} from './requestTools.js';
+import {validateCollectionVariableRows} from './collectionVariableSession.js';
 
 export const STORAGE_LOCAL='local';
 export const STORAGE_WORKSPACE='workspace';
@@ -48,6 +49,7 @@ export async function saveCloudCollections(sources,{workspaceId,token,request,on
   // Preflight all requests before creating any remote records.
   const prepared=sources.map(source=>({
     name:String(source.name||'Imported collection').trim(),
+    variables:validateCollectionVariableRows((source.variables||[]).map(v=>({key:v.key,value:v.value??'',isSecret:!!v.isSecret}))),
     requests:(source.requests||[]).map(importedRequestPayload)
   }));
   for(const source of prepared){
@@ -59,6 +61,9 @@ export async function saveCloudCollections(sources,{workspaceId,token,request,on
       const created=await request(base,'POST',{name:source.name},token);
       createdCount++;firstId ||= created.id;
       onCreated(created);
+      if(source.variables.length){
+        await request(`${base}/${created.id}/variables`,'PUT',{version:0,variables:source.variables},token);
+      }
       for(const payload of source.requests){
         await request(`${base}/${created.id}/requests`,'POST',payload,token);
         count++;

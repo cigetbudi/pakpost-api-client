@@ -16,6 +16,18 @@ public sealed class CollectionsController(ISender sender) : ControllerBase
     public async Task<ActionResult<IReadOnlyList<CollectionDto>>> List(Guid workspaceId, CancellationToken ct)
         => Ok(await sender.Send(new ListCollectionsQuery(User.GetUserId(), workspaceId), ct));
 
+    [HttpGet("{collectionId:guid}/variables")]
+    public async Task<ActionResult<CollectionVariablesDto>> GetVariables(Guid workspaceId, Guid collectionId, CancellationToken ct)
+        => Ok(await sender.Send(new GetCollectionVariablesQuery(User.GetUserId(), workspaceId, collectionId), ct));
+
+    [HttpPut("{collectionId:guid}/variables")]
+    public async Task<ActionResult<CollectionVariablesDto>> SaveVariables(Guid workspaceId, Guid collectionId,
+        [FromBody] SaveCollectionVariablesRequest body, CancellationToken ct)
+        => Ok(await sender.Send(new SaveCollectionVariablesCommand(User.GetUserId(), workspaceId,
+            collectionId, body.Version, body.Variables), ct));
+
+    public sealed record SaveCollectionVariablesRequest(int Version, List<CollectionVariableDto> Variables);
+
     [HttpPut("{collectionId:guid}")]
     public async Task<ActionResult<CollectionDto>> Rename(Guid workspaceId, Guid collectionId, [FromBody] CreateCollectionRequest body, CancellationToken ct)
         => Ok(await sender.Send(new RenameCollectionCommand(User.GetUserId(), workspaceId, collectionId, body.Name), ct));

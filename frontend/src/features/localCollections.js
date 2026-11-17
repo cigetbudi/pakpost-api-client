@@ -1,5 +1,6 @@
 /** Browser-local imported collections. Nothing is sent to a remote workspace. */
 import {blankDraft, safeExportDraft} from './importExport.js';
+import {validateCollectionVariableRows} from './collectionVariableSession.js';
 
 const LIVE='pakpost_v5_collections_live';
 const FALLBACK='pakpost_v5_collections_recovery';
@@ -20,12 +21,13 @@ export function toLocalCollection(source,idFactory=uid){
     responseExamples:(r.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),
     result:null,scriptLog:[],scriptTests:[],scriptError:'',
   }));
-  return {id:idFactory(),name:String(source?.name||'Imported collection'),documentation:String(source?.documentation||''),folderDocs:{...(source?.folderDocs||{})},requests};
+  return {id:idFactory(),name:String(source?.name||'Imported collection'),variables:(source?.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret})),documentation:String(source?.documentation||''),folderDocs:{...(source?.folderDocs||{})},requests};
 }
 
 export function validateLibrary(collections){
   if(!Array.isArray(collections)||collections.length>MAX_COLLECTIONS)throw Error(`Maximum ${MAX_COLLECTIONS} local collections.`);
   if(collections.reduce((total,c)=>total+(c.requests||[]).length,0)>MAX_REQUESTS)throw Error(`Maximum ${MAX_REQUESTS} local requests.`);
+  for(const collection of collections)validateCollectionVariableRows(collection.variables||[]);
   return collections;
 }
 
@@ -76,7 +78,11 @@ export function writeLocalCollections(collections){
     }))}));
     const live=JSON.stringify({version:1,collections:normalized});
     if(live.length<=MAX_BYTES)sessionStorage.setItem(LIVE,live);
-    const fallback=JSON.stringify({version:1,collections:normalized.map(c=>({...c,requests:c.requests.map(r=>safeExportDraft(r,false))}))});
+    // Local secret values survive refresh in the same tab (sessionStorage only).
+    // They never enter persistent localStorage recovery.
+    const fallback=JSON.stringify({version:1,collections:normalized.map(c=>({...c,
+      variables:(c.variables||[]).map(v=>v.isSecret?{...v,value:''}:v),
+      requests:c.requests.map(r=>safeExportDraft(r,false))}))});
     if(fallback.length<=MAX_BYTES)localStorage.setItem(FALLBACK,fallback);
   }catch{/* Persistence must never interrupt request editing. */}
 }

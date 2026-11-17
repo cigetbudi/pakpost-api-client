@@ -50,8 +50,9 @@ import {applyAuthorization,AUTH_OPTIONS} from './features/authorization';
 import {readInterceptorMode,writeInterceptorMode,probeExtension,dispatchRequest,EXTENSION_CHANNEL} from './features/interceptorClient';
 import {discoverApiDestinations} from './features/interceptorDiscovery';
 import {appendConsoleEvent, subscribeConsoleEvents, clearConsoleEvents} from './features/pakpostConsoleStore.js';
-import {collectionVariableKey, readCollectionVariables, writeCollectionVariables, resolvedScriptVariables} from './features/collectionVariableSession.js';
+import {collectionVariableKey, readCollectionVariables, writeCollectionVariables, resetCollectionVariables, savedCollectionVariableMap, validateCollectionVariableRows, resolvedScriptVariables} from './features/collectionVariableSession.js';
 const PakpostConsole = lazy(() => import('./features/PakpostConsole.jsx'));
+const CollectionVariablesEditor = lazy(() => import('./features/CollectionVariablesEditor.jsx'));
 
 const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
@@ -171,9 +172,17 @@ export default function App() {
   // Never persist QA/Writer Cloud environment edits. Their script changes are RAM-only.
   const sessionEnvironmentOverlays=useRef(new Map());
   const sessionCollectionVariables=useRef(new Map());
+  // Cached shared defaults are scoped by user/workspace/collection and stay in RAM.
+  const savedCollectionVariablesCache=useRef(new Map());
+  const [collectionVariablesTarget,setCollectionVariablesTarget]=useState(null);
+  const [collectionVariablesData,setCollectionVariablesData]=useState(null);
+  const [collectionVariablesLoading,setCollectionVariablesLoading]=useState(false);
+  const [collectionVariablesError,setCollectionVariablesError]=useState('');
+  const [collectionVariablesBusy,setCollectionVariablesBusy]=useState(false);
+  const collectionVariablesFetchId=useRef(0);
   const sessionDocumentationOverlays=useRef(new Map());
   const [,refreshSessionEnvironment]=useState(0);
-  useEffect(()=>{sessionEnvironmentOverlays.current.clear();sessionCollectionVariables.current.clear();sessionDocumentationOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
+  useEffect(()=>{sessionEnvironmentOverlays.current.clear();sessionCollectionVariables.current.clear();savedCollectionVariablesCache.current.clear();setCollectionVariablesTarget(null);sessionDocumentationOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
   const [reqTab, setReqTab] = useState(RECOVERED.reqTab || 'params');
   const [resTab, setResTab] = useState(RECOVERED.resTab || 'body');
   const [loading, setLoading] = useState(false);
@@ -683,10 +692,71 @@ export default function App() {
     }else setRevealLocalDraft({collectionId,folderPath,nonce:Date.now()});
     setNotice('Draft created in collection. Save to persist it.');
   }
+  function collectionTargetKey(target){
+    return collectionVariableKey(target,'',me?.id||'guest');
+  }
+  async function readSavedCollectionVariables(target,{reload=false}={}){
+    if(target.scope==='local')return {version:0,variables:localCollections.find(c=>c.id===target.collectionId)?.variables||[]};
+    const key=collectionTargetKey(target);
+    const cached=savedCollectionVariablesCache.current.get(key);
+    if(!reload&&cached&&Date.now()-cached.at<30000)return cached.data;
+    const data=await api(`/api/workspaces/${target.workspaceId}/collections/${target.collectionId}/variables`,'GET',undefined,token);
+    savedCollectionVariablesCache.current.delete(key);
+    savedCollectionVariablesCache.current.set(key,{data,at:Date.now()});
+    // LRU-style cap keeps this optional feature from accumulating unbounded data.
+    if(savedCollectionVariablesCache.current.size>50)savedCollectionVariablesCache.current.delete(savedCollectionVariablesCache.current.keys().next().value);
+    return data;
+  }
+  async function openCollectionVariables(target){
+    const selected={...target};
+    const id=++collectionVariablesFetchId.current;
+    setCollectionVariablesTarget(selected);setCollectionVariablesData(null);
+    setCollectionVariablesError('');setCollectionVariablesLoading(true);
+    try{
+      const data=await readSavedCollectionVariables(selected,{reload:selected.scope==='workspace'});
+      if(id===collectionVariablesFetchId.current)setCollectionVariablesData(data);
+    }catch(error){if(id===collectionVariablesFetchId.current)setCollectionVariablesError(getMessage(error));}
+    finally{if(id===collectionVariablesFetchId.current)setCollectionVariablesLoading(false);}
+  }
+  async function reloadCollectionVariables(){
+    if(!collectionVariablesTarget)return;
+    const data=await readSavedCollectionVariables(collectionVariablesTarget,{reload:true});
+    setCollectionVariablesData(data);setCollectionVariablesError('');
+  }
+  async function saveCollectionVariableDefaults(rows){
+    const target=collectionVariablesTarget;
+    if(!target)throw Error('No collection selected');
+    const normalized=validateCollectionVariableRows(rows);
+    setCollectionVariablesBusy(true);
+    try{
+      if(target.scope==='local'){
+        setLocalCollections(old=>old.map(c=>c.id===target.collectionId?{...c,variables:normalized.map(({key,value,isSecret})=>({key,value,isSecret}))}:c));
+        setCollectionVariablesData({version:0,variables:normalized});
+      }else{
+        if(!canWorkspace(selfMember,'collection.write'))throw Error('Missing permission: collection.write');
+        if(!collectionVariablesData)throw Error('Reload Collection Variables before saving');
+        const saved=await api(`/api/workspaces/${target.workspaceId}/collections/${target.collectionId}/variables`,'PUT',
+          {version:collectionVariablesData.version,variables:normalized},token);
+        savedCollectionVariablesCache.current.set(collectionTargetKey(target),{data:saved,at:Date.now()});
+        setCollectionVariablesData(saved);
+      }
+    }finally{setCollectionVariablesBusy(false);}
+  }
+  function applyCollectionVariableSession(next){
+    if(!collectionVariablesTarget)return;
+    writeCollectionVariables(sessionCollectionVariables.current,collectionTargetKey(collectionVariablesTarget),next);
+    refreshSessionEnvironment(v=>v+1);
+  }
+  function resetCollectionVariableSession(){
+    if(!collectionVariablesTarget)return;
+    resetCollectionVariables(sessionCollectionVariables.current,collectionTargetKey(collectionVariablesTarget));
+    refreshSessionEnvironment(v=>v+1);
+  }
   function handleLocalMenu(item){
     const {action,collectionId,requestId,folderPath}=item;
     const collection=localCollections.find(c=>c.id===collectionId);
     if(!collection)return;
+    if(action==='variables'){openCollectionVariables({scope:'local',collectionId,name:collection.name});return;}
     if(action==='exportCollection'){openExportChoice({kind:'collection',scope:'local',collectionId,name:collection.name});return;}
     if(action==='documentation'){openDocumentation({scope:'local',type:requestId?'request':folderPath?.length?'folder':'collection',collectionId,requestId,folderPath,name:item.name||collection.name});return;}
     if(action==='newRequest'){
@@ -759,6 +829,7 @@ export default function App() {
     if(action==='renameExample'||action==='deleteExample'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
     }
+    if(action==='variables'){openCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,name:collections.find(c=>c.id===item.collectionId)?.name||item.name});return;}
     if(action==='documentation'){openDocumentation({scope:'workspace',type:item.type==='request'?'request':'collection',collectionId:item.collectionId,requestId:item.requestId,name:item.name});return;}
     if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
       setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
@@ -782,6 +853,10 @@ export default function App() {
         const source=collections.find(c=>c.id===item.collectionId);
         const destination=await api(base,'POST',{name:`${source?.name||'Collection'} (copy)`},token);
         setWorkspaceCollectionDocs(old=>({...old,[workspaceDocKey(selectedWs,destination.id)]:old[workspaceDocKey(selectedWs,item.collectionId)]||''}));
+        const variables=await readSavedCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId});
+        if(variables.variables?.length){
+          await api(`${base}/${destination.id}/variables`,'PUT',{version:0,variables:variables.variables.filter(v=>!v.isRedacted)},token);
+        }
         for(const req of list)await api(`${base}/${destination.id}/requests`,'POST',
           {name:req.name,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
         setCollections(await api(base,'GET',undefined,token));return;
@@ -1107,6 +1182,10 @@ export default function App() {
         }
         const documentation=scope==='workspace'?workspaceCollectionDocs[workspaceDocKey(selectedWs,collectionId)]||'':'';
         const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection,documentation});
+        if(scope==='workspace'&&exportFormat==='postman'){
+          const cloudVars=await readSavedCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId},{reload:true});
+          output.variable=(cloudVars.variables||[]).map(v=>({key:v.key,value:v.isRedacted||v.isSecret&&!exportIncludeSecrets?'':v.value,type:v.isSecret?'secret':'string'}));
+        }
         downloadJson(output,exportFileName(name,exportFormat));
       }
       setNotice(`Exported ${name} as ${exportFormat==='openapi'?'OpenAPI 3.1':exportFormat==='insomnia'?'Insomnia v4':'Postman'}`);setExportChoice(null);
@@ -1458,6 +1537,16 @@ export default function App() {
     const collectionKey=collectionVariableKey(sourceAtSend,tabId,me?.id||'guest');
     let collectionVars=readCollectionVariables(sessionCollectionVariables.current,collectionKey);
     try {
+      if(sourceAtSend?.collectionId){
+        let savedDefaults={};
+        try {
+          const savedData=await readSavedCollectionVariables(sourceAtSend);
+          savedDefaults=savedCollectionVariableMap(savedData.variables);
+        } catch(e) {
+          trace('warn','collection','Saved Collection Variables unavailable; continuing with session values');
+        }
+        collectionVars=readCollectionVariables(sessionCollectionVariables.current,collectionKey,savedDefaults);
+      }
       const pre=await runSandbox(preScript,'pre',variables,postmanRequestSnapshot({method,url,headers:requestHeaderObject(),body:languageFromMime(format)==='json'?stripJsonComments(body):body,format},resolvedScriptVariables(collectionVars,variables)),null,collectionVars);
       if(pre.error){
         const failure=new Error(`Pre-request script: ${pre.error}`);
@@ -1810,11 +1899,11 @@ export default function App() {
         </div>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
-            ['newRequest','New request'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
+            ['newRequest','New request'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
           ]:workspaceMenu.type==='example'?[
             ['renameExample','Rename example'],['deleteExample','Delete example']
           ]:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
+            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
@@ -2029,6 +2118,22 @@ export default function App() {
     <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">{interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Allowed destinations only':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
     {commandOpen && <div className="pp-command-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCommandOpen(false);}}><section className="pp-command-dialog" role="dialog" aria-modal="true" aria-label="Quick search and commands"><div className="pp-command-input-wrap"><Search size={18}/><input autoFocus aria-label="Search commands" value={commandQuery} onChange={e=>{setCommandQuery(e.target.value);setCommandIndex(0);}} onKeyDown={e=>{if(e.key==='ArrowDown'){e.preventDefault();setCommandIndex(i=>Math.min(visibleCommandItems.length-1,i+1));}else if(e.key==='ArrowUp'){e.preventDefault();setCommandIndex(i=>Math.max(0,i-1));}else if(e.key==='Enter'&&visibleCommandItems.length){e.preventDefault();setCommandOpen(false);visibleCommandItems[Math.min(commandIndex,visibleCommandItems.length-1)].run();}}} placeholder="Find a request or run a command..."/><kbd>Esc</kbd></div><div className="pp-command-results" role="listbox">{visibleCommandItems.length?visibleCommandItems.map((item,i)=><button type="button" role="option" aria-selected={commandIndex===i} onMouseEnter={()=>setCommandIndex(i)} key={item.key} onClick={()=>{setCommandOpen(false);item.run();}}>{item.method?<span className={`pp-http-label ${item.method.toLowerCase()}`}>{item.method}</span>:<Code2 size={15}/>}<span><strong>{item.title}</strong><small>{item.subtitle}</small></span><ArrowRight size={14}/></button>):<div className="pp-command-empty">No matching requests or commands.</div>}</div></section></div>}
     {notice && createPortal(<div className="pp-toast pp-toast-v17" role="status" aria-live="polite"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
+    {collectionVariablesTarget&&<Suspense fallback={<div className="pp-cv-loading">Loading Collection Variables editor…</div>}>
+      <CollectionVariablesEditor
+        target={collectionVariablesTarget}
+        initial={collectionVariablesData}
+        current={sessionCollectionVariables.current.has(collectionTargetKey(collectionVariablesTarget))
+          ?readCollectionVariables(sessionCollectionVariables.current,collectionTargetKey(collectionVariablesTarget)):null}
+        readOnly={collectionVariablesTarget.scope==='workspace'&&(!canWorkspace(selfMember,'collection.write')||!!collectionVariablesError)}
+        busy={collectionVariablesLoading||collectionVariablesBusy}
+        loadError={collectionVariablesError}
+        onClose={()=>{collectionVariablesFetchId.current++;setCollectionVariablesTarget(null);}}
+        onSave={saveCollectionVariableDefaults}
+        onApplySession={applyCollectionVariableSession}
+        onReset={resetCollectionVariableSession}
+        onReload={reloadCollectionVariables}
+      />
+    </Suspense>}
     {documentationTarget&&<Dialog title={`Documentation · ${documentationTarget.type}`} subtitle="Write Markdown notes for OpenAPI/Postman exports." onClose={()=>setDocumentationTarget(null)}><DocumentationEditor key={`${documentationTarget.scope}:${documentationTarget.collectionId}:${documentationTarget.requestId||JSON.stringify(documentationTarget.folderPath||[])}`} title={documentationTarget.name||'Item'} initial={documentationTarget.initial} busy={docBusy} onCancel={()=>setDocumentationTarget(null)} onSave={saveDocumentation}/></Dialog>}
     {exportChoice&&<Dialog title={`Export ${exportChoice.kind}`} subtitle={`Export “${exportChoice.name}” as a downloadable JSON file.`} onClose={()=>setExportChoice(null)}>
       <div className="pp-v17-export-options">

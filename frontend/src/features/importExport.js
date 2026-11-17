@@ -207,7 +207,7 @@ export function parseImportText(text){
   if(importedEnvironments)return {requests:[],environments:importedEnvironments,kind:'environment'};
   if(data?.openapi)return parseOpenApiCollection(data);
   if(data?.__export_format===4&&Array.isArray(data.resources))return parseInsomniaV4(data);
-  if(Array.isArray(data?.item)){const requests=parsePostmanCollection(data);return {requests,environments:[],kind:'postman',collections:[{name:safeString(data.info?.name||'Imported collection'),documentation:safeString(data.info?.description),folderDocs:postmanFolderDocs(data.item),requests}]};}
+  if(Array.isArray(data?.item)){const requests=parsePostmanCollection(data);return {requests,environments:[],kind:'postman',collections:[{name:safeString(data.info?.name||'Imported collection'),documentation:safeString(data.info?.description),folderDocs:postmanFolderDocs(data.item),variables:(Array.isArray(data.variable)?data.variable:[]).filter(v=>v?.key).slice(0,100).map(v=>({key:safeString(v.key),value:safeString(v.value),isSecret:v.type==='secret'})),requests}]};}
   throw Error('Unsupported file. Use Hoppscotch/Postman/Insomnia environment JSON, OpenAPI 3.1 JSON, Postman v2.1, Pakpost session, or cURL.');
 }
 
@@ -226,7 +226,7 @@ export function postmanFolderDocs(items,base=[],out={}){
 export function createLocalPostmanExport(collections,{includeSecrets=false}={}){
   const root=createPostmanCollection([],{name:'Pakpost local collections',includeSecrets});
   for(const col of collections||[]){
-    const parent={name:col.name,description:col.documentation||'',item:[]};root.item.push(parent);
+    const parent={name:col.name,description:col.documentation||'',item:[],variable:(col.variables||[]).map(v=>({key:v.key,value:v.isSecret&&!includeSecrets?'':v.value,type:v.isSecret?'secret':'string'}))};root.item.push(parent);
     for(const draft of col.requests||[]){
       const exported=createPostmanCollection([draft],{includeSecrets}).item[0];
       exported.name=draft.requestName||draft.name||'Request';

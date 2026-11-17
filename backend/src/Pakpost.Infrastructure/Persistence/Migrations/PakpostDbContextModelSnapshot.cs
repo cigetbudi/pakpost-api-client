@@ -42,6 +42,20 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("VariablesJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("variables_json")
+                        .HasDefaultValue("[]");
+
+                    b.Property<int>("VariablesVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("variables_version")
+                        .HasDefaultValue(0);
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByUserId");
