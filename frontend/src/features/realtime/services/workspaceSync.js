@@ -1,5 +1,5 @@
 import { CLIENT_INSTANCE_ID } from '../../../services/httpClient.js';
-import { validWorkspaceEvent, shouldRefreshRequestList } from './workspaceRealtime.js';
+import { validWorkspaceEvent, shouldRefreshRequestList } from './workspaceEventPolicy.js';
 import { decideCloudTabSync } from '../../requests/services/cloudConflict.js';
 import { isWorkspaceCollectionOpen, workspaceCollectionKey } from '../../collections/services/collectionExpansion.js';
 import { freshRequest, tabSaved } from '../../requests/services/draftLifecycle.js';

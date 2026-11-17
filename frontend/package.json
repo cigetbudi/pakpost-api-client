@@ -7,11 +7,14 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "bun test",
+    "test": "bun test ./tests",
     "test:node": "node scripts/check-source-imports.mjs && node --test tests/*/*.test.js",
     "audit": "bun audit",
     "perf:audit": "node scripts/performance-audit.mjs",
-    "verify:imports": "node scripts/check-source-imports.mjs"
+    "verify:imports": "node scripts/check-source-imports.mjs",
+    "test:e2e": "playwright test",
+    "perf:check": "node scripts/performance-budget.mjs",
+    "quality:check": "bun run verify:imports && bun run test && bun run build && bun run perf:check"
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.0",
@@ -34,7 +37,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "@playwright/test": "^1.56.0"
   },
   "packageManager": "bun@1.4.4"
 }

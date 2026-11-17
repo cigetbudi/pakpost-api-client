@@ -1,19 +1,10 @@
-// The SignalR client lives in a separate async chunk. No connection or dependency
-// is initialized for guest / Local-only sessions.
-export const WORKSPACE_KINDS = new Set([
-  'collection.created','collection.updated','collection.deleted','collection.variables',
-  'request.created','request.updated','request.deleted','request.moved'
-]);
-export function validWorkspaceEvent(event, workspaceId){
-  return !!event && typeof event==='object' && event.workspaceId===workspaceId &&
-    WORKSPACE_KINDS.has(event.kind) && typeof event.collectionId==='string' &&
-    /^[0-9a-f-]{36}$/i.test(event.collectionId) &&
-    (event.requestId==null || (typeof event.requestId==='string' && /^[0-9a-f-]{36}$/i.test(event.requestId)));
-}
-export function shouldRefreshRequestList(event,{selectedCol='',cached=false,hasOpenTab=false,expanded=false}={}){
-  return !!event?.kind?.startsWith('request.') &&
-    (cached||hasOpenTab||expanded||selectedCol===event.collectionId);
-}
+/** SignalR transport, loaded only for an authenticated Cloud workspace. */
+import { validWorkspaceEvent } from './workspaceEventPolicy.js';
+
+// Keep the public helpers re-exported for existing callers/tests. The module
+// itself must never be statically imported by startup/reconciliation code.
+export { WORKSPACE_KINDS, validWorkspaceEvent, shouldRefreshRequestList } from './workspaceEventPolicy.js';
+
 export async function connectWorkspaceRealtime({workspaceId,getToken,onEvent,onStatus,onAccessChanged}){
   const {HubConnectionBuilder,LogLevel}=await import('@microsoft/signalr');
   const hub=new HubConnectionBuilder()
