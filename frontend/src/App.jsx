@@ -1,5 +1,9 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
+import { api } from './services/httpClient.js';
+import { toRows, prettyJson, initialLocalEnvs, rowFromFile, encodeFile } from './utils/workbenchHelpers.js';
+import { IconButton, Empty, Dialog } from './components/ui/WorkbenchPrimitives.jsx';
+import { ResponsePane } from './components/workbench/ResponsePane.jsx';
 import {
   ArrowDownToLine, ArrowRight, Braces, Play, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
@@ -82,58 +86,8 @@ const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const EMPTY_HEADER = { key: '', value: '', description: '', enabled: true };
 const storedToken = () => sessionStorage.getItem('pakpost_token') || '';
 const getMessage = (e) => e?.message || 'Something went wrong';
-// Per browser tab, not per account. Changes made from a second tab still synchronize.
-const CLIENT_INSTANCE_ID=globalThis.crypto?.randomUUID?.()||`tab-${Math.random().toString(36).slice(2)}`;
-
-async function api(path, method = 'GET', body, token = '') {
-  const headers = { 'Accept': 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (method!=='GET' && path.startsWith('/api/workspaces/')) headers['X-PakPost-Instance']=CLIENT_INSTANCE_ID;
-  const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  let data;
-  try { data = await res.json(); } catch { data = null; }
-  if (!res.ok) {
-    const messages=Array.isArray(data?.errors)?data.errors.map(e=>e.message||String(e)):
-      data?.errors&&typeof data.errors==='object'?Object.entries(data.errors).flatMap(([key,items])=>
-        (Array.isArray(items)?items:[items]).map(message=>`${key}: ${message}`)):[];
-    const error=new Error(data?.message||data?.detail||messages.join(', ')||data?.title||`HTTP ${res.status}`);
-    error.status=res.status;
-    throw error;
-  }
-  return data;
-}
-const toRows = (headers = {}) => Object.entries(headers).map(([key, value]) => ({ key, value }));
-function prettyJson(text) { try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; } }
-const initialLocalEnvs=()=>{
-  try {
-    const data=JSON.parse(localStorage.getItem('pakpost_guest_envs')||'[]');
-    const secrets=JSON.parse(sessionStorage.getItem('pakpost_guest_secrets')||'{}');
-    return data.map(env=>({...env,variables:env.variables.map(v=>v.isSecret?{...v,value:secrets[env.id]?.[v.key]||''}:v)}));
-  }catch{return []}
-};
-const rowFromFile = (file,base64) => ({key:'file',value:'',fileName:file.name,fileBase64:base64,contentType:file.type||'application/octet-stream'});
-async function encodeFile(file) {
-  if(file.size>5*1024*1024)throw new Error('Maximum file size is 5 MB');
-  const bytes=new Uint8Array(await file.arrayBuffer());
-  let binary=''; for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
-  return btoa(binary);
-}
 
 
-function IconButton({ icon: Icon, onClick, label, disabled = false }) {
-  return <button type="button" className="icon-btn" aria-label={label} title={label} disabled={disabled} onClick={onClick}><Icon size={16}/></button>;
-}
-function Empty({ icon: Icon, title, description }) {
-  return <div className="empty"><div className="empty-icon"><Icon size={23}/></div><strong>{title}</strong><p>{description}</p></div>;
-}
-function Dialog({ title, subtitle, onClose, children, wide = false }) {
-  return <div className="overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div className={wide?"dialog pp-v85-dialog":"dialog"} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="dialog-top"><div><h2>{title}</h2><p>{subtitle}</p></div><IconButton icon={X} label="Close" onClick={onClose}/></div>{children}
-    </div>
-  </div>;
-}
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
 
@@ -2337,14 +2291,22 @@ export default function App() {
               <div className="pp-pane-footer"><ShieldCheck size={14}/><span>{isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Sandbox: edits and post-scripts do not change Cloud. Real API calls still execute.":"Public API tester · No sign-in needed"}</span><span className="pp-footer-tail">Proxy protected</span></div>
             </section>
             <div role="separator" aria-label="Resize request and response panels" aria-orientation={split === 'vertical' ? 'vertical' : 'horizontal'} className="pp-splitter" onPointerDown={e => { draggingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={onSplitterMove} onPointerUp={onSplitterEnd} onPointerCancel={onSplitterEnd}><span className="pp-splitter-handle"/></div>
-            <section className="pp-response-pane">
-              <div className="pp-pane-heading pp-response-heading"><span className="pp-pane-title"><Bolt size={15}/> Response</span>{result && !result.error ? <div className="pp-response-metrics"><span className={`pp-status ${statusTone(result.statusCode)}`}><span className="pp-status-dot"/>{result.statusCode} {result.reasonPhrase}</span><span><Clock3 size={13}/> {result.elapsedMs} ms</span><span><ArrowDownToLine size={13}/> {new Blob([result.body || '']).size.toLocaleString()} B</span></div> : <span className="pp-pane-meta">Awaiting response</span>}</div>
-              <div className="pp-panel-tabs"><button className={resTab === 'body' ? 'active' : ''} onClick={()=>setResTab('body')}>Body</button><button className={resTab === 'headers' ? 'active' : ''} onClick={()=>setResTab('headers')}>Headers{result && !result.error && <span className="pp-tiny-count">{Object.keys(result.headers || {}).length}</span>}</button><div className="pp-panel-tabs-spacer"/><button className="pp-copy-response" disabled={!result||!!result.error} onClick={beautifyResult} title="Beautify response"><WandSparkles size={14}/> Beautify</button><button className="pp-copy-response" disabled={!result||!!result.error} onClick={()=>setResponsePretty(v=>!v)} title="Toggle raw/pretty">{responsePretty?'Pretty':'Raw'}</button><button className="pp-copy-response" title="Save response example" disabled={!result || !!result.error} onClick={openSaveExampleDialog}><Save size={14}/> Save example</button><button className="pp-copy-response" title="Copy response" disabled={!result || !!result.error} onClick={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}><Copy size={14}/> Copy</button></div>
-              <div className="pp-panel-body pp-response-body">
-                {!result ? <div className="pp-response-empty"><div className="pp-response-empty-symbol"><Terminal size={28}/></div><strong>{loading ? 'Sending request…' : 'Ready to send a request'}</strong><p>{loading ? 'The server is processing your request.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p><span>⌘ / Ctrl + Enter</span></div> : result.error ? <div className="pp-response-error"><div><X size={18}/></div><strong>Request failed</strong><p>{result.error}</p></div> : <><div className="pp-response-code"><TextEditor readOnly value={responseText} lang={resTab==='headers'?'json':languageFromMime(responseType)} theme={isDarkAppearance(theme) ? 'dark' : 'light'} minHeight="250px"/></div>{result.truncated && <div className="pp-response-warning">Output truncated to 1 MB.</div>}{result.isBinary && <div className="pp-response-warning">Binary content displayed as Base64.</div>}</>}
-              </div>
-              <div className="pp-pane-footer"><span>{result && !result.error ? `HTTP ${result.statusCode}` : 'No response yet'}</span><span className="pp-footer-tail">{responseExamples.length ? `${responseExamples.length} example${responseExamples.length>1?'s':''} saved` : (result?.truncated ? 'Truncated' : 'Raw / JSON preview')}</span></div>
-            </section>
+            <ResponsePane
+              result={result}
+              loading={loading}
+              resTab={resTab}
+              onResTabChange={setResTab}
+              responsePretty={responsePretty}
+              onResponsePrettyChange={setResponsePretty}
+              responseText={responseText}
+              responseType={responseType}
+              exampleCount={responseExamples.length}
+              onBeautify={beautifyResult}
+              onSaveExample={openSaveExampleDialog}
+              onCopy={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}
+              isDark={isDarkAppearance(theme)}
+              Editor={TextEditor}
+            />
           </div>
         </div> : <div className="pp-manager">
           <div className="pp-manager-top"><div><span className="pp-manager-eyebrow"><Layers3 size={14}/> WORKSPACE MANAGEMENT</span><h2>{activeWorkspace?.name || 'Your workspaces'}</h2><p>Collections, teams and members are available after sign-in.</p></div><button className="pp-plain-btn" onClick={() => setPage('tester')}><ArrowRight size={15}/> Back to request tester</button></div>
