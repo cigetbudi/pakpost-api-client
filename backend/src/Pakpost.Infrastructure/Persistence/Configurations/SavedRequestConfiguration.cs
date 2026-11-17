@@ -7,6 +7,7 @@ public sealed class SavedRequestConfiguration:IEntityTypeConfiguration<SavedRequ
     public void Configure(EntityTypeBuilder<SavedRequest> b)
     {
         b.ToTable("saved_requests","collection");b.HasKey(x=>x.Id);
+        b.Property(x=>x.Revision).HasColumnName("revision").HasDefaultValue(1).IsConcurrencyToken();
         b.Property(x=>x.Name).HasMaxLength(120).IsRequired();
         b.Property(x=>x.Method).HasMaxLength(10).IsRequired();
         b.Property(x=>x.Url).HasMaxLength(2048).IsRequired();

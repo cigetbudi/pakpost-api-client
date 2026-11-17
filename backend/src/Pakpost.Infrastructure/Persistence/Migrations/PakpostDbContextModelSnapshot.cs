@@ -164,6 +164,13 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("revision")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)

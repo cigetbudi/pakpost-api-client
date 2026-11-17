@@ -7,7 +7,7 @@ using Pakpost.Application.Common.Security;
 using Pakpost.Domain.Entities;
 namespace Pakpost.Application.Internal.Collections;
 public sealed record SavedRequestDto(Guid Id,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body,
-    string BodyMode,string ContentType,string FormFieldsJson,string PreRequestScript,string PostResponseScript);
+    string BodyMode,string ContentType,string FormFieldsJson,string PreRequestScript,string PostResponseScript,int Revision);
 public sealed record ListSavedRequestsQuery(Guid ActorId,Guid WorkspaceId,Guid CollectionId):IRequest<IReadOnlyList<SavedRequestDto>>;
 public sealed record SaveRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,string Name,string Method,string Url,string HeadersJson,string Body,string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript=""):IRequest<SavedRequestDto>;
 public sealed record DeleteSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId):IRequest;
@@ -41,7 +41,7 @@ public abstract class SavedRequestsAccess
     }
     // Legacy JSONB may contain literal credentials. Never return those values to the browser.
     protected static SavedRequestDto ToDto(SavedRequest x)=>new(x.Id,x.CollectionId,x.Name,x.Method,x.Url,
-        SavedHeaderPolicy.RedactLegacyCredentials(x.HeadersJson),x.Body,x.BodyMode,x.ContentType,x.FormFieldsJson,x.PreRequestScript,x.PostResponseScript);
+        SavedHeaderPolicy.RedactLegacyCredentials(x.HeadersJson),x.Body,x.BodyMode,x.ContentType,x.FormFieldsJson,x.PreRequestScript,x.PostResponseScript,x.Revision);
 }
 public sealed class ListSavedRequestsHandler(IWorkspaceRepository workspaces,ICollectionRepository collections,ISavedRequestRepository requests)
     :SavedRequestsAccess,IRequestHandler<ListSavedRequestsQuery,IReadOnlyList<SavedRequestDto>>
@@ -73,7 +73,7 @@ public sealed class DeleteSavedRequestHandler(IWorkspaceRepository workspaces,IC
 
 public sealed record UpdateSavedRequestCommand(Guid ActorId,Guid WorkspaceId,Guid CollectionId,Guid RequestId,
     string Name,string Method,string Url,string HeadersJson,string Body,
-    string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript=""):IRequest<SavedRequestDto>;
+    string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript="",int? ExpectedRevision=null):IRequest<SavedRequestDto>;
 public sealed class UpdateSavedRequestValidator:AbstractValidator<UpdateSavedRequestCommand>
 {
     public UpdateSavedRequestValidator()
@@ -101,6 +101,10 @@ public sealed class UpdateSavedRequestHandler(IWorkspaceRepository workspaces,IC
         await Check(cmd.ActorId,cmd.WorkspaceId,cmd.CollectionId,workspaces,collections,ct,destructive:true);
         var item=await requests.FindAsync(cmd.RequestId,ct);
         if(item is null||item.CollectionId!=cmd.CollectionId)throw AppException.NotFound("Request not found");
+        if(cmd.ExpectedRevision is null || cmd.ExpectedRevision <= 0)
+            throw new AppException(428,"Request revision required. Reload the Cloud request before saving.");
+        if(item.Revision != cmd.ExpectedRevision.Value)
+            throw AppException.Conflict("This request changed in another session. Review the latest version before saving.");
         SavedHeaderPolicy.EnsureSafe(cmd.HeadersJson);
         item.Update(cmd.Name,cmd.Method,cmd.Url,cmd.HeadersJson,cmd.Body,cmd.BodyMode,cmd.ContentType,cmd.FormFieldsJson,cmd.PreRequestScript,cmd.PostResponseScript);
         await uow.SaveChangesAsync(ct);return ToDto(item);

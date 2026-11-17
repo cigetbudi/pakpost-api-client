@@ -4,6 +4,8 @@ public sealed class SavedRequest
     private SavedRequest() { }
     public Guid Id { get; private set; }
     public Guid CollectionId { get; private set; }
+    // Optimistic concurrency token. Every modification gets a new revision.
+    public int Revision { get; private set; } = 1;
     public string Name { get; private set; } = "";
     public string Method { get; private set; } = "GET";
     public string Url { get; private set; } = "";
@@ -21,10 +23,10 @@ public sealed class SavedRequest
         Id = Guid.NewGuid();CollectionId = collectionId;CreatedAt = DateTimeOffset.UtcNow;
         Update(name,method,url,headersJson,body,bodyMode,contentType,formFieldsJson,preRequestScript,postResponseScript);
     }
-    public void MoveTo(Guid collectionId) { CollectionId = collectionId; UpdatedAt = DateTimeOffset.UtcNow; }
+    public void MoveTo(Guid collectionId) { CollectionId = collectionId; Revision++; UpdatedAt = DateTimeOffset.UtcNow; }
     public void Update(string name,string method,string url,string headersJson,string body,string bodyMode="raw",string contentType="application/json",string formFieldsJson="[]",string preRequestScript="",string postResponseScript="")
     {
         Name = name.Trim();Method = method.ToUpperInvariant();Url = url.Trim();
-        HeadersJson = headersJson;Body = body;BodyMode=bodyMode;ContentType=contentType;FormFieldsJson=formFieldsJson;PreRequestScript=preRequestScript;PostResponseScript=postResponseScript;UpdatedAt = DateTimeOffset.UtcNow;
+        HeadersJson = headersJson;Body = body;BodyMode=bodyMode;ContentType=contentType;FormFieldsJson=formFieldsJson;PreRequestScript=preRequestScript;PostResponseScript=postResponseScript;if(CreatedAt!=default && UpdatedAt!=default)Revision++;UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

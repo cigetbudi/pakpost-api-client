@@ -27,7 +27,8 @@
     "prettier": "^3.6.0",
     "crypto-js": "4.2.0",
     "@codemirror/language": "^6.11.3",
-    "@codemirror/view": "^6.36.0"
+    "@codemirror/view": "^6.36.0",
+    "@microsoft/signalr": "^10.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Pakpost.Api.Middlewares;
+using Pakpost.Api.Realtime;
 using Pakpost.Application;
 using Pakpost.Infrastructure;
 var builder=WebApplication.CreateBuilder(args);
@@ -28,6 +29,18 @@ if(string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKe
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o=>
 {
     o.MapInboundClaims=false;
+    o.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // Browser WebSocket/EventSource cannot attach Authorization headers.
+            // This query-token exception is ONLY valid on the SignalR hub path.
+            var token=context.Request.Query["access_token"];
+            if(!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/workspace"))
+                context.Token=token;
+            return Task.CompletedTask;
+        }
+    };
     o.TokenValidationParameters=new TokenValidationParameters
     {
         ValidateIssuer=true,ValidIssuer=builder.Configuration["Jwt:Issuer"]??"pakpost",
@@ -38,6 +51,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<WorkspaceConnectionRegistry>();
+builder.Services.AddSingleton<IWorkspaceChangePublisher,WorkspaceChangePublisher>();
 builder.Services.AddRateLimiter(o=>
 {
     o.RejectionStatusCode=429;
@@ -86,5 +102,6 @@ app.Use(async (context,next)=>
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<WorkspaceHub>("/hubs/workspace");
 app.MapGet("/health",()=>Results.Ok(new{status="ok",service="pakpost-api",mode="anonymous-tester-with-private-workspaces"}));
 app.Run();

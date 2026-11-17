@@ -1,6 +1,8 @@
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using Pakpost.Api.Realtime;
 using Pakpost.Api.Extensions;
 using Pakpost.Application.Internal.Workspaces;
 using Pakpost.Domain.Enums;
@@ -9,7 +11,7 @@ namespace Pakpost.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/workspaces")]
-public sealed class WorkspacesController(ISender sender) : ControllerBase
+public sealed class WorkspacesController(ISender sender,WorkspaceConnectionRegistry connections,IHubContext<WorkspaceHub> hub) : ControllerBase
 {
     public sealed record CreateWorkspaceRequest(string Name);
     public sealed record AddMemberRequest(string Email, WorkspaceRole Role=WorkspaceRole.Member, IReadOnlyList<WorkspaceAccessRole>? Roles=null);
@@ -38,5 +40,10 @@ public sealed class WorkspacesController(ISender sender) : ControllerBase
     [HttpPut("{workspaceId:guid}/members/{userId:guid}/roles")]
     public async Task<ActionResult<MemberDto>> SetRoles(Guid workspaceId,Guid userId,
         [FromBody] SetMemberRolesRequest body,CancellationToken ct)
-        =>Ok(await sender.Send(new UpdateWorkspaceMemberRolesCommand(User.GetUserId(),workspaceId,userId,body.Roles),ct));
+    {
+        var result=await sender.Send(new UpdateWorkspaceMemberRolesCommand(User.GetUserId(),workspaceId,userId,body.Roles),ct);
+        // Remove old group access immediately; affected sessions must rejoin and reauthorize.
+        await connections.ReauthorizeUserAsync(hub,workspaceId,userId);
+        return Ok(result);
+    }
 }
