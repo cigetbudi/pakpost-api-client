@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -7,7 +8,7 @@ import {readWorkbenchCache,writeWorkbenchCache,clearWorkbenchCache} from '../src
 const localTab={id:'t2',name:'Local request',method:'GET',source:{scope:'local',collectionId:'local-one',requestId:'loc1'}};
 const cloudA={id:'t1',name:'Account Inquiry',method:'POST',source:{scope:'workspace',workspaceId:'workspace-a',collectionId:'col-a',requestId:'req-a'}};
 const cloudB={id:'t3',name:'Other Workspace',method:'POST',source:{scope:'workspace',workspaceId:'workspace-b',collectionId:'col-b',requestId:'req-b'}};
-const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+const app=readWorkbenchSource();
 
 function storage(){const map=new Map();return {getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k),clear:()=>map.clear()};}
 function restoreGlobalStorage(){ const previous=[globalThis.sessionStorage,globalThis.localStorage];globalThis.sessionStorage=storage();globalThis.localStorage=storage();return ()=>{globalThis.sessionStorage=previous[0];globalThis.localStorage=previous[1]}; }

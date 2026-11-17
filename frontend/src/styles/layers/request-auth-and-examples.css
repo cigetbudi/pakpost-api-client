@@ -1,0 +1,19 @@
+/* : compact, accessible response examples nested under requests. */
+.pp-endpoint-example-toggle {
+  position:absolute;z-index:2;left:8px;top:50%;transform:translateY(-50%);
+  width:17px;height:21px;display:grid;place-items:center;
+  padding:0;border:0;border-radius:4px;background:transparent;
+  color:var(--text2);cursor:pointer;
+}
+.pp-endpoint-example-toggle:hover,.pp-endpoint-example-toggle:focus-visible {
+  background:var(--accent-soft);color:var(--accent);
+}
+.pp-endpoint-example-toggle:focus-visible {outline:1px solid var(--accent);outline-offset:1px}
+.pp-endpoint-chevron-slot {display:inline-block;flex:0 0 12px;width:12px;height:14px}
+.pp-example-motion {margin:0;}
+.pp-example-motion>.pp-collection-motion-inner {padding:1px 0 2px}
+.pp-request-auth {max-width:760px}
+.pp-request-auth input[type="text"] {font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0;overflow-wrap:normal}
+.pp-request-auth label {display:flex;flex-direction:column;gap:7px;min-width:0}
+.pp-request-auth p {line-height:1.65;max-width:700px}
+@media(prefers-reduced-motion:reduce) {.pp-example-motion,.pp-endpoint-example-toggle {transition:none!important;animation:none!important}}

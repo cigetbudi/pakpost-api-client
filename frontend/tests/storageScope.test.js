@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -89,7 +90,7 @@ test('Cloud endpoint count is available before expanding the collection',()=>{
 });
 
 test('Header controls ONE shared storage scope for Collections and Environments',()=>{
-  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const app=readWorkbenchSource();
   assert.match(app,/const \[storageScope,setStorageScope\] = useState/);
   assert.match(app,/const collectionsScope=storageScope/);
   assert.match(app,/const envScope=storageScope/);
@@ -103,7 +104,7 @@ test('Header controls ONE shared storage scope for Collections and Environments'
 });
 
 test('Collections toolbar keeps all four sorts, provides compact expand/collapse and import/new actions',()=>{
-  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const app=readWorkbenchSource();
   const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
   const toolbar=explorer.split('<div className="pp-collections-toolbar-row">')[1]?.split('</div>')[0];
   assert.ok(toolbar);
@@ -117,7 +118,7 @@ test('Collections toolbar keeps all four sorts, provides compact expand/collapse
 });
 
 test('Import dialog keeps explicit Local/Cloud destination and guards against env-only files',()=>{
-  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const app=readWorkbenchSource();
   assert.match(app,/setCollectionImportDestination\(token&&canEditCloud\?STORAGE_WORKSPACE:STORAGE_LOCAL\)/);
   assert.match(app,/collectionImportSources\(parsed\)/);
   assert.match(app,/parsed.kind==='environment'/);

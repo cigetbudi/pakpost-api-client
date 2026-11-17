@@ -1,0 +1,191 @@
+/* Pakpost — Horizon Workbench. Visual-only shell + right-hand navigator.
+ Intentionally no new UI dependency. Kept separate to permit a clean rollback. */
+:root[data-theme='dark'] {
+  --bg:#0e1119; --top:#10131c; --surface:#141925; --surface2:#1a2030;
+  --editor:#10141d; --hover:#22293a; --selected:#272b48;
+  --border:#303749; --border-soft:#242b3b; --text:#eef1f9; --text2:#bfc7d9;
+  --muted:#8894aa; --accent:#8d91ff; --accent-soft:rgba(126,134,244,.15);
+  --action:#7178e9; --action-hover:#8188f2;
+  --green:#69d7a5; --yellow:#f2ca7c; --red:#ee8f9d;
+  --pp-canvas:#0e1119; --pp-panel:#111621; --pp-sidebar:#10151f;
+  --pp-request-header:#171d2a; --pp-response-header:#171d2a;
+  --pp-pink:#817df0; --pp-pink-hover:#9390fb; --pp-pink-text:#fff;
+  --pp-yellow:#352d1f; --pp-yellow-text:#f4c77a;
+  --pp-green-bg:#18372c; --pp-green-text:#85e4b2;
+  --pp-blue-control:#262c49; --pp-editor-line:#273047;
+  --shadow:0 12px 24px rgba(0,0,0,.15);
+}
+:root[data-theme='light'] {
+  --bg:#f6f8fc; --top:#fff; --surface:#fff; --surface2:#f0f3fa;
+  --editor:#fff; --hover:#edf1fa; --selected:#e8eafc;
+  --border:#cbd3e1; --border-soft:#e1e6f0; --text:#182235; --text2:#43516b;
+  --muted:#73819b; --accent:#515dcc; --accent-soft:rgba(81,93,204,.11);
+  --action:#525dcc; --action-hover:#414bb7;
+  --green:#23805b; --yellow:#916314; --red:#bf4d62;
+  --pp-canvas:#f6f8fc; --pp-panel:#fff; --pp-sidebar:#f9faff;
+  --pp-request-header:#f3f5fc; --pp-response-header:#f3f5fc;
+  --pp-pink:#545dc8; --pp-pink-hover:#434cb6; --pp-pink-text:#fff;
+  --pp-yellow:#fff0d1; --pp-yellow-text:#9b650f;
+  --pp-green-bg:#e2f5ec; --pp-green-text:#176b4a;
+  --pp-blue-control:#e6eaff; --pp-editor-line:#e4e8f1;
+  --shadow:0 12px 24px rgba(27,40,75,.09);
+}
+:root[data-theme='oled'] {
+  --bg:#000; --top:#000; --surface:#080a10; --surface2:#10131b;
+  --editor:#030407; --hover:#161a25; --selected:#1c2040;
+  --border:#303443; --border-soft:#1c202b; --text:#f4f5fb; --text2:#c1c7d6;
+  --muted:#8791a6; --accent:#a0a3ff; --accent-soft:rgba(151,155,255,.14);
+  --action:#777bef; --action-hover:#8c90ff;
+  --green:#76d9a7; --yellow:#f1cb86; --red:#f298a6;
+  --pp-canvas:#000; --pp-panel:#030407; --pp-sidebar:#050609;
+  --pp-request-header:#0b0d15; --pp-response-header:#0b0d15;
+  --pp-pink:#777bef; --pp-pink-hover:#9195ff; --pp-pink-text:#fff;
+  --pp-yellow:#231e15; --pp-yellow-text:#f3cb7c;
+  --pp-green-bg:#0c271b; --pp-green-text:#84dfae;
+  --pp-blue-control:#1a2042; --pp-editor-line:#232634;
+  --shadow:0 16px 28px rgba(0,0,0,.5);
+}
+:root[data-theme] {
+  --pp-radius-sm:5px; --pp-radius-md:7px; --pp-radius-lg:9px;
+  --pp-hairline:var(--border-soft); --pp-overlay:var(--surface);
+  --pp-control-height:42px; --pp-tab-height:44px; --pp-header-height:54px;
+}
+/* Three-column shell: rail LEFT, full editor CENTER, collections RIGHT. */
+.pp-main-frame {position:relative;background:var(--bg)}
+.pp-rail {order:0;flex:none;min-width:58px;width:58px;padding:11px 6px;background:var(--top);border-right:1px solid var(--border-soft)}
+.pp-rail button {height:39px;width:42px;border-radius:7px}
+.pp-rail button.selected {background:var(--accent-soft);color:var(--accent)}
+.pp-content {order:1;flex:1 1 0;width:0;min-width:0;background:var(--bg)}
+.pp-explorer {order:2;flex:0 0 clamp(260px,23vw,355px);width:clamp(260px,23vw,355px);background:var(--pp-sidebar);border-left:1px solid var(--border);border-right:0;border-top:0;border-radius:0;min-width:0}
+.pp-explorer:has(.pp-side-tool){flex-basis:clamp(300px,26vw,400px);width:clamp(300px,26vw,400px)}
+.pp-explorer-title {height:49px;min-height:49px;padding:0 16px;font-size:14px;background:var(--pp-sidebar)}
+.pp-scope {margin:10px 12px 7px;min-height:50px;padding:8px;background:var(--surface);border:1px solid var(--border-soft);border-radius:7px}
+.pp-scope-logo {background:var(--accent-soft);color:var(--accent)}
+.pp-explorer-search {margin:9px 12px 13px;background:var(--editor);padding:8px 10px;border-radius:6px}
+.pp-side-subhead {font-size:10px;letter-spacing:.7px;margin:0 12px;padding-bottom:8px}
+.pp-tree-row,.pp-tree-request,.pp-local-request {height:32px;border-radius:5px}
+.pp-tree-request {padding-left:33px}
+.pp-tree-row.active,.pp-tree-request.active,.pp-local-request.active {background:var(--accent-soft);color:var(--text)}
+.pp-local-collection {margin-bottom:6px}
+.pp-explorer-bottom {background:var(--pp-sidebar);padding:12px 13px}
+/* Toolbar and tabs: compact desktop density; no large colored blocks. */
+.pp-top {background:var(--top);height:54px;min-height:54px;padding:0 16px;grid-template-columns:minmax(195px,1fr) minmax(225px,450px) minmax(290px,1fr);gap:14px}
+.pp-logo{font-size:19px;gap:10px}.pp-logo-sparkle{display:none}
+:root[data-theme] .pp-logo-mark{width:30px;height:30px;font-size:19px;background:var(--action);color:#fff;transform:none;border-radius:7px}
+.pp-top-right{gap:9px}.pp-connection{font-size:10px}
+.pp-top-search {width:100%;min-width:0;height:33px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--editor);color:var(--muted);text-align:left;font-size:11px}
+.pp-top-search:hover {border-color:var(--accent);color:var(--text2)}
+.pp-top-search>span {flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-top-search kbd {font:10px 'JetBrains Mono',monospace;padding:2px 5px;border:1px solid var(--border);border-radius:4px;color:var(--muted)}
+.pp-env-top {border-color:var(--border-soft);padding:2px 5px;border-radius:7px;max-width:min(400px,36vw)}
+.pp-env-top .pp-select-trigger {height:29px;font-size:11px}
+.pp-top .pp-signin,.pp-top .pp-profile {height:32px;border-radius:6px;font-size:11px;padding:0 11px}
+.pp-tabs-bar {height:44px;min-height:44px;padding:0 8px;background:var(--top);border-bottom:1px solid var(--border-soft)}
+.pp-open-tab,.pp-open-tab.current {height:41px;margin:3px 2px 0;border-radius:7px 7px 0 0;min-width:125px;max-width:225px;border:1px solid transparent;border-bottom:0;font-size:11px}
+.pp-open-tab.current {background:var(--accent-soft);color:var(--text);border-color:var(--border-soft);box-shadow:inset 0 -2px 0 var(--accent)}
+.pp-open-tab.current .pp-tab-name,.pp-open-tab.current .pp-tab-x,.pp-open-tab.current .pp-tab-status{color:var(--text)}
+.pp-open-tab.current .pp-http-label {background:var(--pp-yellow);color:var(--pp-yellow-text)}
+.pp-crumb{height:37px;min-height:37px;padding:0 16px;border-bottom:0}
+.pp-crumb strong{font-size:12px}.pp-crumb>span:first-child{font-size:10px}
+.pp-url-bar{margin:5px 15px 12px;gap:9px;height:42px;min-height:42px}
+.pp-url-entry {gap:9px;border:0;border-radius:6px;height:42px;min-height:42px}
+.pp-method-wrap,.pp-method-wrap:has(.pp-method.get),.pp-method-wrap:has(.pp-method.delete){width:100px;min-width:100px;flex-basis:100px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;overflow:visible}
+.pp-method {font-size:12px;font-weight:800;padding-left:11px;color:var(--text)!important}
+.pp-method-wrap svg {color:var(--muted)}
+.pp-url-input {background:var(--editor);border:1px solid var(--border);border-radius:6px;padding:0 11px}
+.pp-url-input:focus-within {border-color:var(--accent)}
+:root[data-theme] .pp-send {min-width:105px;height:42px;padding:0 15px;border-radius:6px;font-size:12px;background:var(--action);color:#fff;border:1px solid transparent}
+:root[data-theme] .pp-send:hover:not(:disabled) {background:var(--action-hover);color:#fff}
+.pp-save-action,.pp-save-as-action {height:42px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:11px}
+.pp-save-as-action {min-width:71px;padding:0 9px}
+.pp-save-action {min-width:72px;padding:0 10px}
+.pp-save-action:hover,.pp-save-as-action:hover {border-color:var(--accent);background:var(--hover)}
+/* Stack by default: no decorative gap. Drag divider still works. */
+.pp-panes {margin:0 13px 9px;border:1px solid var(--border-soft);border-radius:8px;background:var(--pp-panel);overflow:hidden;gap:0}
+.pp-panes.pp-horizontal {grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,var(--pp-split)) 7px minmax(0,1fr)}
+.pp-panes.pp-vertical {grid-template-columns:minmax(0,var(--pp-split)) 7px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.pp-request-pane,.pp-response-pane {border:0!important;background:var(--pp-panel);border-radius:0;min-height:0}
+.pp-pane-heading,.pp-request-pane .pp-pane-heading,.pp-response-pane .pp-pane-heading {height:37px;min-height:37px;background:var(--surface);padding:0 15px;border-bottom:1px solid var(--border-soft)}
+.pp-pane-title {font-size:12px;font-weight:800;gap:8px}
+.pp-request-pane .pp-pane-title svg,.pp-response-pane .pp-pane-title svg {color:var(--accent)}
+.pp-panel-tabs {height:38px;min-height:38px;background:var(--pp-panel);padding:0 9px;border-bottom:1px solid var(--border-soft)}
+.pp-panel-tabs>button:not(.pp-copy-response) {font-size:11px;font-weight:600;padding:0 9px}
+.pp-panel-tabs>button.active:not(.pp-copy-response),.pp-request-pane .pp-panel-tabs>button.active:not(.pp-copy-response),.pp-response-pane .pp-panel-tabs>button.active:not(.pp-copy-response) {border-bottom:2px solid var(--accent);color:var(--text)}
+.pp-copy-response{font-size:10px}
+.pp-request-body {padding:10px 12px}
+.pp-body-toolbar {min-height:31px}
+.pp-body-code {border:1px solid var(--border-soft);background:var(--editor);border-radius:6px}
+.pp-body-format-select .pp-select-trigger {height:31px}
+.pp-splitter {background:var(--border-soft);z-index:3}
+.pp-splitter:hover {background:var(--accent-soft)}
+.pp-splitter-handle {height:2px;width:35px;opacity:.55;background:var(--muted)}
+.pp-vertical .pp-splitter-handle {height:35px;width:2px}
+.pp-response-code,.pp-cm-editor {border-radius:5px}
+.pp-response-body {background:var(--editor)}
+.pp-response-metrics {font-size:10px}
+.pp-status.good {background:var(--pp-green-bg);color:var(--pp-green-text);border-radius:5px;padding:3px 7px}
+.pp-pane-footer {min-height:23px;height:23px;margin:0;padding:0 12px;background:var(--pp-panel);border-top:1px solid var(--border-soft);border-radius:0;font-size:10px}
+.pp-global-footer {height:27px;min-height:27px;background:var(--top);border-color:var(--border-soft);font-size:10px}
+:root[data-theme] .pp-cm-editor .cm-editor,:root[data-theme] .pp-cm-editor .cm-gutters {background:var(--editor)}
+.pp-theme-option.active {background:var(--accent-soft);border-color:var(--accent)}
+.pp-theme-option.active .pp-theme-choice {background:var(--accent);color:#fff}
+.pp-env-action-submit,.pp-action-dialog-buttons .pp-modal-submit,.pp-modal-submit {background:var(--action)!important;border-color:var(--action)!important;color:#fff!important}
+/* Functional Ctrl/Cmd+K quick switcher */
+.pp-command-backdrop {position:fixed;inset:0;z-index:21000;background:rgba(4,7,14,.54);display:flex;justify-content:center;align-items:flex-start;padding:clamp(55px,13vh,135px) 16px 20px;animation:pp-workbench-fade 110ms ease-out}
+.pp-command-dialog {width:min(580px,100%);max-height:min(600px,75vh);overflow:hidden;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:9px;box-shadow:0 22px 62px rgba(0,0,0,.28)}
+.pp-command-input-wrap {display:flex;align-items:center;gap:11px;padding:12px 15px;border-bottom:1px solid var(--border);color:var(--muted)}
+.pp-command-input-wrap input {border:0;outline:none;background:transparent;min-width:0;flex:1;font-size:14px;color:var(--text)}
+.pp-command-input-wrap kbd {font:10px 'JetBrains Mono',monospace;border:1px solid var(--border);padding:3px 6px;border-radius:4px}
+.pp-command-results {overflow-y:auto;padding:7px;min-height:0}
+.pp-command-results button {width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:10px 11px;border-radius:6px;font-size:12px;color:var(--text2)}
+.pp-command-results button:hover,.pp-command-results button:focus-visible {background:var(--accent-soft);color:var(--text);outline:none}
+.pp-command-results button>span {flex:1;min-width:0;display:flex;flex-direction:column}
+.pp-command-results button small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:10px}
+.pp-command-empty {padding:18px;text-align:center;color:var(--muted);font-size:12px}
+@keyframes pp-workbench-fade {from{opacity:0}to{opacity:1}}
+/* Keep the editor usable as the window narrows. */
+@media(max-width:1370px){
+  .pp-explorer {flex-basis:270px;width:270px}
+  .pp-explorer:has(.pp-side-tool){flex-basis:300px;width:300px}
+  .pp-top {grid-template-columns:minmax(155px,1fr) minmax(190px,360px) minmax(220px,1fr)}
+  .pp-connection {display:none}
+  :root[data-theme] .pp-send {min-width:88px;padding:0 11px}
+  .pp-save-as-action {min-width:0}
+}
+@media(max-width:1080px){
+  .pp-top {grid-template-columns:auto minmax(0,1fr) auto}
+  .pp-top-search {max-width:280px;margin:auto}
+  .pp-explorer {flex-basis:238px;width:238px}
+  .pp-explorer:has(.pp-side-tool){flex-basis:270px;width:270px}
+  .pp-method-wrap,.pp-method-wrap:has(.pp-method.get),.pp-method-wrap:has(.pp-method.delete) {min-width:88px;width:88px;flex-basis:88px!important}
+  .pp-url-bar {gap:6px;margin:5px 9px 9px}
+  .pp-crumb {padding:0 10px}
+  .pp-panes {margin:0 8px 8px}
+  .pp-save-as-action {display:none}
+}
+@media(max-width:880px){
+  .pp-main-frame .pp-explorer {display:flex;position:absolute;right:0;top:0;bottom:0;z-index:16;width:min(340px,calc(100vw - 53px));flex-basis:auto;box-shadow:-8px 0 25px rgba(0,0,0,.25)}
+  .pp-content {width:0;flex:1}
+  .pp-top-search {display:none}
+  .pp-top {grid-template-columns:1fr auto}
+  .pp-main-frame .pp-explorer:has(.pp-side-tool){width:min(380px,calc(100vw - 53px))}
+}
+@media(max-width:550px){
+  .pp-top {padding:0 9px}
+  .pp-top-right .pp-env-top {max-width:150px}
+  .pp-rail {min-width:45px;width:45px}
+  .pp-rail button {width:35px}
+  .pp-crumb-sub {display:none}
+  .pp-method-wrap,.pp-method-wrap:has(.pp-method.get),.pp-method-wrap:has(.pp-method.delete) {min-width:76px;width:76px;flex-basis:76px!important}
+  .pp-url-input {padding:0 7px}
+  :root[data-theme] .pp-send {min-width:48px;padding:0 8px}
+  .pp-send-shortcut,.pp-save-action > span,.pp-save-as-action {display:none}
+}
+@media(prefers-reduced-motion:reduce){.pp-command-backdrop {animation:none}.pp-top-search,.pp-command-results button{transition:none!important}}
+/* Keep the user-selected side-by-side layout functional at tablet widths too. */
+@media(min-width:551px) and (max-width:980px){
+  .pp-panes.pp-vertical {grid-template-columns:minmax(0,var(--pp-split)) 7px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .pp-panes.pp-vertical .pp-splitter {cursor:col-resize}
+  .pp-panes.pp-vertical .pp-splitter-handle {height:34px;width:2px}
+}
+.pp-command-results button[aria-selected='true'] {background:var(--accent-soft);color:var(--text)}

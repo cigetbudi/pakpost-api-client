@@ -37,20 +37,20 @@ export function WorkspaceManager({ data, actions, refs }) {
               {wsTab === 'collections' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Collections</strong>{canEditCloud&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newCollection.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name:newCollection.trim()},token);setNewCollection('');setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));setNotice('Collection created');});}}><input placeholder="Collection name" maxLength={120} value={newCollection} onChange={e=>setNewCollection(e.target.value)}/><button title="Create collection" disabled={busyAction}><Plus size={16}/></button></form>}</div>{collections.map(c=><button className={`pp-manager-entry ${selectedCol === c.id ? 'active' : ''}`} key={c.id} onClick={()=>setSelectedCol(c.id)}><FolderClosed size={16}/><span>{c.name}</span><ChevronRight size={15}/></button>)}{!collections.length && <Empty icon={FolderPlus} title="No collections yet" description="Create your first collection above."/>}{selectedCol && <div className="pp-manager-saved"><h3>Saved requests</h3>{savedRequests.map(r=><div className="pp-manager-saved-row" key={r.id}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><button onClick={()=>loadSavedRequest(r)}><strong>{r.name}</strong><small>{r.url}</small></button>{canEditCloud&&<IconButton icon={Trash2} label="Delete request" disabled={busyAction} onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/${r.id}`,'DELETE',undefined,token);setSavedRequests(v=>v.filter(x=>x.id!==r.id));})}/>}</div>)}{!savedRequests.length && <p className="pp-muted-small">No saved requests in this collection.</p>}</div>}</div>}
               {wsTab === 'teams' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Teams</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeam.trim())return;doAction(async()=>{const t=await api(`/api/workspaces/${selectedWs}/teams`,'POST',{name:newTeam.trim()},token);setNewTeam('');setTeams(await api(`/api/workspaces/${selectedWs}/teams`,'GET',undefined,token));setSelectedTeam(t.id);setNotice('Team created');});}}><input placeholder="Team name" maxLength={120} value={newTeam} onChange={e=>setNewTeam(e.target.value)}/><button title="Create team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teams.map(t=><button className={`pp-manager-entry ${selectedTeam===t.id?'active':''}`} key={t.id} onClick={()=>setSelectedTeam(t.id)}><Users size={16}/><span>{t.name}</span><ChevronRight size={15}/></button>)}{!teams.length && <Empty icon={Users} title="No teams yet" description="Create a team above to manage collaboration."/>}{activeTeam && <div className="pp-manager-saved"><div className="pp-manager-section-heading"><strong>{activeTeam.name} members</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeamMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'POST',{email:newTeamMember.trim()},token);setNewTeamMember('');setTeamMembers(await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'GET',undefined,token));setNotice('Member added to team');});}}><input type="email" placeholder="Member email" value={newTeamMember} onChange={e=>setNewTeamMember(e.target.value)}/><button title="Add to team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teamMembers.map(m=><div className="pp-manager-member" key={m.userId}><span>{m.displayName[0]}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div></div>)}<p className="pp-muted-small">A user must belong to this workspace before joining a team.</p></div>}</div>}
               {wsTab === 'members' && <div className="pp-manager-section">
-                <div className="pp-v34-hero">
-                  <div className="pp-v34-header">
-                    <div><h3>Members & roles</h3><p>Roles apply only to <strong className="pp-v34-strong">{activeWorkspace?.name||'this workspace'}</strong>. Members can have multiple roles.</p></div>
-                    {canManageMembers&&<div className="pp-v8-member-actions">
-                      <button type="button" className="pp-v34-button" aria-expanded={showMemberAdd} onClick={()=>{setShowMemberAdd(v=>!v);setInviteOpen(false)}}><Plus size={15}/> Add existing</button>
-                      <button type="button" className="pp-v34-button primary" aria-expanded={inviteOpen} onClick={()=>{setInviteOpen(v=>!v);setShowMemberAdd(false)}}><Mail size={15}/> Invite via email</button>
+                <div className="pp-roles-hero">
+                  <div className="pp-roles-header">
+                    <div><h3>Members & roles</h3><p>Roles apply only to <strong className="pp-roles-strong">{activeWorkspace?.name||'this workspace'}</strong>. Members can have multiple roles.</p></div>
+                    {canManageMembers&&<div className="pp-member-actions">
+                      <button type="button" className="pp-roles-button" aria-expanded={showMemberAdd} onClick={()=>{setShowMemberAdd(v=>!v);setInviteOpen(false)}}><Plus size={15}/> Add existing</button>
+                      <button type="button" className="pp-roles-button primary" aria-expanded={inviteOpen} onClick={()=>{setInviteOpen(v=>!v);setShowMemberAdd(false)}}><Mail size={15}/> Invite via email</button>
                     </div>}
                   </div>
-                  <div className="pp-v34-stats" aria-label="Workspace member statistics">
-                    <span className="pp-v34-stat"><strong>{workspaceMemberStats.count}</strong> members</span>
-                    {workspaceMemberStats.roles.filter(role=>role.count>0).map(role=><span className="pp-v34-stat" key={role.id}><strong>{role.count}</strong> {role.label}</span>)}
+                  <div className="pp-roles-stats" aria-label="Workspace member statistics">
+                    <span className="pp-roles-stat"><strong>{workspaceMemberStats.count}</strong> members</span>
+                    {workspaceMemberStats.roles.filter(role=>role.count>0).map(role=><span className="pp-roles-stat" key={role.id}><strong>{role.count}</strong> {role.label}</span>)}
                   </div>
                 </div>
-                {canManageMembers&&showMemberAdd&&<form className="pp-v34-add" onSubmit={e=>{e.preventDefault();if(!newMember.trim()||!newMemberRoles.length)return;
+                {canManageMembers&&showMemberAdd&&<form className="pp-roles-add" onSubmit={e=>{e.preventDefault();if(!newMember.trim()||!newMemberRoles.length)return;
                   doAction(async()=>{const workspaceId=selectedWs;await api(`/api/workspaces/${workspaceId}/members`,'POST',
                     {email:newMember.trim(),role:'Member',roles:newMemberRoles},token);
                     const refreshed=await api(`/api/workspaces/${workspaceId}/members`,'GET',undefined,token);
@@ -61,33 +61,33 @@ export function WorkspaceManager({ data, actions, refs }) {
                   <input id="pp-member-email" type="email" required maxLength={254} placeholder="teammate@company.com" value={newMember} onChange={e=>setNewMember(e.target.value)}/>
                   <div className="pp-rbac-heading">Assign initial roles</div>
                   <WorkspaceRolePicker value={newMemberRoles} onChange={setNewMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
-                  <p className="pp-v34-add-help">Only for users already registered in PakPost. Use Invite via email for new members.</p>
-                  <div className="pp-v34-add-actions"><button type="button" className="pp-v34-button" onClick={()=>setShowMemberAdd(false)}>Cancel</button><button type="submit" className="pp-v34-button primary" disabled={busyAction||!newMemberRoles.length||!newMember.trim()}>Add member</button></div>
+                  <p className="pp-roles-add-help">Only for users already registered in PakPost. Use Invite via email for new members.</p>
+                  <div className="pp-roles-add-actions"><button type="button" className="pp-roles-button" onClick={()=>setShowMemberAdd(false)}>Cancel</button><button type="submit" className="pp-roles-button primary" disabled={busyAction||!newMemberRoles.length||!newMember.trim()}>Add member</button></div>
                 </form>}
-                {canManageMembers&&inviteOpen&&<form className="pp-v34-add pp-v8-invite-form" onSubmit={inviteMember}>
+                {canManageMembers&&inviteOpen&&<form className="pp-roles-add pp-invite-form" onSubmit={inviteMember}>
                   <label htmlFor="pp-invite-email">Invite a new member via email</label>
                   <input id="pp-invite-email" type="email" autoFocus required maxLength={254} placeholder="teammate@company.com" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/>
                   <div className="pp-rbac-heading">Roles to assign when invitation is accepted</div>
                   <WorkspaceRolePicker value={inviteRoles} onChange={setInviteRoles} actorRoles={assignableRoles} disabled={invitationBusy}/>
-                  <p className="pp-v34-add-help">Invitation lasts 7 days. The recipient must sign in with a Google-verified email matching this invitation.</p>
-                  <div className="pp-v34-add-actions"><button type="button" className="pp-v34-button" onClick={()=>setInviteOpen(false)}>Cancel</button><button type="submit" className="pp-v34-button primary" disabled={invitationBusy||!inviteEmail.trim()||!inviteRoles.length}><Mail size={14}/> {invitationBusy?'Sending…':'Send invitation'}</button></div>
+                  <p className="pp-roles-add-help">Invitation lasts 7 days. The recipient must sign in with a Google-verified email matching this invitation.</p>
+                  <div className="pp-roles-add-actions"><button type="button" className="pp-roles-button" onClick={()=>setInviteOpen(false)}>Cancel</button><button type="submit" className="pp-roles-button primary" disabled={invitationBusy||!inviteEmail.trim()||!inviteRoles.length}><Mail size={14}/> {invitationBusy?'Sending…':'Send invitation'}</button></div>
                 </form>}
-                {canManageMembers&&<section className="pp-v8-invitations" aria-label="Workspace invitations">
-                  <div className="pp-v8-invitations-heading"><strong>Pending invitations</strong><span>{pendingInvitations(invitationRows).length} pending</span></div>
+                {canManageMembers&&<section className="pp-invitations" aria-label="Workspace invitations">
+                  <div className="pp-invitations-heading"><strong>Pending invitations</strong><span>{pendingInvitations(invitationRows).length} pending</span></div>
                   {invitationError&&<p className="pp-env-error" role="alert">{invitationError}</p>}
-                  {pendingInvitations(invitationRows).map(i=><div className="pp-v8-invite-item" key={i.id}>
-                    <div className="pp-v8-invite-info"><strong>{i.email}</strong><small>{(i.roles||[]).join(' + ')} · Expires {new Date(i.expiresAt).toLocaleDateString()}</small></div>
-                    <div className="pp-v8-invite-actions"><button type="button" disabled={invitationBusy||!canManageInvitation(assignableRoles,i.roles)} onClick={()=>actOnInvitation(i,'resend')}>Resend</button><button type="button" disabled={invitationBusy||!canManageInvitation(assignableRoles,i.roles)} onClick={()=>actOnInvitation(i,'revoke')}>Revoke</button></div>
+                  {pendingInvitations(invitationRows).map(i=><div className="pp-invite-item" key={i.id}>
+                    <div className="pp-invite-info"><strong>{i.email}</strong><small>{(i.roles||[]).join(' + ')} · Expires {new Date(i.expiresAt).toLocaleDateString()}</small></div>
+                    <div className="pp-invite-actions"><button type="button" disabled={invitationBusy||!canManageInvitation(assignableRoles,i.roles)} onClick={()=>actOnInvitation(i,'resend')}>Resend</button><button type="button" disabled={invitationBusy||!canManageInvitation(assignableRoles,i.roles)} onClick={()=>actOnInvitation(i,'revoke')}>Revoke</button></div>
                   </div>)}
                   {!pendingInvitations(invitationRows).length&&!invitationError&&<p className="pp-muted-small">No pending invitations for this workspace.</p>}
                 </section>}
-                <div className="pp-v34-toolbar">
-                  <label className="pp-v34-search"><Search size={15}/><input aria-label="Search workspace members" type="search" placeholder="Search name or email" value={memberSearch} onChange={e=>setMemberSearch(e.target.value)}/></label>
-                  <RetroSelect className="pp-v34-filter" ariaLabel="Filter members by role" value={memberRoleFilter} onChange={setMemberRoleFilter}
+                <div className="pp-roles-toolbar">
+                  <label className="pp-roles-search"><Search size={15}/><input aria-label="Search workspace members" type="search" placeholder="Search name or email" value={memberSearch} onChange={e=>setMemberSearch(e.target.value)}/></label>
+                  <RetroSelect className="pp-roles-filter" ariaLabel="Filter members by role" value={memberRoleFilter} onChange={setMemberRoleFilter}
                     options={[{value:'all',label:'All roles'},...WORKSPACE_ROLES.map(role=>({value:role.id,label:role.label}))]}/>
-                  <span className="pp-v34-filter-count">{visibleWorkspaceMembers.length} shown</span>
+                  <span className="pp-roles-filter-count">{visibleWorkspaceMembers.length} shown</span>
                 </div>
-                <div className="pp-v34-member-list">
+                <div className="pp-roles-member-list">
                   {visibleWorkspaceMembers.map(m=>{
                     const founder=m.userId===activeWorkspace?.ownerUserId;
                     const self=m.userId===me?.id;
@@ -95,28 +95,28 @@ export function WorkspaceManager({ data, actions, refs }) {
                       (assignableRoles.includes('TeamLead')||!(m.roles||[]).some(r=>['TeamLead','WorkspaceAdmin'].includes(r)));
                     const accessOpen=expandedMemberAccess===m.userId;
                     const editorOpen=canModify&&editingMemberId===m.userId;
-                    return <article className="pp-v34-member" key={m.userId}>
-                      <div className="pp-v34-member-top">
-                        <span className="pp-v34-avatar" aria-hidden="true">{m.displayName?.[0]||m.email?.[0]||'?'}</span>
-                        <div className="pp-v34-member-id"><strong>{m.displayName||'Unnamed member'}</strong><small>{m.email}</small></div>
-                        <div className="pp-v34-member-buttons">
+                    return <article className="pp-roles-member" key={m.userId}>
+                      <div className="pp-roles-member-top">
+                        <span className="pp-roles-avatar" aria-hidden="true">{m.displayName?.[0]||m.email?.[0]||'?'}</span>
+                        <div className="pp-roles-member-id"><strong>{m.displayName||'Unnamed member'}</strong><small>{m.email}</small></div>
+                        <div className="pp-roles-member-buttons">
                           <button type="button" aria-expanded={accessOpen} onClick={()=>setExpandedMemberAccess(current=>current===m.userId?'':m.userId)}><ShieldCheck size={14}/>{accessOpen?'Hide access':'View access'}</button>
                           {canModify&&<button type="button" aria-expanded={editorOpen} onClick={()=>{
                             if(editorOpen){setEditingMemberId('');setEditingMemberRoles([]);}else{setEditingMemberId(m.userId);setEditingMemberRoles(normalizeRoles(m.roles));}
                           }}><Pencil size={13}/>{editorOpen?'Cancel edit':'Manage roles'}</button>}
                         </div>
                       </div>
-                      <div className="pp-v34-tags">{(m.roles||[]).map(roleId=><span className="pp-v34-tag" key={roleId}>{WORKSPACE_ROLES.find(role=>role.id===roleId)?.label||roleId}</span>)}
-                        {founder&&<span className="pp-v34-tag muted">Founder · protected</span>}{self&&<span className="pp-v34-tag muted">You</span>}
+                      <div className="pp-roles-tags">{(m.roles||[]).map(roleId=><span className="pp-roles-tag" key={roleId}>{WORKSPACE_ROLES.find(role=>role.id===roleId)?.label||roleId}</span>)}
+                        {founder&&<span className="pp-roles-tag muted">Founder · protected</span>}{self&&<span className="pp-roles-tag muted">You</span>}
                       </div>
                       {accessOpen&&<WorkspaceAccessBreakdown permissions={m.permissions||[]}/>}
-                      {editorOpen&&<div className="pp-v34-role-edit">
-                        <div className="pp-v34-role-edit-heading"><strong>Assign roles to {m.displayName||m.email}</strong><span>Changes affect only {activeWorkspace?.name}</span></div>
+                      {editorOpen&&<div className="pp-roles-role-edit">
+                        <div className="pp-roles-role-edit-heading"><strong>Assign roles to {m.displayName||m.email}</strong><span>Changes affect only {activeWorkspace?.name}</span></div>
                         <WorkspaceRolePicker value={editingMemberRoles} onChange={setEditingMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
-                        <p className="pp-v34-add-help">Effective permissions are refreshed from the backend after Save. Privileged roles can only be granted by Team Lead.</p>
-                        <div className="pp-v34-role-edit-actions">
-                          <button type="button" className="pp-v34-button" onClick={()=>{setEditingMemberId('');setEditingMemberRoles([]);}}>Cancel</button>
-                          <button type="button" className="pp-v34-button primary" disabled={busyAction||!editingMemberRoles.length||!roleSelectionChanged(m.roles,editingMemberRoles)}
+                        <p className="pp-roles-add-help">Effective permissions are refreshed from the backend after Save. Privileged roles can only be granted by Team Lead.</p>
+                        <div className="pp-roles-role-edit-actions">
+                          <button type="button" className="pp-roles-button" onClick={()=>{setEditingMemberId('');setEditingMemberRoles([]);}}>Cancel</button>
+                          <button type="button" className="pp-roles-button primary" disabled={busyAction||!editingMemberRoles.length||!roleSelectionChanged(m.roles,editingMemberRoles)}
                             onClick={()=>doAction(async()=>{const workspaceId=selectedWs;await api(`/api/workspaces/${workspaceId}/members/${m.userId}/roles`,'PUT',
                               {roles:editingMemberRoles},token);
                               const refreshed=await api(`/api/workspaces/${workspaceId}/members`,'GET',undefined,token);
@@ -126,7 +126,7 @@ export function WorkspaceManager({ data, actions, refs }) {
                       </div>}
                     </article>;
                   })}
-                  {!visibleWorkspaceMembers.length&&<p className="pp-v34-empty">{workspaceMemberStats.count?'No members match your search or role filter.':'No members in this workspace yet.'}</p>}
+                  {!visibleWorkspaceMembers.length&&<p className="pp-roles-empty">{workspaceMemberStats.count?'No members match your search or role filter.':'No members in this workspace yet.'}</p>}
                 </div>
                 <p className="pp-muted-small">Only Team Lead can assign privileged roles. Workspace Admin can assign Developer, QA and Technical Writer roles. Access is always verified by the backend.</p>
               </div>}

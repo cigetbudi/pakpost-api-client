@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -64,7 +65,7 @@ test('SignalR group requires membership and events contain identifiers only',()=
  assert.doesNotMatch(publisher,/body\s*=/i);
 });
 test('UI has conflict warning and Ctrl+S guards and keeps Console lazy',()=>{
- const app=source('frontend/src/App.jsx');
+ const app=readWorkbenchSource();
  const vite=source('frontend/vite.config.js');
  assert.match(app,/if\(remoteAlerts\[tabId\]\)\{showConflictDialog\(tabId\);return;\}/);
  assert.match(app,/error.status===409\|\|error.status===428/);

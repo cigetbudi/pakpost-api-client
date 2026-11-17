@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -83,7 +84,7 @@ test('Corrupt storage and invalid selection values are ignored; no secret values
 });
 
 test('V6 React wiring scopes requests, active IDs, and editor instances to workspace',()=>{
-  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const app=readWorkbenchSource();
   const environmentView=readFileSync(new URL('../src/features/environments/hooks/useScopedEnvironmentView.js',import.meta.url),'utf8');
   const cache=readFileSync(new URL('../src/features/workspaceCache.js',import.meta.url),'utf8');
   const backend=readFileSync(new URL('../../backend/src/Pakpost.Infrastructure/Persistence/Repositories/RequestEnvironmentRepository.cs',import.meta.url),'utf8');

@@ -1,13 +1,14 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const src = path => readFileSync(new URL(path, import.meta.url), 'utf8');
-const app = src('../src/App.jsx');
+const app = readWorkbenchSource();
 const main = src('../src/main.jsx');
-const css = src('../src/v13-horizon-workbench.css');
+const css = src('../src/styles/layers/workbench-details.css');
 
 test('v13 skin is appended after v12 without replacing theme or runtime code', () => {
-  assert.match(main, /import '\.\/v12-collection-workflow\.css';\s*import '\.\/v13-horizon-workbench\.css';/);
+  assert.match(main, /import '\.\/styles\/layers\/collection-workflows\.css';\s*import '\.\/styles\/layers\/workbench-details\.css';/);
   for (const theme of ['light', 'dark', 'oled']) assert.match(css, new RegExp(`:root\\[data-theme='${theme}'\\]`));
   assert.match(app, /executeWorkbenchRequest/);
   assert.match(app, /sendRequest/);

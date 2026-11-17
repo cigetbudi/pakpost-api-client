@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -80,7 +81,7 @@ test('browser recovery keeps unsaved collection identity and non-plaintext finge
   }finally {globalThis.sessionStorage=savedSession;globalThis.localStorage=savedLocal;}
 });
 test('App creates in-place collection drafts, persists first Save, and confirms destructive closes',()=>{
-  const app=source('../src/App.jsx');
+  const app=readWorkbenchSource();
   assert.match(app,/function createCollectionDraft\(scope,collectionId,folderPath=\[\]\)/);
   assert.match(app,/if\(action==='newRequest'\)\{\s*createCollectionDraft\('workspace'/);
   assert.match(app,/const saved=await createWorkspaceRequest\(origin\.workspaceId,origin\.collectionId,savedPayload,token\)/);
@@ -92,8 +93,8 @@ test('App creates in-place collection drafts, persists first Save, and confirms 
 });
 test('Collections show pending request plus button and unsaved indicators',()=>{
   const tree=source('../src/features/LocalCollectionsTree.jsx');
-  const app=source('../src/App.jsx');
-  const style=source('../src/v16-draft-requests.css');
+  const app=readWorkbenchSource();
+  const style=source('../src/styles/layers/request-drafts.css');
   assert.match(tree,/New request in collection/);
   assert.match(tree,/pp-draft-request/);
   const explorer=source('../src/features/collections/components/WorkbenchExplorer.jsx');

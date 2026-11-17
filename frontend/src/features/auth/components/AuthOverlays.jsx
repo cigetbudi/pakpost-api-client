@@ -24,7 +24,7 @@ export function AuthOverlays({ data, actions }) {
         {token?<button type="button" className="pp-modal-submit" disabled={acceptingInvite} onClick={acceptInvitation}>{acceptingInvite?'Accepting…':'Accept invitation'}</button>:
           <button type="button" className="pp-modal-submit" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}>Sign in to accept</button>}
         {token&&!googleLinked&&<p className="pp-muted-small">Your current account has no linked Google identity. Connect Google from the top bar first if the invitation email matches.</p>}
-        <button type="button" className="pp-v34-button" onClick={()=>{setInviteToken('');setInviteAcceptError('')}}>Not now</button>
+        <button type="button" className="pp-roles-button" onClick={()=>{setInviteToken('');setInviteAcceptError('')}}>Not now</button>
       </div>
     </Dialog>}
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}>

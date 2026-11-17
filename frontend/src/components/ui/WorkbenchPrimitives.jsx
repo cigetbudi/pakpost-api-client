@@ -25,7 +25,7 @@ export function Dialog({ title, subtitle, onClose, children, wide = false }) {
     <div className="overlay" onMouseDown={event => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <div className={wide ? 'dialog pp-v85-dialog' : 'dialog'} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={wide ? 'dialog pp-revision-dialog' : 'dialog'} role="dialog" aria-modal="true" aria-label={title}>
         <div className="dialog-top">
           <div><h2>{title}</h2><p>{subtitle}</p></div>
           <IconButton icon={X} label="Close" onClick={onClose} />

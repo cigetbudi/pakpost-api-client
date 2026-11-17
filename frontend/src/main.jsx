@@ -1,44 +1,45 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
-import './styles.css';
-import './clean-minimal.css';
-import './v8-interactions.css';
-import './v9-layout.css';
-import './v10-reference-workbench.css';
-import './v11-retro-controls.css';
-import './v12-collection-workflow.css';
-import './v13-horizon-workbench.css';
-import './v14-right-context.css';
-import './v16-draft-requests.css';
+import { WorkbenchErrorBoundary } from './components/ui/WorkbenchErrorBoundary.jsx';
+import './styles/base.css';
+import './styles/clean-workbench.css';
+import './styles/layers/interactions.css';
+import './styles/layers/workbench-layout.css';
+import './styles/layers/theme-and-surfaces.css';
+import './styles/layers/form-controls.css';
+import './styles/layers/collection-workflows.css';
+import './styles/layers/workbench-details.css';
+import './styles/layers/context-sidebar.css';
+import './styles/layers/request-drafts.css';
 import { readAppearance } from './features/appearance.js';
 document.documentElement.dataset.theme = readAppearance(window.localStorage);
-createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
-import './v17-environment-branding.css';
-import './v18-menu-consistency.css';
+createRoot(document.getElementById('root')).render(<React.StrictMode><WorkbenchErrorBoundary><App/></WorkbenchErrorBoundary></React.StrictMode>);
+import './styles/layers/environment-branding.css';
+import './styles/layers/action-menus.css';
 
-import './v19-inline-name.css';
+import './styles/layers/inline-rename.css';
 
-import './v21-documentation-headers.css';
+import './styles/layers/request-documentation.css';
 
-import './v25-hoppscotch-import.css';
+import './styles/layers/import-compatibility.css';
 
-import './v26-auth-example-collapse.css';
+import './styles/layers/request-auth-and-examples.css';
 
-import './v27-interceptor.css';
-import './storage-scope.css';
+import './styles/layers/request-transport.css';
+import './styles/storage-scope.css';
 
-import './v28-unified-storage.css';
+import './styles/layers/storage-controls.css';
 
-import './v29-variable-experience.css';
+import './styles/layers/variable-highlights.css';
 
-import './v30-workspace-environments.css';
-import './v31-google-sso.css';
+import './styles/layers/workspace-environments.css';
+import './styles/layers/google-auth.css';
 
-import './v32-multi-role.css';
+import './styles/layers/workspace-permissions.css';
 
-import './v33-qa-sandbox.css';
-import './v34-manage-roles.css';
-import './v35-invitations-topbar.css';
+import './styles/layers/qa-sandbox.css';
+import './styles/layers/role-management.css';
+import './styles/layers/invitations.css';
 
-import './v84-realtime-conflicts.css';
+import './styles/layers/realtime-conflicts.css';

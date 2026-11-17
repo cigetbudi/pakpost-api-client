@@ -41,8 +41,8 @@ test('v17 app connects export, environment dialog, branding, and global toast po
  const panel=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
  assert.match(panel,/onDuplicate=\{duplicateEnvironment\}/);
  assert.match(panel,/onExport=\{environment=>openExportChoice/);
- assert.match(app,/createPortal\(<div className="pp-toast pp-toast-v17"/);
- assert.match(explorer,/pp-env-v17-modal-backdrop/);
+ assert.match(app,/createPortal\(<div className="pp-toast pp-toast-note"/);
+ assert.match(explorer,/pp-env-editor-modal-backdrop/);
  assert.match(explorer,/Export as/);
  for(const mode of ['light','dark'])assert.ok(existsSync(new URL(`../public/branding/pakpost-logo-${mode}.svg`,import.meta.url)));
 });

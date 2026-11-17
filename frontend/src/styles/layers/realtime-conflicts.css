@@ -1,0 +1,26 @@
+/* : slim, accessible conflict affordances, no fixed-height layout changes. */
+.pp-conflict-conflict-icon { color: #dc8257; flex: none; }
+.pp-conflict-conflict-banner { display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+  border-bottom: 1px solid rgba(220,130,87,.3); background: rgba(214,122,76,.09); color: var(--text,#e8e8e8); }
+.pp-conflict-conflict-banner > svg { color: #df8458; flex-shrink: 0; }
+.pp-conflict-conflict-banner > span { display: flex; flex: 1; gap: 2px; min-width: 0; flex-direction: column; }
+.pp-conflict-conflict-banner strong { font-size: 12px; font-weight: 650; }
+.pp-conflict-conflict-banner small { font-size: 11px; opacity: .8; }
+.pp-conflict-conflict-banner button { padding: 6px 10px; border: 1px solid rgba(210,135,100,.45);
+  border-radius: 7px; color: inherit; background: transparent; white-space: nowrap; cursor: pointer; font-size: 12px; }
+.pp-conflict-conflict-dialog { padding: 16px 20px 18px; max-width: 570px; }
+.pp-conflict-conflict-dialog p { font-size: 13px; line-height: 1.5; margin: 0 0 13px; }
+.pp-conflict-conflict-fields { border: 1px solid var(--border,#4444); border-radius: 9px; margin-bottom: 12px; overflow: hidden; }
+.pp-conflict-conflict-fields > strong { display: block; padding: 9px 12px; font-size: 12px; }
+.pp-conflict-conflict-fields > div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px;
+  border-top: 1px solid var(--border,#4444); font-size: 12px; }
+.pp-conflict-different, .pp-conflict-error { color: #de8155; }
+.pp-conflict-warning { opacity: .8; }
+.pp-conflict-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.pp-conflict-actions button { padding: 8px 11px; border: 1px solid var(--border,#7776); border-radius: 8px;
+  color: inherit; background: transparent; cursor: pointer; font-size: 12px; }
+.pp-conflict-actions button:hover:not(:disabled) { background: var(--surface-hover,#7772); }
+.pp-conflict-actions .pp-conflict-destructive { border-color: rgba(219,102,102,.65); color: #d7766b; }
+.pp-conflict-actions button:disabled { opacity: .45; cursor: not-allowed; }
+@media(max-width:620px) { .pp-conflict-conflict-banner { align-items: flex-start; flex-wrap: wrap; }
+  .pp-conflict-conflict-banner button { margin-left: 26px; } }

@@ -1,8 +1,9 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const source = path => readFileSync(new URL(path, import.meta.url), 'utf8');
-const app = source('../src/App.jsx');
+const app = readWorkbenchSource();
 const store = source('../src/features/requests/store/createRequestWorkbenchStore.js');
 const tabs = source('../src/features/requests/components/RequestTabs.jsx');
 const body = source('../src/features/requests/components/RequestBody.jsx');

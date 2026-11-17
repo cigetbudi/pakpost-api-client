@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {readWorkbenchSource} from './support/workbenchSource.js';
 import {fileURLToPath} from 'node:url';
 import {dirname,resolve,join} from 'node:path';
 import {isPendingInvitation,canManageInvitation,pendingInvitations} from '../src/features/workspaceInvitations.js';
@@ -45,7 +46,7 @@ test('SMTP fails closed when unconfigured and does not return invitation URL as 
  assert.doesNotMatch(source,/Console\.WriteLine\(.*invitationUrl/);
 });
 test('frontend exposes Invite, Pending, Resend, Revoke, Accept flows',()=>{
- const app=read('frontend/src/App.jsx');
+ const app=readWorkbenchSource();
  const workspace=read('frontend/src/features/workspace/components/WorkspaceManager.jsx');
  const auth=read('frontend/src/features/auth/components/AuthOverlays.jsx');
  for(const phrase of ['Invite via email','Pending invitations','Resend','Revoke'])assert.ok(workspace.includes(phrase),phrase);
@@ -55,6 +56,6 @@ test('frontend exposes Invite, Pending, Resend, Revoke, Accept flows',()=>{
  assert.match(auth,/googleLinked/);
 });
 test('final header CSS declares deliberate flex sizes and truncates names',()=>{
- const css=read('frontend/src/v35-invitations-topbar.css');
+ const css=read('frontend/src/styles/layers/invitations.css');
  for (const phrase of ['.pp-top>.pp-logo','.pp-top>.pp-top-search','.pp-top>.pp-top-right','text-overflow:ellipsis','max-width:calc(100% - 120px)'])assert.ok(css.includes(phrase),phrase);
 });

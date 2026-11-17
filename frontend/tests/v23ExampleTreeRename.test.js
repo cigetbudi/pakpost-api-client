@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {readWorkbenchSource} from './support/workbenchSource.js';
 import {applyLocalAction} from '../src/features/localCollectionActions.js';
 import {renameResponseExample} from '../src/features/responseExamples.js';
 import {encodeStoredHeaders,decodeStoredHeaders} from '../src/features/requestMetadata.js';
@@ -57,7 +58,7 @@ test('workspace metadata roundtrip keeps renamed examples, request headers and d
 
 test('Local example tree has nested visual order and local/Neon menus include rename',()=>{
   const tree=readFileSync(new URL('../src/features/LocalCollectionsTree.jsx',import.meta.url),'utf8');
-  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const app=readWorkbenchSource();
   assert.match(tree,/example:\[\['renameExample','Rename example'\]/);
   assert.match(tree,/pp-local-request" style=\{\{paddingLeft:12\+depth\*14\}\}/);
   assert.match(tree,/pp-tree-example" style=\{\{paddingLeft:58\+depth\*14\}\}/);

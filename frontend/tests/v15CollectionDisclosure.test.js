@@ -51,7 +51,7 @@ test('React UI exposes bulk controls and independent animated disclosure regions
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
   const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
   const tree=readFileSync(new URL('../src/features/LocalCollectionsTree.jsx',import.meta.url),'utf8');
-  const css=readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../src/styles/base.css',import.meta.url),'utf8');
   assert.match(explorer,/expandOrCollapseAllCollections\(true\)/);
   assert.match(explorer,/expandOrCollapseAllCollections\(false\)/);
   assert.match(explorer,/toggleWorkspaceCollectionById\(c\.id\)/);

@@ -1,10 +1,11 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {freshRequest,requestFingerprint,hasUnsavedChanges,needsCloseConfirmation,tabSaved} from '../src/features/draftLifecycle.js';
 
-const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
-const css=readFileSync(new URL('../src/v19-inline-name.css',import.meta.url),'utf8');
+const app=readWorkbenchSource();
+const css=readFileSync(new URL('../src/styles/layers/inline-rename.css',import.meta.url),'utf8');
 test('renaming a saved collection request is dirty until Save completes',()=>{
   const draft=freshRequest('Original');
   const tab={id:'t1',name:'Original',savedName:'Original',source:{scope:'workspace',workspaceId:'w',collectionId:'c',requestId:'r'},savedFingerprint:requestFingerprint(draft,'Original')};

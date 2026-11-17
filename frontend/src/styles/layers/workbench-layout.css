@@ -1,0 +1,159 @@
+/* Pakpost – layout stabilization on top of Workbench .
+ One sizing system for headers, URL fields and actions; no theme token overrides. */
+:root {
+  --pp-control-height: 42px;
+  --pp-header-height: 51px;
+  --pp-tab-height: 42px;
+}
+
+/* Keep real controls visible when the selected environment name is long. */
+.pp-top {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 18px;
+  height: var(--pp-header-height);
+  min-height: var(--pp-header-height);
+}
+.pp-top-center { display: none; }
+.pp-top-right { min-width: 0; width: auto; max-width: 100%; justify-self: end; gap: 9px; }
+.pp-env-top { min-width: 0; max-width: min(430px, 52vw); flex: 0 1 auto; }
+.pp-env-top > span { flex: none; }
+.pp-env-top select { min-width: 0; text-overflow: ellipsis; white-space: nowrap; }
+.pp-env-top select:first-of-type { flex: 0 0 78px; max-width: 78px; }
+.pp-env-top select:last-of-type { flex: 0 1 190px; max-width: 190px; min-width: 76px; }
+.pp-env-top > button { flex: none; }
+.pp-signin, .pp-profile { flex: none; }
+
+/* Tabs and URL composer use a fixed rhythm. Avoid inherited align-items:center
+ shrinking .pp-url-entry to the intrinsic height of its select and input. */
+.pp-tabs-bar { height: var(--pp-tab-height); min-height: var(--pp-tab-height); }
+.pp-open-tab { font-size: 12px; }
+.pp-url-bar {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 var(--pp-control-height);
+  height: var(--pp-control-height);
+  min-height: var(--pp-control-height);
+  margin: 8px 15px 14px;
+  gap: 8px;
+}
+.pp-url-entry {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  min-height: var(--pp-control-height);
+  height: var(--pp-control-height);
+  overflow: visible;
+  border-radius: 5px;
+}
+.pp-method-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  width: 112px;
+  min-width: 112px;
+  height: 100%;
+  flex: 0 0 112px;
+  border-radius: 4px 0 0 4px;
+}
+.pp-method {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 32px 0 13px;
+  font-size: 12px;
+  line-height: normal;
+  background: transparent;
+}
+.pp-method-wrap svg { top: 50%; right: 12px; transform: translateY(-50%); }
+.pp-url-input {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+}
+.pp-url-input > svg { flex: none; }
+.pp-url-field { height: 100%; min-height: 0; min-width: 0; }
+.pp-url-field > input {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  font-size: 12px;
+  line-height: normal;
+}
+.pp-url-highlight { align-items: center; font-size: 12px; }
+.pp-send, .pp-save-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  box-sizing: border-box;
+  height: var(--pp-control-height);
+  min-height: var(--pp-control-height);
+  margin: 0;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.pp-send { min-width: 100px; }
+.pp-save-action { min-width: 75px; }
+
+/* Clear hierarchy, not stacks of decorative cards. */
+.pp-crumb { height: 35px; min-height: 35px; }
+.pp-panes { min-height: 0; }
+.pp-pane-heading { height: 40px; min-height: 40px; }
+.pp-panel-tabs { height: 39px; min-height: 39px; }
+.pp-panel-tabs > button:not(.pp-copy-response) { font-size: 12px; }
+.pp-request-body { min-width: 0; }
+.pp-body-toolbar { min-width: 0; }
+
+@media (max-width: 1400px) {
+  .pp-connection { display: none; }
+}
+@media (max-width: 860px) {
+  .pp-top { column-gap: 8px; padding: 0 10px; }
+  .pp-top-right { gap: 5px; }
+  .pp-env-top { max-width: min(265px, 39vw); }
+  .pp-env-top select:first-of-type { display: none; }
+  .pp-env-top select:last-of-type { flex: 1 1 auto; max-width: 170px; }
+  .pp-method-wrap { width: 96px; min-width: 96px; flex-basis: 96px; }
+  .pp-method { padding: 0 25px 0 10px; font-size: 11px; }
+  .pp-method-wrap svg { right: 7px; }
+  .pp-url-bar { margin: 7px 9px 10px; gap: 6px; }
+  .pp-send { min-width: 78px; padding: 0 10px; }
+  .pp-save-action { min-width: var(--pp-control-height); padding: 0 10px; }
+  .pp-save-action > span { display: none; }
+}
+@media (max-width: 540px) {
+  .pp-logo { gap: 7px; font-size: 14px; }
+  .pp-top-right .pp-env-top { max-width: 140px; }
+  .pp-env-top > span { display: none; }
+  .pp-signin { padding: 0 7px; }
+  .pp-url-entry { min-width: 0; }
+  .pp-method-wrap { width: 76px; min-width: 76px; flex-basis: 76px; }
+  .pp-method { padding-left: 7px; padding-right: 19px; font-size: 10px; }
+  .pp-method-wrap svg { right: 3px; }
+  .pp-url-input { padding: 0 7px; }
+  .pp-url-field > input, .pp-url-highlight { font-size: 11px; }
+  .pp-send { min-width: 42px; padding: 0 7px; }
+  .pp-send-shortcut { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-url-entry { transition: none !important; }
+}
+
+/* .5: lightweight placeholders for optional editor/tool chunks. */
+.pp-editor-loading,.pp-feature-loading{display:flex;align-items:center;justify-content:center;color:var(--muted, #8290a0);font-size:12px;padding:18px;min-height:95px;}
+.pp-editor-loading{background:var(--surface-2, transparent);border-radius:8px;}
+
+/* Collection Runner launcher only; the Runner UI/CSS is lazy loaded. */
+.pp-runner-toolbar{display:inline-flex;gap:5px;align-items:center;padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--text);font-size:12px;white-space:nowrap;cursor:pointer}
+.pp-runner-toolbar:disabled{opacity:.55;cursor:wait}
+.pp-runner-toolbar:hover:not(:disabled){background:var(--hover)}

@@ -16,10 +16,10 @@ test('Menu covers create, rename, duplicate, sort, export and destructive action
   assert.match(s,/aria-hidden="true"/);
 });
 test('Shared style is imported last and preserves keyboard and reduced-motion behavior',()=>{
-  assert.match(src('main.jsx'),/v18-menu-consistency.css/);
-  const css=src('v18-menu-consistency.css');
+  assert.match(src('main.jsx'),/styles\/layers\/action-menus\.css/);
+  const css=src('styles/layers/action-menus.css');
   assert.match(css,/\.pp-collection-popup \.pp-action-menu-item/);
-  assert.match(css,/\.pp-env-v17-menu \.pp-action-menu-item/);
+  assert.match(css,/\.pp-env-editor-menu \.pp-action-menu-item/);
   assert.match(css,/:focus-visible/);
   assert.match(css,/prefers-reduced-motion/);
 });

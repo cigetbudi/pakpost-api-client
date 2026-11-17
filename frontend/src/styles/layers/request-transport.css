@@ -1,0 +1,21 @@
+/* Interceptor settings use existing semantic theme tokens (Light, Dark and AMOLED). */
+.pp-extension-options{display:grid;gap:9px;margin:20px 0}
+.pp-extension-options>button{display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--text2);cursor:pointer;min-height:72px}
+.pp-extension-options>button:hover{background:var(--hover)}
+.pp-extension-options>button.active{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
+.pp-extension-options>button>svg{color:var(--accent);flex-shrink:0}
+.pp-extension-option-radio{width:15px;height:15px;border:1.5px solid var(--muted);border-radius:50%;flex-shrink:0;display:block;position:relative}
+.pp-extension-options>button.active .pp-extension-option-radio{border-color:var(--accent)}
+.pp-extension-options>button.active .pp-extension-option-radio::after{content:"";position:absolute;inset:3px;background:var(--accent);border-radius:50%}
+.pp-extension-options>button strong{display:block;font-size:12px;font-weight:750}
+.pp-extension-options>button small{display:block;margin-top:5px;font-size:11px;color:var(--muted);line-height:1.5}
+.pp-extension-extension-panel{padding:17px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;margin-top:14px}
+.pp-extension-status-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.pp-extension-status-head>svg{color:var(--accent)}
+.pp-extension-status{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--muted)}
+.pp-extension-status.connected{color:var(--green)}
+.pp-extension-status.disconnected{color:var(--yellow)}
+.pp-extension-extension-panel>p{color:var(--text2);font-size:11px;line-height:1.75;margin:14px 0}
+.pp-extension-check{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid var(--border);background:var(--surface);border-radius:6px;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer}
+.pp-extension-hint{color:var(--muted)!important;font-size:11px;line-height:1.7;margin-top:12px}
+@media(max-width:680px){.pp-extension-status{margin-left:0}.pp-extension-options>button{padding:12px}}

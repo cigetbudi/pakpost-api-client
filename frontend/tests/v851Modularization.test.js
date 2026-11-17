@@ -1,10 +1,11 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import { api } from '../src/services/httpClient.js';
 import { toRows, prettyJson } from '../src/utils/workbenchHelpers.js';
 
-const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+const app = readWorkbenchSource();
 const pane = readFileSync(new URL('../src/components/workbench/ResponsePane.jsx', import.meta.url), 'utf8');
 const primitives = readFileSync(new URL('../src/components/ui/WorkbenchPrimitives.jsx', import.meta.url), 'utf8');
 

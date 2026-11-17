@@ -1,0 +1,60 @@
+/* — one storage context in the header; compact collection management. */
+.pp-top-right .pp-unified-storage-top{gap:6px;max-width:min(510px,58vw);min-width:0;flex-shrink:1}
+.pp-unified-storage-top>.pp-top-scope{display:block!important;width:133px;flex:0 1 133px;min-width:108px}
+.pp-unified-storage-top>.pp-top-environment{width:clamp(95px,13vw,182px);flex:0 1 182px;min-width:78px}
+.pp-unified-storage-top .pp-select-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-unified-storage-top .pp-select-trigger{min-width:0}
+.pp-unified-storage-top .pp-top-env-label{padding-left:10px;border-left:1px solid var(--border-soft)}
+.pp-unified-storage-top>.pp-top-env-local{white-space:nowrap;font-size:11px}
+.pp-compact-workspace{display:flex;align-items:center;gap:9px;min-width:0;margin:11px 12px 2px;padding:7px 10px;border:1px solid var(--border-soft);border-radius:6px;background:var(--surface);color:var(--muted);font-size:11px}
+.pp-compact-workspace>svg{flex:none;color:var(--accent)}
+.pp-compact-workspace>span{flex:none;font-weight:650}
+.pp-compact-workspace>.pp-retro-select{flex:1;min-width:0;max-width:none}
+.pp-compact-workspace .pp-select-trigger{height:30px;background:var(--editor);padding:0 7px;font-size:11px}
+.pp-compact-workspace>button{width:29px;height:29px;display:grid;place-items:center;flex:none;border:1px solid var(--border-soft);border-radius:5px;color:var(--text2)}
+.pp-compact-workspace>button:hover{background:var(--hover);color:var(--accent)}
+.pp-collections-toolbar{padding:10px 12px 12px;border-bottom:1px solid var(--border-soft);flex:none}
+.pp-collections-toolbar>.pp-explorer-search{margin:0 0 9px}
+.pp-collections-toolbar-row{display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap}
+.pp-collections-toolbar-row>.pp-retro-select{flex:1 1 80px;min-width:0;width:0;max-width:none}
+.pp-collections-toolbar-row>.pp-retro-select .pp-select-trigger{height:34px;min-width:0;padding:0 7px;background:var(--editor);border:1px solid var(--border);font-size:11px}
+.pp-collections-toolbar-row>.pp-retro-select .pp-select-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-collections-toolbar-row .pp-collection-expand-controls{display:flex;gap:3px;padding:0;flex:none}
+.pp-collections-toolbar-row .pp-collection-expand-controls>button{width:29px;height:34px;flex:none;padding:0;gap:0;border-radius:5px;background:var(--surface2);color:var(--text2)}
+.pp-collections-toolbar-row>.pp-env-import-action{height:34px;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:0 8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:650;border-radius:5px;flex:none}
+.pp-collections-toolbar-row>.pp-env-import-action:hover{background:var(--hover);color:var(--accent)}
+.pp-collections-toolbar-row>.pp-env-primary{height:34px;gap:5px;padding:0 9px;font-size:11px;flex:none}
+.pp-collections-toolbar+.pp-local-create{margin:9px 12px}
+.pp-collections-toolbar~.pp-side-subhead{padding-top:12px}
+.pp-collection-import-dialog{display:flex;flex-direction:column;gap:16px}
+.pp-collection-import-dialog .pp-import-destination{gap:8px}
+.pp-collection-file-picker{position:relative;display:flex;align-items:center;gap:9px;min-height:54px;padding:12px;border:1px dashed var(--border);border-radius:6px;background:var(--editor);color:var(--text2);font-size:12px;cursor:pointer;overflow:hidden}
+.pp-collection-file-picker:hover,.pp-collection-file-picker:focus-within{border-color:var(--accent);color:var(--accent)}
+.pp-collection-file-picker span{min-width:0;overflow-wrap:anywhere}
+.pp-collection-file-picker input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.pp-collection-import-actions{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:15px}
+.pp-collection-import-actions>button{min-height:36px;padding:7px 12px;border:1px solid var(--border);border-radius:5px;font-size:12px}
+.pp-collection-import-actions>.pp-env-primary{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.pp-collection-import-actions button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:1150px){
+  .pp-top .pp-connection{display:none}
+  .pp-top-right .pp-unified-storage-top{max-width:55vw}
+}
+@media(max-width:860px){
+  .pp-unified-storage-top>.pp-top-scope{display:block!important;min-width:95px;flex:0 1 122px;width:122px}
+  .pp-unified-storage-top>.pp-top-environment{min-width:65px;flex:0 1 135px;width:135px}
+  .pp-unified-storage-top .pp-top-env-label{padding-left:5px}
+}
+@media(max-width:560px){
+  .pp-unified-storage-top>span:first-child{display:none}
+  .pp-unified-storage-top .pp-top-env-label{display:none}
+  .pp-unified-storage-top>.pp-top-environment{display:none}
+  .pp-unified-storage-top>button{display:none}
+  .pp-top-right .pp-unified-storage-top{max-width:150px}
+  .pp-unified-storage-top{gap:2px}
+  .pp-top-right .pp-profile-name{display:none}
+  .pp-collections-toolbar-row{gap:4px}
+  .pp-collections-toolbar-row>.pp-env-import-action,.pp-collections-toolbar-row>.pp-env-primary{padding:0 6px;gap:3px;font-size:10px}
+  .pp-collections-toolbar-row .pp-collection-expand-controls>button{width:25px}
+  .pp-compact-workspace{gap:6px}
+}

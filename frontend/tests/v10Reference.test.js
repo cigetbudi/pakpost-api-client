@@ -1,16 +1,17 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { APPEARANCE_THEMES } from '../src/features/appearance.js';
 
-const css = readFileSync(new URL('../src/v10-reference-workbench.css', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../src/styles/layers/theme-and-surfaces.css', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+const app = readWorkbenchSource();
 const scripts = readFileSync(new URL('../src/features/requests/components/ScriptEditor.jsx', import.meta.url), 'utf8');
 
 test('reference theme layer loads last and offers light/dark/AMOLED only', () => {
   assert.deepEqual(APPEARANCE_THEMES.map(theme => theme.id), ['light', 'dark', 'oled']);
-  assert.ok(main.indexOf("'./v9-layout.css'") < main.indexOf("'./v10-reference-workbench.css'"));
+  assert.ok(main.indexOf("'./styles/layers/workbench-layout.css'") < main.indexOf("'./styles/layers/theme-and-surfaces.css'"));
   for (const id of ['light', 'dark', 'oled']) assert.ok(css.includes(`:root[data-theme='${id}']`));
 });
 

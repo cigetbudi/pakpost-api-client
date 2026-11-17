@@ -1,11 +1,12 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {sortCollectionRoots} from '../src/features/collectionSort.js';
 
-const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+const app=readWorkbenchSource();
 const env=readFileSync(new URL('../src/features/EnvironmentExplorer.jsx',import.meta.url),'utf8');
-const styles=readFileSync(new URL('../src/v14-right-context.css',import.meta.url),'utf8');
+const styles=readFileSync(new URL('../src/styles/layers/context-sidebar.css',import.meta.url),'utf8');
 
 test('global collection sort: manual order unchanged',()=>{
  const source=[{id:'b',name:'Beta'},{id:'a',name:'alpha'}];

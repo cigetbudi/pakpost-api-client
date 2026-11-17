@@ -1,3 +1,25 @@
+import { useRequestDraftEditor } from './features/requests/hooks/useRequestDraftEditor.js';
+import { useAuthOverlayState } from './features/auth/hooks/useAuthOverlayState.js';
+import { useCollectionSessionState } from './features/collections/hooks/useCollectionSessionState.js';
+import { createRealtimeActions } from './features/realtime/controllers/createRealtimeActions.js';
+import { createRequestHistoryActions } from './features/requests/controllers/createRequestHistoryActions.js';
+import { createRequestTabActions } from './features/requests/controllers/createRequestTabActions.js';
+import { createCollectionActions } from './features/collections/controllers/createCollectionActions.js';
+import { createCollectionRunnerActions } from './features/collections/controllers/createCollectionRunnerActions.js';
+import { createInvitationActions } from './features/workspace/controllers/createInvitationActions.js';
+import { createRequestExecutionActions } from './features/requests/controllers/createRequestExecutionActions.js';
+import { createDocumentationActions } from './features/collections/controllers/documentationActions.js';
+import { createEnvironmentActions } from './features/environments/controllers/environmentActions.js';
+import { createAuthActions } from './features/auth/controllers/authActions.js';
+import { createRequestSaveActions } from './features/requests/controllers/requestSaveActions.js';
+import { createCollectionImportActions } from './features/collections/controllers/collectionImportActions.js';
+import { createCollectionVariableActions } from './features/collections/controllers/collectionVariableActions.js';
+import { AppHeader } from './components/layout/AppHeader.jsx';
+import { WorkbenchNavigation } from './components/layout/WorkbenchNavigation.jsx';
+import { RequestWorkbench } from './features/requests/components/RequestWorkbench.jsx';
+import { CommandPalette } from './components/layout/CommandPalette.jsx';
+import { CollectionDialogs } from './features/collections/components/CollectionDialogs.jsx';
+import { RequestDialogs } from './features/requests/components/RequestDialogs.jsx';
 import { getWorkspaceCollections, getWorkspaceRequests, createWorkspaceRequest, updateWorkspaceRequest } from './features/collections/services/workspaceRequestRepository.js';
 import { reconcileRequestTabs, synchronizeWorkspaceChanges } from './features/realtime/services/workspaceSync.js';
 import { executeWorkbenchRequest } from './features/requests/services/executeWorkbenchRequest.js';
@@ -42,7 +64,7 @@ import {sortCollectionRoots} from './features/collectionSort';
 import {isWorkspaceCollectionOpen, toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from './features/collectionExpansion';
 import { blankDraft, parseCurl, isCurl, parseImportText } from './features/importExport';
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from './features/environmentImport';
-import { readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
+import {clearWorkbenchCache ,readWorkbenchCache, writeWorkbenchCache } from './features/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from './features/localCollections';
 import {planTabClose} from './features/tabActions';
 import {applyLocalAction,updateLocalRequest,createLocalSavedRequest} from './features/localCollectionActions';
@@ -141,40 +163,24 @@ export default function App() {
   const collectionsScope=storageScope;
   const envScope=storageScope;
   const [me, setMe] = useState(null);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('login');
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [authForm, setAuthForm] = useState({ displayName: '', email: '', password: '' });
-  const [googleLinkOpen, setGoogleLinkOpen] = useState(false);
-  const [googleLinkPassword, setGoogleLinkPassword] = useState('');
-  const [googleLinkError, setGoogleLinkError] = useState('');
-  const [googleLinked,setGoogleLinked] = useState(false);
-  const [inviteToken,setInviteToken] = useState(()=>new URLSearchParams(window.location.search).get('invite')||'');
-  const [acceptingInvite,setAcceptingInvite] = useState(false);
-  const [inviteAcceptError,setInviteAcceptError] = useState('');
+  const {
+    authOpen, setAuthOpen, authMode, setAuthMode, authBusy, setAuthBusy,
+    authError, setAuthError, authForm, setAuthForm, googleLinkOpen, setGoogleLinkOpen,
+    googleLinkPassword, setGoogleLinkPassword, googleLinkError, setGoogleLinkError, googleLinked, setGoogleLinked,
+    inviteToken, setInviteToken, acceptingInvite, setAcceptingInvite, inviteAcceptError, setInviteAcceptError,
+  } = useAuthOverlayState();
   const [notice, setNotice] = useState('');
   const [exportChoice,setExportChoice] = useState(null);
   const [exportFormat,setExportFormat] = useState('postman');
   const [exportIncludeSecrets,setExportIncludeSecrets] = useState(false);
-  const [method, setMethod] = useState(RECOVERED.method || 'GET');
-  const [url, setUrl] = useState(RECOVERED.url ?? 'https://httpbin.org/get');
-  const [rows, setRows] = useState(RECOVERED.rows || [{ ...EMPTY_HEADER }]);
-  const [body, setBody] = useState(RECOVERED.body || '');
-  const [documentation,setDocumentation]=useState(RECOVERED.documentation||'');
-  const [format, setFormat] = useState(RECOVERED.format || 'application/json');
-  const [formFields, setFormFields] = useState(RECOVERED.formFields || [{key:'',value:''}]);
-  const [binaryFile, setBinaryFile] = useState({name:RECOVERED.binaryFile?.name || '',base64:''});
-  const [preScript, setPreScript] = useState(RECOVERED.preScript || '');
-  const [postScript, setPostScript] = useState(RECOVERED.postScript || '');
-  const [responseExamples, setResponseExamples] = useState(sanitizeResponseExamples(RECOVERED.responseExamples));
-  const [scriptLog, setScriptLog] = useState(RECOVERED.scriptLog || []);
-  const [scriptTests, setScriptTests] = useState(RECOVERED.scriptTests || []);
-  const [scriptError, setScriptError] = useState(RECOVERED.scriptError || '');
-  const [scriptDiagnostic,setScriptDiagnostic] = useState(RECOVERED.scriptDiagnostic || null);
-  const [scriptJump,setScriptJump] = useState(null);
-  const [responsePretty, setResponsePretty] = useState(true);
-  const [prettyResponse, setPrettyResponse] = useState('');
+  const {
+    method, setMethod, url, setUrl, rows, setRows,
+    body, setBody, documentation, setDocumentation, format, setFormat,
+    formFields, setFormFields, binaryFile, setBinaryFile, preScript, setPreScript,
+    postScript, setPostScript, responseExamples, setResponseExamples, scriptLog, setScriptLog,
+    scriptTests, setScriptTests, scriptError, setScriptError, scriptDiagnostic, setScriptDiagnostic,
+    scriptJump, setScriptJump, responsePretty, setResponsePretty, prettyResponse, setPrettyResponse,
+  } = useRequestDraftEditor(RECOVERED, EMPTY_HEADER);
   // Each workbench has its own memory-only Environment store. Existing Local
   // persistence, Cloud authorization, and QA session overlays are unchanged.
   const [environmentStore] = useState(() => createEnvironmentWorkbenchStore({
@@ -184,20 +190,11 @@ export default function App() {
   const { localEnvironments, setLocalEnvironments,
     workspaceEnvironmentResult, setWorkspaceEnvironmentResult,
     environmentSelections, setEnvironmentSelections } = useEnvironmentWorkbench(environmentStore);
-  // Never persist QA/Writer Cloud environment edits. Their script changes are RAM-only.
-  const sessionEnvironmentOverlays=useRef(new Map());
-  const sessionCollectionVariables=useRef(new Map());
-  // Cached shared defaults are scoped by user/workspace/collection and stay in RAM.
-  const savedCollectionVariablesCache=useRef(new Map());
-  const [collectionVariablesTarget,setCollectionVariablesTarget]=useState(null);
-  const [collectionVariablesData,setCollectionVariablesData]=useState(null);
-  const [collectionVariablesLoading,setCollectionVariablesLoading]=useState(false);
-  const [collectionVariablesError,setCollectionVariablesError]=useState('');
-  const [collectionVariablesBusy,setCollectionVariablesBusy]=useState(false);
-  const collectionVariablesFetchId=useRef(0);
-  const sessionDocumentationOverlays=useRef(new Map());
-  const [,refreshSessionEnvironment]=useState(0);
-  useEffect(()=>{sessionEnvironmentOverlays.current.clear();sessionCollectionVariables.current.clear();savedCollectionVariablesCache.current.clear();setCollectionVariablesTarget(null);sessionDocumentationOverlays.current.clear();refreshSessionEnvironment(v=>v+1);},[token]);
+  const {
+    sessionEnvironmentOverlays, sessionCollectionVariables, savedCollectionVariablesCache, collectionVariablesTarget, setCollectionVariablesTarget, collectionVariablesData,
+    setCollectionVariablesData, collectionVariablesLoading, setCollectionVariablesLoading, collectionVariablesError, setCollectionVariablesError, collectionVariablesBusy,
+    setCollectionVariablesBusy, collectionVariablesFetchId, sessionDocumentationOverlays, refreshSessionEnvironment,
+  } = useCollectionSessionState(token);
   // Request tab state comes from the per-App Zustand store, not one huge context.
   const reqTab = useStore(requestWorkbenchStore, s => s.reqTab);
   const setReqTab = useStore(requestWorkbenchStore, s => s.setReqTab);
@@ -324,44 +321,16 @@ export default function App() {
     const input=requestNameInputRef.current;
     if (input) { input.focus(); input.select(); }
   }, [editingRequestName, activeTabId, page]);
-  function beginRequestRename() {
-    const current=openTabs.find(tab=>tab.id===activeTabRef.current);
-    originalRequestNameRef.current=current?.name||'Untitled Request';
-    cancelledRequestNameRef.current=false;
-    setEditingRequestName(true);
-  }
-  function setCurrentRequestName(nextName) {
-    setOpenTabs(tabs=>tabs.map(tab=>tab.id===activeTabRef.current?{...tab,name:nextName}:tab));
-  }
-  function finishRequestRename() {
-    if(cancelledRequestNameRef.current){cancelledRequestNameRef.current=false;return;}
-    const current=openTabs.find(tab=>tab.id===activeTabRef.current);
-    const trimmed=(current?.name||'').trim();
-    setCurrentRequestName(trimmed||originalRequestNameRef.current||'Untitled Request');
-    setEditingRequestName(false);
-  }
-  function cancelRequestRename() {
-    cancelledRequestNameRef.current=true;
-    setCurrentRequestName(originalRequestNameRef.current);
-    setEditingRequestName(false);
-  }
+  function beginRequestRename(...args) { return tabActions.beginRequestRename(...args); }
+  function setCurrentRequestName(...args) { return tabActions.setCurrentRequestName(...args); }
+  function finishRequestRename(...args) { return tabActions.finishRequestRename(...args); }
+  function cancelRequestRename(...args) { return tabActions.cancelRequestRename(...args); }
 
   const currentAuth=()=>({authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn});
-  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,responseExamples:sanitizeResponseExamples(responseExamples),scriptLog,scriptTests,scriptError,scriptDiagnostic, reqTab, resTab, result, params: params.map(p => ({ ...p })), ...currentAuth() }; }
+  function snapshot(...args) { return tabActions.snapshot(...args); }
   const snapshotRef=useRef(snapshot);snapshotRef.current=snapshot;
-  function restoreDraft(next) {
-    setMethod(next.method||'GET');setUrl(next.url||'');setRows(next.rows||[{...EMPTY_HEADER}]);setBody(next.body||'');setDocumentation(next.documentation||'');
-    setFormat(next.format||'application/json');setFormFields(next.formFields||[{key:'',value:''}]);
-    setBinaryFile(next.binaryFile||{name:'',base64:''});
-    setPreScript(next.preScript||'');setPostScript(next.postScript||'');setResponseExamples(sanitizeResponseExamples(next.responseExamples));
-    setScriptLog(next.scriptLog||[]);setScriptTests(next.scriptTests||[]);setScriptError(next.scriptError||'');
-    setScriptDiagnostic(next.scriptDiagnostic||null);setScriptJump(null);
-    setReqTab(next.reqTab||'params');setResTab(next.resTab||'body');setResult(next.result||null);setResponsePretty(next.responsePretty??true);setPrettyResponse(next.prettyResponse||'');
-    setParams(next.params||[{...EMPTY_HEADER}]);setAuthType(next.authType||'none');setBearerToken(next.bearerToken||'');
-    setBasicUsername(next.basicUsername||'');setBasicPassword(next.basicPassword||'');
-    setApiKeyName(next.apiKeyName||'X-API-Key');setApiKeyValue(next.apiKeyValue||'');setApiKeyIn(next.apiKeyIn||'header');
-  }
-  function stashActive() { draftsRef.current[activeTabRef.current] = snapshot(); }
+  function restoreDraft(...args) { return tabActions.restoreDraft(...args); }
+  function stashActive(...args) { return tabActions.stashActive(...args); }
   useEffect(()=>writeLocalCollections(localCollections),[localCollections]);
   useEffect(()=>writeWorkspaceCollectionDocs(localStorage,workspaceCollectionDocs),[workspaceCollectionDocs]);
   useEffect(()=>{localStorage.setItem('pakpost_v14_global_collection_sort',collectionSort)},[collectionSort]);
@@ -396,845 +365,84 @@ export default function App() {
     return ()=>{clearTimeout(timer);window.removeEventListener('beforeunload',persist)};
   },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,responseExamples,scriptLog,scriptTests,scriptError,scriptDiagnostic,
     reqTab,resTab,result,params,authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,selectedWs,members,membersWorkspaceId,me]);
-  function adoptSavedRevision(saved){
-    if(!saved?.id || !Number.isInteger(saved.revision))return;
-    setOpenTabs(tabs=>tabs.map(tab=>tab.source?.scope==='workspace' && tab.source.requestId===saved.id
-      ? {...tab,source:{...tab.source,revision:saved.revision}}:tab));
-  }
+  function adoptSavedRevision(...args) { return realtimeActions.adoptSavedRevision(...args); }
   // Draft reconciliation is isolated from SignalR, without touching dirty tabs.
-  function reconcileCloudRequests(workspaceId,collectionId,items){
-    reconcileRequestTabs({workspaceId,collectionId,requests:items,tabs:openTabsRef.current,
-      activeTabId:activeTabRef.current,
-      readDraft:id=>id===activeTabRef.current?snapshotRef.current():draftsRef.current[id],
-      transformRemote:workspaceDraft,
-      markConflict:(id,value)=>setRemoteAlerts(old=>({...old,[id]:value})),
-      updateDraft:(id,draft)=>{draftsRef.current[id]=draft},
-      updateTab:(id,update)=>setOpenTabs(tabs=>tabs.map(tab=>tab.id===id?update(tab):tab)),
-      clearConflict:id=>setRemoteAlerts(old=>{if(!old[id])return old;const next={...old};delete next[id];return next}),
-      restoreActive:restoreDraft,
-    });
-  }
-  async function refreshRealtimeChanges(events){
-    const auth=currentTokenRef.current, workspaceId=selectedWorkspaceRef.current;
-    return synchronizeWorkspaceChanges({events,token:auth,workspaceId,
-      isCurrent:()=>auth===currentTokenRef.current&&workspaceId===selectedWorkspaceRef.current,
-      tabs:openTabsRef.current,selectedCollectionId:selectedColRef.current,
-      expandedCollections,requestLists:workspaceRequestLists,
-      setCollections,setSelectedCollectionId:setSelectedCol,setRequestLists:setWorkspaceRequestLists,
-      setSelectedRequests:setSavedRequests,
-      markConflict:(id,value)=>setRemoteAlerts(old=>({...old,[id]:value})),
-      reconcile:reconcileCloudRequests,
-      fetchCollections:getWorkspaceCollections,
-      fetchRequests:getWorkspaceRequests,
-    });
-  }
+  function reconcileCloudRequests(...args) { return realtimeActions.reconcileCloudRequests(...args); }
+  async function refreshRealtimeChanges(...args) { return realtimeActions.refreshRealtimeChanges(...args); }
   realtimeHandlerRef.current=refreshRealtimeChanges;
-  function enqueueWorkspaceChange(event){
-    realtimeQueueRef.current.push(event);
-    if(realtimeTimerRef.current)return;
-    realtimeTimerRef.current=setTimeout(()=>{
-      realtimeTimerRef.current=null;
-      const batch=realtimeQueueRef.current.splice(0,100);
-      realtimeHandlerRef.current?.(batch);
-    },180);
-  }
-  async function showConflictDialog(tabId){
-    const tab=openTabsRef.current.find(t=>t.id===tabId);
-    if(!tab?.source?.requestId)return;
-    if(activeTabRef.current!==tabId)selectTab(tabId);
-    const source=tab.source;
-    setConflictDialog({tabId,source,loading:true,latest:null,base:null,error:''});
-    try{
-      const rows=await api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`,'GET',undefined,currentTokenRef.current);
-      if(source.workspaceId!==selectedWorkspaceRef.current)return;
-      const latest=rows.find(x=>x.id===source.requestId)||null;
-      let base=null;
-      if(source.revision>0){
-        try{
-          const detail=await api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests/${source.requestId}/history/${source.revision}`,'GET',undefined,currentTokenRef.current);
-          base=detail.request;
-        }catch{/* Older revisions may have expired or predate V8.5. Manual selection remains safe. */}
-      }
-      if(currentTokenRef.current!==token||source.workspaceId!==selectedWorkspaceRef.current)return;
-      setConflictDialog({tabId,source,loading:false,latest,base,error:''});
-    }catch(e){setConflictDialog({tabId,source,loading:false,latest:null,error:getMessage(e)});}
-  }
-  function reloadCloudConflict(){
-    const dialog=conflictDialog;
-    if(!dialog?.latest)return;
-    const tab=openTabsRef.current.find(t=>t.id===dialog.tabId);
-    if(!tab)return;
-    const latest=dialog.latest;
-    const updated={...freshRequest(latest.name),...workspaceDraft(latest),result:null,scriptLog:[],scriptTests:[],scriptError:'',scriptDiagnostic:null};
-    draftsRef.current[tab.id]=updated;
-    setOpenTabs(tabs=>tabs.map(t=>t.id===tab.id?tabSaved(t,{...dialog.source,revision:latest.revision},updated,latest.name):t));
-    if(activeTabRef.current===tab.id)restoreDraft(updated);
-    setRemoteAlerts(old=>{const next={...old};delete next[tab.id];return next;});
-    setConflictDialog(null);setNotice('Reloaded latest Cloud version. Local unsaved changes were discarded.');
-  }
-  function saveConflictCopy(){
-    const dialog=conflictDialog;
-    if(!dialog)return;
-    if(activeTabRef.current!==dialog.tabId)selectTab(dialog.tabId);
-    setConflictDialog(null);
-    // Open the existing Save As flow, explicitly targeting Local.
-    openSaveAs({scope:'local',collectionId:localCollections[0]?.id||''});
-    setNotice('Save your draft as a Local copy. The Cloud version will not be overwritten.');
-  }
+  function enqueueWorkspaceChange(...args) { return realtimeActions.enqueueWorkspaceChange(...args); }
+  async function showConflictDialog(...args) { return historyActions.showConflictDialog(...args); }
+  function reloadCloudConflict(...args) { return historyActions.reloadCloudConflict(...args); }
+  function saveConflictCopy(...args) { return historyActions.saveConflictCopy(...args); }
 
   // V8.5: explicit field merge; never silently overwrite the editor or Cloud.
-  function applyMergedRevision(tabId,remote,chosen,{resolveConflict=false}={}){
-    const tab=openTabsRef.current.find(t=>t.id===tabId);
-    if(!tab||!remote)return;
-    const original=tabId===activeTabRef.current?snapshotRef.current():draftsRef.current[tabId];
-    if(!original)return;
-    const merged=applyFieldMerge({...original,name:tab.name},workspaceDraft(remote),chosen);
-    const {name,...draft}=merged;
-    draftsRef.current[tabId]=draft;
-    setOpenTabs(tabs=>tabs.map(t=>t.id!==tabId?t:{...t,name:name||t.name,
-      source:resolveConflict?{...t.source,revision:remote.revision}:t.source}));
-    if(tabId===activeTabRef.current){restoreDraft(draft);setCurrentRequestName(name||tab.name);}
-    if(resolveConflict){
-      setRemoteAlerts(old=>{const next={...old};delete next[tabId];return next;});
-      setConflictDialog(null);
-    }
-    setNotice(resolveConflict?'Merge applied to draft. Review and press Save; Cloud was NOT changed.':'Selected revision fields applied to your unsaved draft.');
-  }
-  async function openRequestHistory(tabId=activeTabRef.current,sourceOverride=null){
-    const tab=openTabsRef.current.find(t=>t.id===tabId);
-    const source=sourceOverride||tab?.source;
-    if(source?.scope!=='workspace'||source.pending||!source.requestId){setNotice('Version History is available for saved Cloud requests.');return;}
-    if(source.workspaceId!==selectedWorkspaceRef.current){setNotice('Switch to the request Workspace first.');return;}
-    if(tab&&tabId!==activeTabRef.current)selectTab(tabId);
-    const path=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests/${source.requestId}`;
-    setVersionDialog({tabId,source,path,entries:[],selectedRevision:null,detail:null,latest:null,loading:true,busy:false,error:''});
-    try{
-      const [entries,requests]=await Promise.all([
-        api(`${path}/history`,'GET',undefined,currentTokenRef.current),
-        api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`,'GET',undefined,currentTokenRef.current)]);
-      if(source.workspaceId!==selectedWorkspaceRef.current)return;
-      const latest=requests.find(req=>req.id===source.requestId);
-      setVersionDialog(old=>old?.tabId===tabId?{...old,entries,latest,loading:false}:old);
-      if(entries.length)await selectRequestHistoryRevision(tabId,path,entries[0].revision);
-    }catch(err){setVersionDialog(old=>old?.tabId===tabId?{...old,error:getMessage(err),loading:false}:old);}
-  }
-  async function selectRequestHistoryRevision(tabId,path,revision){
-    setVersionDialog(old=>old?.tabId===tabId?{...old,selectedRevision:revision,detail:null,loading:true,error:''}:old);
-    try{
-      const detail=await api(`${path}/history/${revision}`,'GET',undefined,currentTokenRef.current);
-      setVersionDialog(old=>old?.tabId===tabId&&old.selectedRevision===revision?{...old,detail,loading:false}:old);
-    }catch(err){setVersionDialog(old=>old?.tabId===tabId?{...old,error:getMessage(err),loading:false}:old);}
-  }
-  async function restoreRequestRevision(revision,expectedRevision){
-    const dialog=versionDialog;
-    if(!dialog||!canEditCloud||dialog.source.workspaceId!==selectedWorkspaceRef.current)return;
-    setVersionDialog(old=>({...old,busy:true,error:''}));
-    try{
-      await api(`${dialog.path}/history/${revision}/restore`,'POST',{expectedRevision},currentTokenRef.current);
-      setVersionDialog(null);
-      setNotice(`Revision ${revision} restored as a NEW Cloud revision. Unsaved drafts were preserved.`);
-      try{
-        const updated=await api(`/api/workspaces/${dialog.source.workspaceId}/collections/${dialog.source.collectionId}/requests`,'GET',undefined,currentTokenRef.current);
-        if(dialog.source.workspaceId!==selectedWorkspaceRef.current)return;
-        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(dialog.source.workspaceId,dialog.source.collectionId)]:updated}));
-        if(selectedColRef.current===dialog.source.collectionId)setSavedRequests(updated);
-        reconcileCloudRequests(dialog.source.workspaceId,dialog.source.collectionId,updated);
-      }catch{setNotice('Restore succeeded. Reload the Collection to see the latest revision.');}
-    }catch(err){setVersionDialog(old=>old?{...old,busy:false,error:getMessage(err)}:old);}
-  }
+  function applyMergedRevision(...args) { return historyActions.applyMergedRevision(...args); }
+  async function openRequestHistory(...args) { return historyActions.openRequestHistory(...args); }
+  async function selectRequestHistoryRevision(...args) { return historyActions.selectRequestHistoryRevision(...args); }
+  async function restoreRequestRevision(...args) { return historyActions.restoreRequestRevision(...args); }
 
-  function selectTab(id) {
-    setEditingRequestName(false);
-    if (id === activeTabRef.current) { setPage('tester'); return; }
-    stashActive();
-    const next = draftsRef.current[id];
-    if (!next) return;
-    activeTabRef.current = id; setActiveTabId(id);
-    restoreDraft(next);
-
-    setPage('tester');
-  }
-  function navigateConsoleEvent(event) {
-    if (!event?.line || !['pre-script','post-script'].includes(event.phase)) return;
-    if (!openTabs.some(tab => tab.id === event.tabId)) {
-      setNotice('The request tab for this Console event is no longer open.');
-      return;
-    }
-    selectTab(event.tabId);
-    setReqTab('scripts');
-    setScriptJump({phase:event.phase==='pre-script'?'pre':'post',line:event.line,column:event.column||1,serial:Date.now()});
-    setConsoleOpen(false);
-  }
-  function addTab(request, source = null, { focusName = false } = {}) {
-    stashActive();
-    const id = `t${++tabSequence.current}`;
-    const draft = { ...freshRequest(request?.name || 'Untitled Request'), ...request, binaryFile:{name:request?.binaryFile?.name||'',base64:''},
-      params:request?.params||[{...EMPTY_HEADER}],rows:request?.rows||[{...EMPTY_HEADER}],
-      formFields:request?.formFields||[{...EMPTY_HEADER}],result:null,scriptLog:[],scriptTests:[],scriptError:''};
-    draftsRef.current[id] = draft; activeTabRef.current = id;
-    const name = request?.name || 'Untitled Request';
-    setOpenTabs(t => [...t, { id, name, savedName:name, method: draft.method, source, savedFingerprint:requestFingerprint(draft,name) }]);
-    originalRequestNameRef.current=name; cancelledRequestNameRef.current=false; setEditingRequestName(focusName);
-    setActiveTabId(id); restoreDraft(draft); setPage('tester');
-  }
-  async function importPreparedEnvironments(imported,destination){
-    if(!imported.length)return 0;
-    const cloud=destination===STORAGE_WORKSPACE;
-    const workspaceId=selectedWs,auth=token,epoch=workspaceFetchEpoch.current;
-    if(cloud&&(!auth||!workspaceId))throw Error('Sign in and select a workspace before importing environments to Cloud.');
-    // Remote list may not be loaded yet when the user is browsing Local environments.
-    // Always read the destination workspace's real list: never dedupe against another team's cached list.
-    const existing=cloud?await api(`/api/workspaces/${workspaceId}/environments`,'GET',undefined,auth):localEnvironments;
-    const prepared=uniqueEnvironmentImports(imported,existing);
-    if(!cloud){
-      const added=prepared.map(env=>({...env,id:crypto.randomUUID(),variables:(env.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret}))}));
-      setLocalEnvironments(old=>[...old,...added]);
-      setStorageScope(STORAGE_LOCAL);selectEnvironmentForContext(STORAGE_LOCAL,'','',added[0].id);
-      return added.length;
-    }
-    const base=`/api/workspaces/${workspaceId}/environments`;
-    const saved=[];
-    for(const env of prepared){
-      let created;
-      try{
-        created=await api(base,'POST',{name:env.name},auth);
-        saved.push(await api(`${base}/${created.id}`,'PUT',{name:env.name,variables:env.variables},auth));
-      }catch(error){
-        // Undo only the empty record created by this failed environment; keep earlier successful imports.
-        if(created){try{await api(`${base}/${created.id}`,'DELETE',undefined,auth)}catch{}}
-        if(saved.length&&epoch===workspaceFetchEpoch.current)setWorkspaceEnvironments(old=>[...old.filter(e=>!saved.some(x=>x.id===e.id)),...saved]);
-        throw Error(`Cloud import partially completed (${saved.length}/${prepared.length} environments): ${getMessage(error)}`);
-      }
-    }
-    if(epoch===workspaceFetchEpoch.current){
-      setWorkspaceEnvironments(old=>[...old.filter(e=>!saved.some(x=>x.id===e.id)),...saved]);
-      setStorageScope(STORAGE_WORKSPACE);selectEnvironmentForContext(STORAGE_WORKSPACE,workspaceId,me?.id,saved[0].id);
-    }
-    return saved.length;
-  }
-  async function importCloudCollections(sources){
-    const workspaceId=selectedWs;
-    const auth=token;
-    const epoch=workspaceFetchEpoch.current;
-    let imported;
-    try{
-      imported=await saveCloudCollections(sources,{workspaceId,token:auth,request:api,onCreated:created=>{
-        if(epoch===workspaceFetchEpoch.current)setCollections(old=>[...old,created]);
-      }});
-    }catch(error){
-      // A failed remote import can still have successful records: refresh without local fallback.
-      if(auth&&workspaceId){try{
-        const latest=await api(`/api/workspaces/${workspaceId}/collections`,'GET',undefined,auth);
-        if(epoch===workspaceFetchEpoch.current)setCollections(latest);
-      }catch{}}
-      throw error;
-    }
-    try{
-      const latest=await api(`/api/workspaces/${workspaceId}/collections`,'GET',undefined,auth);
-      if(epoch===workspaceFetchEpoch.current)setCollections(latest);
-    }catch{}
-    if(epoch===workspaceFetchEpoch.current){
-      if(imported.firstId){setSelectedCol(imported.firstId);setExpandedCollections(old=>({...old,[workspaceCollectionKey(workspaceId,imported.firstId)]:true}));}
-      setStorageScope(STORAGE_WORKSPACE);
-      setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
-    }
-    return imported.count;
-  }
-  async function importRequestsAndEnvironments({kind,requests=[],environments=[],collections:incoming=[]},requestedDestination){
-    if(requests.length>200)throw Error('Import limit: maximum 200 requests.');
-    const destination=allowedStorageScope(!!token,requestedDestination);
-    const sources=collectionImportSources({kind,requests,collections:incoming});
-    let count=0;
-    if(sources.length){
-      if(destination===STORAGE_WORKSPACE){
-        count=await importCloudCollections(sources);
-      }else{
-        const added=sources.map(source=>toLocalCollection(source));
-        setLocalCollections(validateLibrary([...localCollections,...added]));
-        count=requests.length;
-        setStorageScope(STORAGE_LOCAL);setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester');
-      }
-    }else if(kind==='pakpost'&&requests.length){
-      // A Pakpost session is a tab backup, not a collection import.
-      stashActive();
-      const tabs=requests.map(request=>{
-        const id=`t${++tabSequence.current}`;
-        const draft={...blankDraft(),...request,binaryFile:{name:request?.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
-        draftsRef.current[id]=draft;
-        return {id,name:request.name||'Imported Request',method:draft.method};
-      });
-      setOpenTabs(old=>[...old,...tabs]);
-      const last=tabs.at(-1);
-      activeTabRef.current=last.id;setActiveTabId(last.id);restoreDraft(draftsRef.current[last.id]);setPage('tester');
-    }
-    if(environments.length)await importPreparedEnvironments(environments,destination);
-    const place=destination===STORAGE_WORKSPACE?'Cloud · Neon':'Local · Browser';
-    if(kind==='pakpost')return `Restored ${requests.length} tab(s)${environments.length?` and imported ${environments.length} environment(s) into ${place}`:''}.`;
-    return `Imported ${[count?`${count} request(s)`:null,environments.length?`${environments.length} environment(s)`:null].filter(Boolean).join(' and ')||'0 items'} into ${place}.`;
-  }
-  function openDocumentation(target){
-    let initial='';
-    if(target.scope==='local'){
-      const collection=localCollections.find(c=>c.id===target.collectionId);
-      if(target.type==='collection')initial=collection?.documentation||'';
-      if(target.type==='folder')initial=collection?.folderDocs?.[JSON.stringify(target.folderPath||[])]||'';
-      if(target.type==='request')initial=collection?.requests?.find(r=>r.id===target.requestId)?.documentation||'';
-    }else if(target.type==='collection'){
-      initial=workspaceCollectionDocs[workspaceDocKey(selectedWs,target.collectionId)]||'';
-    }else{
-      const request=(workspaceRequestLists[workspaceCollectionKey(selectedWs,target.collectionId)]||savedRequests).find(r=>r.id===target.requestId);
-      initial=decodeStoredHeaders(request?.headersJson).documentation||'';
-    }
-    const docTarget={...target,workspaceId:selectedWs};
-    const temporary=sessionDocumentationOverlays.current.get(sandboxDocKey(docTarget));
-    setDocumentationTarget({...docTarget,initial:temporary??initial});
-  }
-  async function saveDocumentation(text){
-    if(!documentationTarget)return;
-    const target=documentationTarget;const value=String(text||'').slice(0,16000);
-    if(target.scope==='workspace'&&!canEditCloud){
-      // QA / Technical Writer can prepare Markdown notes in RAM only.
-      // Do not send request documentation edits to Neon or persist to localStorage.
-      sessionDocumentationOverlays.current.set(sandboxDocKey(target),value);
-      if(target.type==='request')for(const tab of openTabs){
-        if(tab.source?.scope==='workspace'&&tab.source?.workspaceId===target.workspaceId&&
-           tab.source.collectionId===target.collectionId&&tab.source.requestId===target.requestId){
-          if(draftsRef.current[tab.id])draftsRef.current[tab.id]={...draftsRef.current[tab.id],documentation:value};
-          if(tab.id===activeTabRef.current)setDocumentation(value);
-        }
-      }
-      setDocumentationTarget(null);
-      setNotice('Documentation drafted in this sandbox only. Cloud remains unchanged.');
-      return;
-    }
-    setDocBusy(true);
-    try{
-      if(target.scope==='local'){
-        setLocalCollections(old=>applyLocalAction(old,{type:'saveDocumentation',collectionId:target.collectionId,requestId:target.requestId,folderPath:target.folderPath,documentation:value}));
-      }else if(target.type==='collection'){
-        // Current Neon collection DTO has no description property. Persist browser-locally.
-        setWorkspaceCollectionDocs(old=>({...old,[workspaceDocKey(target.workspaceId,target.collectionId)]:value}));
-      }else{
-        const base=`/api/workspaces/${target.workspaceId}/collections/${target.collectionId}/requests`;
-        const requests=await api(base,'GET',undefined,token);
-        const request=requests.find(r=>r.id===target.requestId);
-        if(!request)throw Error('Saved request was not found');
-        const meta=decodeStoredHeaders(request.headersJson);
-        const saved=await api(`${base}/${target.requestId}`,'PUT',{
-          ...request,headersJson:encodeStoredHeaders(meta.headers,meta.params,value,meta.responseExamples,meta.auth)
-        },token);
-        adoptSavedRevision(saved);
-        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(target.workspaceId,target.collectionId)]:requests.map(r=>r.id===saved.id?saved:r)}));
-        if(selectedCol===target.collectionId)setSavedRequests(requests.map(r=>r.id===saved.id?saved:r));
-      }
-      if(target.type==='request'){
-        // Keep open tab's draft metadata in sync so later Save doesn't erase docs.
-        for(const tab of openTabs){if(tab.source?.scope===target.scope&&tab.source?.collectionId===target.collectionId&&tab.source?.requestId===target.requestId){
-          if(draftsRef.current[tab.id])draftsRef.current[tab.id]={...draftsRef.current[tab.id],documentation:value};
-          if(tab.id===activeTabRef.current)setDocumentation(value);
-        }}
-      }
-      setDocumentationTarget(null);setNotice('Documentation saved');
-    }catch(e){setNotice(`Cannot save documentation: ${getMessage(e)}`)}finally{setDocBusy(false)}
-  }
-  async function createExplorerCollection(e){
-    e.preventDefault();
-    const name=localCollectionName.trim();if(!name||busyAction)return;
-    if(storageScope===STORAGE_WORKSPACE&&token){
-      if(!selectedWs){setNotice('Select a workspace before creating a Cloud collection.');return;}
-      await doAction(async()=>{
-        const created=await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name},token);
-        setCollections(current=>[...current,created]);
-        setSelectedCol(created.id);
-        setLocalCollectionName('');setCreatingLocalCollection(false);
-        setNotice('Cloud collection created.');
-      });
-    }else{
-      try{setLocalCollections(validateLibrary([...localCollections,toLocalCollection({name,requests:[]})]));setLocalCollectionName('');setCreatingLocalCollection(false);}
-      catch(err){setNotice(getMessage(err));}
-    }
-  }
-  function openCollectionImport(){
-    setCollectionImportDestination(token&&canEditCloud?STORAGE_WORKSPACE:STORAGE_LOCAL);
-    setCollectionImportFile(null);setCollectionImportError('');setCollectionImportOpen(true);
-  }
-  async function submitCollectionImport(){
-    if(!collectionImportFile||collectionImportBusy)return;
-    setCollectionImportBusy(true);setCollectionImportError('');
-    try{
-      const parsed=parseImportText(await collectionImportFile.text());
-      if(parsed.kind==='environment'||(parsed.kind==='pakpost'&&!parsed.requests?.length))
-        throw Error('This file has no collections. Use Environments or Import / Export to import it.');
-      if(!collectionImportSources(parsed).length)
-        throw Error('This file has no HTTP collections. Choose Postman, OpenAPI, Insomnia v4 JSON or cURL.');
-      if(collectionImportDestination===STORAGE_WORKSPACE&&!canEditCloud)
-        throw Error('You cannot import Cloud collections with your current workspace roles. Choose Local.');
-      const message=await importRequestsAndEnvironments(parsed,allowedStorageScope(!!token,collectionImportDestination));
-      setNotice(message);setCollectionImportOpen(false);setCollectionImportFile(null);
-    }catch(error){setCollectionImportError(getMessage(error));}
-    finally{setCollectionImportBusy(false);}
-  }
-  function openBoundRequest(request,source){
-    const current=findBoundTab(openTabs,source);
-    if(current){selectTab(current.id);return;}
-    addTab(request,source);
-  }
-  function openLocalRequest(request,collectionId){
-    openBoundRequest({...request,name:request.requestName||request.name},
-      {scope:'local',collectionId,requestId:request.id});
-  }
-  function previewSavedExample(request,source,example){
-    const resultExample=exampleToResult(example);
-    const current=findBoundTab(openTabs,source);
-    if(current){
-      const stored=current.id===activeTabRef.current?snapshot():draftsRef.current[current.id];
-      const next={...stored,result:resultExample,resTab:'body'};
-      draftsRef.current[current.id]=next;
-      activeTabRef.current=current.id;setActiveTabId(current.id);restoreDraft(next);setPage('tester');
-      setOpenTabs(tabs=>tabs.map(tab=>tab.id===current.id?{...tab,status:resultExample.statusCode}:tab));
-      return;
-    }
-    addTab(request,source);
-    draftsRef.current[activeTabRef.current]={...draftsRef.current[activeTabRef.current],result:resultExample,resTab:'body'};
-    setResult(resultExample);setResTab('body');
-    const newTabId=activeTabRef.current;
-    setOpenTabs(tabs=>tabs.map(tab=>tab.id===newTabId?{...tab,status:resultExample.statusCode}:tab));
-  }
-  function openLocalExample(request,collectionId,example){
-    previewSavedExample({...request,name:request.requestName||request.name},{scope:'local',collectionId,requestId:request.id},example);
-  }
-  function openWorkspaceExample(request,collectionId,example){
-    const draft=workspaceDraft({...request,collectionId});
-    previewSavedExample({...draft,name:request.name||draft.name},{scope:'workspace',workspaceId:selectedWs,collectionId,requestId:request.id,revision:request.revision},example);
-  }
-  function downloadJson(data,filename){
-    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;
-    anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
-  }
-  function updateLocal(action){
-    try{setLocalCollections(old=>applyLocalAction(old,action));
-      if(action.type==='deleteRequest'||action.type==='deleteCollection')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&(action.type==='deleteCollection'?t.source.collectionId===action.collectionId:(t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId))?{...t,source:null}:t));
-      if(action.type==='renameRequest')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId?{...t,name:action.name,savedName:action.name}:t));
-      if(action.type==='deleteExample'){
-        const source=activeSource();
-        if(source?.scope==='local'&&source.collectionId===action.collectionId&&source.requestId===action.requestId){
-          const current=sanitizeResponseExamples(responseExamples).filter(example=>example.id!==action.exampleId);
-          setResponseExamples(current);
-          draftsRef.current[activeTabRef.current]={...snapshot(),responseExamples:current};
-        }
-      }
-      if(action.type==='deleteRequest'||action.type==='deleteCollection')setNotice('Deleted from local collection. Open drafts are preserved.');
-    }catch(e){setNotice(getMessage(e));}
-  }
-  function createCollectionDraft(scope,collectionId,folderPath=[]){
-    const draft=freshRequest('New Request');
-    const source=pendingSource(scope,collectionId,{
-      workspaceId:scope==='workspace'?selectedWs:'',folderPath,
-      pendingId:typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function'
-        ?crypto.randomUUID():`draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    });
-    addTab(draft,source,{focusName:true});
-    setExplorerTab('collections');setSidebarCollapsed(false);
-    if(scope==='workspace'){
-      setSelectedCol(collectionId);
-      setExpandedCollections(previous=>({...previous,[workspaceCollectionKey(selectedWs,collectionId)]:true}));
-    }else setRevealLocalDraft({collectionId,folderPath,nonce:Date.now()});
-    setNotice('Draft created in collection. Save to persist it.');
-  }
-  function collectionTargetKey(target){
-    return collectionVariableKey(target,'',me?.id||'guest');
-  }
-  async function readSavedCollectionVariables(target,{reload=false}={}){
-    if(target.scope==='local')return {version:0,variables:localCollections.find(c=>c.id===target.collectionId)?.variables||[]};
-    const key=collectionTargetKey(target);
-    const cached=savedCollectionVariablesCache.current.get(key);
-    if(!reload&&cached&&Date.now()-cached.at<30000)return cached.data;
-    const data=await api(`/api/workspaces/${target.workspaceId}/collections/${target.collectionId}/variables`,'GET',undefined,token);
-    savedCollectionVariablesCache.current.delete(key);
-    savedCollectionVariablesCache.current.set(key,{data,at:Date.now()});
-    // LRU-style cap keeps this optional feature from accumulating unbounded data.
-    if(savedCollectionVariablesCache.current.size>50)savedCollectionVariablesCache.current.delete(savedCollectionVariablesCache.current.keys().next().value);
-    return data;
-  }
-  async function openCollectionVariables(target){
-    const selected={...target};
-    const id=++collectionVariablesFetchId.current;
-    setCollectionVariablesTarget(selected);setCollectionVariablesData(null);
-    setCollectionVariablesError('');setCollectionVariablesLoading(true);
-    try{
-      const data=await readSavedCollectionVariables(selected,{reload:selected.scope==='workspace'});
-      if(id===collectionVariablesFetchId.current)setCollectionVariablesData(data);
-    }catch(error){if(id===collectionVariablesFetchId.current)setCollectionVariablesError(getMessage(error));}
-    finally{if(id===collectionVariablesFetchId.current)setCollectionVariablesLoading(false);}
-  }
-  async function reloadCollectionVariables(){
-    if(!collectionVariablesTarget)return;
-    const data=await readSavedCollectionVariables(collectionVariablesTarget,{reload:true});
-    setCollectionVariablesData(data);setCollectionVariablesError('');
-  }
-  async function saveCollectionVariableDefaults(rows){
-    const target=collectionVariablesTarget;
-    if(!target)throw Error('No collection selected');
-    const normalized=validateCollectionVariableRows(rows);
-    setCollectionVariablesBusy(true);
-    try{
-      if(target.scope==='local'){
-        setLocalCollections(old=>old.map(c=>c.id===target.collectionId?{...c,variables:normalized.map(({key,value,isSecret})=>({key,value,isSecret}))}:c));
-        setCollectionVariablesData({version:0,variables:normalized});
-      }else{
-        if(!canWorkspace(selfMember,'collection.write'))throw Error('Missing permission: collection.write');
-        if(!collectionVariablesData)throw Error('Reload Collection Variables before saving');
-        const saved=await api(`/api/workspaces/${target.workspaceId}/collections/${target.collectionId}/variables`,'PUT',
-          {version:collectionVariablesData.version,variables:normalized},token);
-        savedCollectionVariablesCache.current.set(collectionTargetKey(target),{data:saved,at:Date.now()});
-        setCollectionVariablesData(saved);
-      }
-    }finally{setCollectionVariablesBusy(false);}
-  }
-  function applyCollectionVariableSession(next){
-    if(!collectionVariablesTarget)return;
-    writeCollectionVariables(sessionCollectionVariables.current,collectionTargetKey(collectionVariablesTarget),next);
-    refreshSessionEnvironment(v=>v+1);
-  }
-  function resetCollectionVariableSession(){
-    if(!collectionVariablesTarget)return;
-    resetCollectionVariables(sessionCollectionVariables.current,collectionTargetKey(collectionVariablesTarget));
-    refreshSessionEnvironment(v=>v+1);
-  }
-  async function openCollectionRunner(target){
-    const fetchId=++runnerFetchId.current;
-    setRunnerLoading(true);
-    try{
-      const source={...target};
-      let items=[];
-      if(source.scope==='local'){
-        const collection=localCollections.find(c=>c.id===source.collectionId);
-        if(!collection)throw Error('Local collection not found');
-        items=(collection.requests||[]).map(r=>({...r,name:r.requestName||r.name}));
-      }else{
-        if(!token||!source.workspaceId)throw Error('Sign in and choose a Workspace first');
-        items=(await api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`,'GET',undefined,token))
-          .map(item=>workspaceDraft(item));
-      }
-      const saved=await readSavedCollectionVariables(source);
-      const key=collectionVariableKey(source,'',me?.id||'guest');
-      const collectionVars=readCollectionVariables(sessionCollectionVariables.current,key,savedCollectionVariableMap(saved.variables));
-      // Snapshot is intentionally private to this single run. Runner scripts never
-      // call applyScriptVariables or write Collection/Environment Cloud defaults.
-      if(fetchId!==runnerFetchId.current)return;
-      setRunnerTarget({...source,requests:items,environmentVariables:{...varsFromEnv()},
-        collectionVariables:collectionVars,transport:interceptorMode,environmentName:activeEnvironment?.name||'No environment'});
-    }catch(error){if(fetchId===runnerFetchId.current)setNotice(`Collection Runner: ${getMessage(error)}`);}
-    finally{if(fetchId===runnerFetchId.current)setRunnerLoading(false);}
-  }
-  function openRunnerForCurrentCollection(){
-    if(collectionsScope===STORAGE_WORKSPACE){
-      const col=collections.find(c=>c.id===selectedCol);
-      if(!col){setNotice('Select a Cloud Collection to run first.');return;}
-      openCollectionRunner({scope:'workspace',workspaceId:selectedWs,collectionId:col.id,name:col.name});
-    }else{
-      const source=openTabs.find(t=>t.id===activeTabRef.current)?.source;
-      const col=localCollections.find(c=>c.id===source?.collectionId)||localCollections[0];
-      if(!col){setNotice('Create or select a Local Collection first.');return;}
-      openCollectionRunner({scope:'local',collectionId:col.id,name:col.name});
-    }
-  }
-  function closeRunner(){runnerFetchId.current++;setRunnerTarget(null);}
+  function selectTab(...args) { return tabActions.selectTab(...args); }
+  function navigateConsoleEvent(...args) { return tabActions.navigateConsoleEvent(...args); }
+  function addTab(...args) { return tabActions.addTab(...args); }
+  const { importPreparedEnvironments, importCloudCollections, importRequestsAndEnvironments } = createCollectionImportActions({
+    STORAGE_LOCAL, STORAGE_WORKSPACE, activeTabRef, allowedStorageScope, api, blankDraft,
+    collectionImportSources, collections, draftsRef, getMessage, localCollections, localEnvironments,
+    me, restoreDraft, saveCloudCollections, selectEnvironmentForContext, selectedWs, setActiveTabId,
+    setCollections, setExpandedCollections, setExplorerTab, setLocalCollections, setLocalEnvironments, setOpenTabs,
+    setPage, setSelectedCol, setSidebarCollapsed, setStorageScope, setWorkspaceEnvironments, stashActive,
+    tabSequence, toLocalCollection, token, uniqueEnvironmentImports, validateLibrary, workspaceCollectionKey,
+    workspaceFetchEpoch,
+  });
+  const selfMember=membersWorkspaceId===selectedWs?currentWorkspaceMember(members,me):null;
+  const canEditCloud=canWorkspace(selfMember,'collection.write');
+  const { openDocumentation, saveDocumentation } = createDocumentationActions({
+    activeTabRef, adoptSavedRevision, api, applyLocalAction, canEditCloud, decodeStoredHeaders,
+    documentationTarget, draftsRef, encodeStoredHeaders, getMessage, localCollections, openTabs,
+    sandboxDocKey, savedRequests, selectedCol, selectedWs, sessionDocumentationOverlays, setDocBusy,
+    setDocumentation, setDocumentationTarget, setLocalCollections, setNotice, setSavedRequests, setWorkspaceCollectionDocs,
+    setWorkspaceRequestLists, token, workspaceCollectionDocs, workspaceCollectionKey, workspaceDocKey, workspaceRequestLists,
+  });
+  async function createExplorerCollection(...args) { return collectionActions.createExplorerCollection(...args); }
+  function openCollectionImport(...args) { return collectionActions.openCollectionImport(...args); }
+  async function submitCollectionImport(...args) { return collectionActions.submitCollectionImport(...args); }
+  function openBoundRequest(...args) { return collectionActions.openBoundRequest(...args); }
+  function openLocalRequest(...args) { return collectionActions.openLocalRequest(...args); }
+  function previewSavedExample(...args) { return collectionActions.previewSavedExample(...args); }
+  function openLocalExample(...args) { return collectionActions.openLocalExample(...args); }
+  function openWorkspaceExample(...args) { return collectionActions.openWorkspaceExample(...args); }
+  function downloadJson(...args) { return collectionActions.downloadJson(...args); }
+  function updateLocal(...args) { return collectionActions.updateLocal(...args); }
+  function createCollectionDraft(...args) { return collectionActions.createCollectionDraft(...args); }
+  const { collectionTargetKey, readSavedCollectionVariables, openCollectionVariables, reloadCollectionVariables, saveCollectionVariableDefaults, applyCollectionVariableSession, resetCollectionVariableSession } = createCollectionVariableActions({
+    api, canWorkspace, collectionVariableKey, collectionVariablesData, collectionVariablesFetchId, collectionVariablesTarget,
+    getMessage, localCollections, me, refreshSessionEnvironment, resetCollectionVariables, rows,
+    savedCollectionVariablesCache, selfMember, sessionCollectionVariables, setCollectionVariablesBusy, setCollectionVariablesData, setCollectionVariablesError,
+    setCollectionVariablesLoading, setCollectionVariablesTarget, setLocalCollections, token, validateCollectionVariableRows, writeCollectionVariables,
+  });
+  async function openCollectionRunner(...args) { return runnerActions.openCollectionRunner(...args); }
+  function openRunnerForCurrentCollection(...args) { return runnerActions.openRunnerForCurrentCollection(...args); }
+  function closeRunner(...args) { return runnerActions.closeRunner(...args); }
   // Switching account/workspace/storage must stop the old Runner and discard
   // its private variable snapshot, even when Cloud and Local IDs overlap.
   useEffect(()=>{runnerFetchId.current++;setRunnerTarget(null);},[token,selectedWs,storageScope,activeEnvId]);
-  function handleLocalMenu(item){
-    const {action,collectionId,requestId,folderPath}=item;
-    const collection=localCollections.find(c=>c.id===collectionId);
-    if(!collection)return;
-    if(action==='versionHistory'){
-      const tab=openTabsRef.current.find(t=>t.source?.scope==='workspace'&&t.source?.requestId===item.requestId);
-      if(tab){openRequestHistory(tab.id);return;}
-      const rows=workspaceRequestLists[workspaceCollectionKey(selectedWs,item.collectionId)]||savedRequests;
-      const request=rows.find(x=>x.id===item.requestId);
-      if(!request){setNotice('Open the Cloud request first, then select Versions.');return;}
-      loadSavedRequest({...request,collectionId:item.collectionId});
-      openRequestHistory(activeTabRef.current,{scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,requestId:item.requestId,revision:request.revision});return;
-    }
-    if(action==='variables'){openCollectionVariables({scope:'local',collectionId,name:collection.name});return;}
-    if(action==='runCollection'){openCollectionRunner({scope:'local',collectionId,name:collection.name});return;}
-    if(action==='exportCollection'){openExportChoice({kind:'collection',scope:'local',collectionId,name:collection.name});return;}
-    if(action==='documentation'){openDocumentation({scope:'local',type:requestId?'request':folderPath?.length?'folder':'collection',collectionId,requestId,folderPath,name:item.name||collection.name});return;}
-    if(action==='newRequest'){
-      createCollectionDraft('local',collectionId,folderPath||[]);
-      return;
-    }
-    if(action==='renameExample'){
-      setActionName(item.name||'');setActionDialog({scope:'local',...item});return;
-    }
-    const immediate={duplicateCollection:'duplicateCollection',duplicateFolder:'duplicateFolder',duplicateRequest:'duplicateRequest',sortCollection:'sortCollection',sortMethod:'sortCollection',sortFolder:'sortFolder',deleteExample:'deleteExample'};
-    if(immediate[action]){updateLocal({...item,type:immediate[action],sort:action==='sortMethod'?'method':'name'});return;}
-    setActionName(item.name||'');setActionDialog({scope:'local',...item});
-  }
-  function expandOrCollapseAllCollections(open) {
-    setLocalExpandAllSignal(previous => ({open, nonce: (previous?.nonce||0)+1}));
-    if(token && selectedWs && collectionsScope===STORAGE_WORKSPACE)
-      setExpandedCollections(previous => setAllWorkspaceCollections(previous,selectedWs,collections.map(c=>c.id),open));
-  }
-  function toggleWorkspaceCollectionById(id) {
-    setExpandedCollections(previous => toggleWorkspaceCollection(previous,selectedWs,id,selectedCol));
-    setSelectedCol(id);
-  }
-  function invalidateWorkspaceRequestLists(workspaceId,ids) {
-    setWorkspaceRequestLists(previous => {
-      const next={...previous};
-      for(const id of ids)delete next[workspaceCollectionKey(workspaceId,id)];
-      return next;
-    });
-  }
-  function moveLocalRequest({collectionId,requestId,targetCollectionId,targetFolderPath,beforeRequestId}){
-    updateLocal({type:'moveRequest',collectionId,requestId,targetCollectionId,targetFolderPath,beforeRequestId});
-    if(collectionId!==targetCollectionId)setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===collectionId&&t.source.requestId===requestId?
-      {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
-  }
+  function handleLocalMenu(...args) { return collectionActions.handleLocalMenu(...args); }
+  function expandOrCollapseAllCollections(...args) { return collectionActions.expandOrCollapseAllCollections(...args); }
+  function toggleWorkspaceCollectionById(...args) { return collectionActions.toggleWorkspaceCollectionById(...args); }
+  function invalidateWorkspaceRequestLists(...args) { return collectionActions.invalidateWorkspaceRequestLists(...args); }
+  function moveLocalRequest(...args) { return collectionActions.moveLocalRequest(...args); }
   const WORKSPACE_DRAG='application/x-pakpost-workspace-request';
-  async function moveWorkspaceRequest(e,targetCollectionId){
-    e.preventDefault();e.stopPropagation();
-    if(!token)return;
-    try{
-      const raw=e.dataTransfer.getData(WORKSPACE_DRAG);
-      if(!raw)return;
-      const {collectionId,requestId}=JSON.parse(raw);
-      if(collectionId===targetCollectionId)return;
-      await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests/${requestId}/move`,'PATCH',
-        {targetCollectionId},token);
-      setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.requestId===requestId?
-        {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
-      invalidateWorkspaceRequestLists(selectedWs,[collectionId,targetCollectionId]);
-      if(selectedCol===collectionId){
-        const latest=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
-        setSavedRequests(latest);
-        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:latest}));
-      }
-      setNotice('Request moved to workspace collection');
-    }catch(err){setNotice(getMessage(err));}
-  }
-  function showWorkspaceMenu(e,item){
-    e.preventDefault();e.stopPropagation();
-    const rect=e.currentTarget.getBoundingClientRect();
-    setWorkspaceMenu({...item,x:Math.max(8,Math.min(e.clientX||rect.right,window.innerWidth-245)),y:Math.max(8,Math.min(e.clientY||rect.bottom,window.innerHeight-365))});
-  }
-  function workspaceDraft(item){
-    const saved=decodeStoredHeaders(item.headersJson);
-    let fields=[];try{fields=JSON.parse(item.formFieldsJson||'[]')}catch{}
-    return {...blankDraft(),...item,rows:[...saved.headers,{...EMPTY_HEADER}],params:saved.params.length?saved.params:[{...EMPTY_HEADER}],documentation:saved.documentation,responseExamples:saved.responseExamples,...saved.auth,format:item.contentType||'application/json',
-      formFields:fields,preScript:item.preRequestScript||'',postScript:item.postResponseScript||''};
-  }
-  async function handleWorkspaceMenu(action,item){
-    setWorkspaceMenu(null);
-    if(action==='renameExample'||action==='deleteExample'){
-      setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
-    }
-    if(action==='variables'){openCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,name:collections.find(c=>c.id===item.collectionId)?.name||item.name});return;}
-    if(action==='runCollection'){openCollectionRunner({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,name:collections.find(c=>c.id===item.collectionId)?.name||item.name});return;}
-    if(action==='documentation'){openDocumentation({scope:'workspace',type:item.type==='request'?'request':'collection',collectionId:item.collectionId,requestId:item.requestId,name:item.name});return;}
-    if(action==='renameCollection'||action==='deleteCollection'||action==='renameRequest'||action==='deleteRequest'){
-      setActionName(item.name||'');setActionDialog({scope:'workspace',action,...item});return;
-    }
-    if(action==='exportCollection'){
-      openExportChoice({kind:'collection',scope:'workspace',collectionId:item.collectionId,name:collections.find(c=>c.id===item.collectionId)?.name||'Workspace collection'});return;
-    }
-    if(action==='newRequest'){
-      createCollectionDraft('workspace',item.collectionId);
-      return;
-    }
-    const base=`/api/workspaces/${selectedWs}/collections`;
-    await doAction(async()=>{
-      if(action==='sortCollection'){
-        setWorkspaceSorted(old=>({...old,[item.collectionId]:'name'}));
-        return;
-      }
-      const list=await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token);
-      if(action==='duplicateCollection'){
-        if(list.length>100)throw Error('Duplicate limit: 100 saved requests');
-        const source=collections.find(c=>c.id===item.collectionId);
-        const destination=await api(base,'POST',{name:`${source?.name||'Collection'} (copy)`},token);
-        setWorkspaceCollectionDocs(old=>({...old,[workspaceDocKey(selectedWs,destination.id)]:old[workspaceDocKey(selectedWs,item.collectionId)]||''}));
-        const variables=await readSavedCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId});
-        if(variables.variables?.length){
-          await api(`${base}/${destination.id}/variables`,'PUT',{version:0,variables:variables.variables.filter(v=>!v.isRedacted)},token);
-        }
-        for(const req of list)await api(`${base}/${destination.id}/requests`,'POST',
-          {name:req.name,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
-        setCollections(await api(base,'GET',undefined,token));return;
-      }
-      if(action==='duplicateRequest'){
-        const req=list.find(x=>x.id===item.requestId);if(!req)return;
-        await api(`${base}/${item.collectionId}/requests`,'POST',
-          {name:`${req.name} (copy)`,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript},token);
-        invalidateWorkspaceRequestLists(selectedWs,[item.collectionId]);
-        if(selectedCol===item.collectionId){
-          const latest=await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token);
-          setSavedRequests(latest);
-          setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,item.collectionId)]:latest}));
-        }
-      }
-    });
-  }
-  function synchronizeSavedExamples(scope,workspaceId,collectionId,requestId,examples){
-    // Editing an example must not discard unsaved edits to the parent request.
-    for(const tab of openTabs){
-      if(tab.source?.scope!==scope||tab.source.collectionId!==collectionId||tab.source.requestId!==requestId)continue;
-      if(scope==='workspace'&&tab.source.workspaceId!==workspaceId)continue;
-      const previous=tab.id===activeTabRef.current?snapshot():draftsRef.current[tab.id];
-      if(previous)draftsRef.current[tab.id]={...previous,responseExamples:examples};
-      if(tab.id===activeTabRef.current)setResponseExamples(examples);
-    }
-  }
-  async function renameSavedExample(target,name){
-    const {scope,collectionId,requestId,exampleId}=target;
-    if(scope==='local'){
-      const collection=localCollections.find(col=>col.id===collectionId);
-      const request=collection?.requests.find(item=>item.id===requestId);
-      if(!request)throw Error('Saved request not found');
-      const examples=renameResponseExample(request.responseExamples,exampleId,name);
-      // Dedicated action only touches saved response examples, not draft request fields.
-      const next=applyLocalAction(localCollections,{type:'renameExample',collectionId,requestId,exampleId,name});
-      setLocalCollections(next);
-      synchronizeSavedExamples(scope,'',collectionId,requestId,examples);
-      return;
-    }
-    if(!token)throw Error('Sign in to rename workspace examples');
-    const workspaceId=selectedWs;
-    const base=`/api/workspaces/${workspaceId}/collections/${collectionId}/requests`;
-    const latest=await api(base,'GET',undefined,token);
-    const request=latest.find(item=>item.id===requestId);
-    if(!request)throw Error('Saved request not found');
-    const metadata=decodeStoredHeaders(request.headersJson);
-    const examples=renameResponseExample(metadata.responseExamples,exampleId,name);
-    const saved=await api(`${base}/${requestId}`,'PUT',{
-      ...request,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples,metadata.auth)
-    },token);
-    adoptSavedRevision(saved);
-    const updated=latest.map(item=>item.id===requestId?saved:item);
-    setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(workspaceId,collectionId)]:updated}));
-    if(selectedCol===collectionId)setSavedRequests(updated);
-    synchronizeSavedExamples(scope,workspaceId,collectionId,requestId,examples);
-  }
-  async function executeActionDialog(e){
-    e.preventDefault();if(!actionDialog)return;
-    const {scope,action,collectionId,requestId,folderPath}=actionDialog;
-    const name=actionName.trim();
-    if(action.startsWith('rename')&&!name)return;
-    if(action==='renameExample'){
-      const success=await doAction(async()=>{
-        await renameSavedExample(actionDialog,name);
-        setNotice(`Renamed example to ${name}`);
-      });
-      if(success)setActionDialog(null);
-      return;
-    }
-    if(scope==='local')updateLocal({type:action,collectionId,requestId,folderPath,name});
-    else { const success=await doAction(async()=>{
-      const base=`/api/workspaces/${selectedWs}/collections/${collectionId}`;
-      if(action==='renameCollection'){
-        await api(base,'PUT',{name},token);setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));
-      }else if(action==='deleteCollection'){
-        await api(base,'DELETE',undefined,token);setCollections(old=>old.filter(c=>c.id!==collectionId));
-        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.collectionId===collectionId&&t.source.workspaceId===selectedWs?{...t,source:null}:t));
-        if(selectedCol===collectionId)setSelectedCol('');
-      }else if(action==='renameRequest'){
-        const item=(workspaceRequestLists[workspaceCollectionKey(selectedWs,collectionId)]||savedRequests).find(x=>x.id===requestId);if(!item)return;
-        const saved=await api(`${base}/requests/${requestId}`,'PUT',{...item,name},token);
-        adoptSavedRevision(saved);
-        setSavedRequests(old=>old.map(x=>x.id===requestId?saved:x));
-        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:(old[workspaceCollectionKey(selectedWs,collectionId)]||[]).map(x=>x.id===requestId?saved:x)}));
-        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,name,savedName:name,source:{...t.source,revision:saved.revision},savedFingerprint:requestFingerprint(t.id===activeTabRef.current?snapshot():draftsRef.current[t.id],name)}:t));
-      }else if(action==='deleteRequest'){
-        await api(`${base}/requests/${requestId}`,'DELETE',undefined,token);
-        setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.requestId===requestId?{...t,source:null}:t));
-        setSavedRequests(old=>old.filter(x=>x.id!==requestId));
-        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:(old[workspaceCollectionKey(selectedWs,collectionId)]||[]).filter(x=>x.id!==requestId)}));
-      }else if(action==='deleteExample'){
-        const list=await api(`${base}/requests`,'GET',undefined,token);
-        const original=list.find(x=>x.id===requestId);
-        if(!original)throw Error('Saved request not found');
-        const metadata=decodeStoredHeaders(original.headersJson);
-        const examples=metadata.responseExamples.filter(example=>example.id!==actionDialog.exampleId);
-        const saved=await api(`${base}/requests/${requestId}`,'PUT',{
-          ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,examples,metadata.auth)
-        },token);
-        adoptSavedRevision(saved);
-        const updated=list.map(req=>req.id===requestId?saved:req);
-        setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:updated}));
-        if(selectedCol===collectionId)setSavedRequests(updated);
-        const affected=openTabs.filter(tab=>tab.source?.scope==='workspace'&&tab.source.workspaceId===selectedWs&&tab.source.collectionId===collectionId&&tab.source.requestId===requestId);
-        for(const tab of affected){
-          if(draftsRef.current[tab.id])draftsRef.current[tab.id]={...draftsRef.current[tab.id],responseExamples:examples};
-          if(tab.id===activeTabRef.current)setResponseExamples(examples);
-        }
-      }
-    }); if(!success)return; }
-    setActionDialog(null);
-  }
-  function importCurlIntoCurrent(value){
-    try{
-      const parsed=parseCurl(value);
-      setMethod(parsed.method);setUrl(parsed.url);setRows(parsed.rows);setBody(parsed.body);setFormat(parsed.format);
-      setParams(parsed.params);setFormFields(parsed.formFields);setBinaryFile({name:'',base64:''});
-      setAuthType(parsed.authType);setBearerToken(parsed.bearerToken);
-      setBasicUsername(parsed.basicUsername||'');setBasicPassword(parsed.basicPassword||'');
-      setApiKeyName(parsed.apiKeyName||'X-API-Key');setApiKeyValue(parsed.apiKeyValue||'');setApiKeyIn(parsed.apiKeyIn||'header');
-      setResult(null);setPrettyResponse('');
-      setReqTab(parsed.body||parsed.formFields.some(r=>r.key)?'body':'params');
-      setOpenTabs(t=>t.map(x=>x.id===activeTabRef.current?{...x,method:parsed.method,name:parsed.name,status:undefined}:x));
-      setNotice(`cURL imported: ${parsed.method} ${parsed.url}. Review before sending.`);
-    }catch(e){setNotice(`cURL import failed: ${getMessage(e)}`);}
-  }
-  function closeTab(id){performTabAction('close',id);}
-  function performTabAction(action,id,confirmed=false){
-    setTabMenu(null);
-    if(action==='duplicate'){
-      stashActive();const source=draftsRef.current[id];if(!source)return;
-      const newId=`t${++tabSequence.current}`;
-      const cloned=JSON.parse(JSON.stringify(source));
-      draftsRef.current[newId]={...cloned,binaryFile:{name:cloned.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
-      const sourceTab=openTabs.find(t=>t.id===id);
-      const index=openTabs.findIndex(t=>t.id===id);
-      const copyName=`${sourceTab?.name||'Request'} (copy)`;
-      setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:copyName,savedName:copyName,method:cloned.method,source:null,pendingCopy:true,savedFingerprint:requestFingerprint(cloned,copyName)},...t.slice(index+1)]);
-      selectTabFromDraft(newId);return;
-    }
-    stashActive();
-    const plan=planTabClose(openTabs,id,activeTabRef.current,action);
-    if(!confirmed){
-      const unsaved=plan.removedIds.filter(tabId=>{
-        const tab=openTabs.find(t=>t.id===tabId);
-        return needsCloseConfirmation(tab,draftsRef.current[tabId]);
-      });
-      if(unsaved.length){setCloseConfirmation({action,id,unsaved});return;}
-    }
-    setCloseConfirmation(null);
-    if(plan.reset){
-      const blank=freshRequest('Untitled Request');const blankId=id;
-      draftsRef.current={[blankId]:blank};
-      setOpenTabs([{id:blankId,name:'Untitled Request',savedName:'Untitled Request',method:'GET',savedFingerprint:requestFingerprint(blank,'Untitled Request')}]);
-      selectTabFromDraft(blankId);return;
-    }
-    const removed=new Set(plan.removedIds);
-    for(const key of removed)delete draftsRef.current[key];
-    setOpenTabs(plan.remaining);
-    if(plan.nextActiveId!==activeTabRef.current)selectTabFromDraft(plan.nextActiveId);
-  }
-  function showTabContext(e,id){
-    e.preventDefault();e.stopPropagation();
-    setTabMenu({id,x:Math.max(8,Math.min(e.clientX,window.innerWidth-224)),y:Math.max(8,Math.min(e.clientY,window.innerHeight-190))});
-  }
-  function selectTabFromDraft(id) {
-    setEditingRequestName(false);
-    const next = draftsRef.current[id];
-    if (!next) return;
-    activeTabRef.current = id; setActiveTabId(id);
-    restoreDraft(next);
-
-    setPage('tester');
-  }
+  async function moveWorkspaceRequest(...args) { return collectionActions.moveWorkspaceRequest(...args); }
+  function showWorkspaceMenu(...args) { return collectionActions.showWorkspaceMenu(...args); }
+  function workspaceDraft(...args) { return collectionActions.workspaceDraft(...args); }
+  async function handleWorkspaceMenu(...args) { return collectionActions.handleWorkspaceMenu(...args); }
+  function synchronizeSavedExamples(...args) { return collectionActions.synchronizeSavedExamples(...args); }
+  async function renameSavedExample(...args) { return collectionActions.renameSavedExample(...args); }
+  async function executeActionDialog(...args) { return collectionActions.executeActionDialog(...args); }
+  function importCurlIntoCurrent(...args) { return tabActions.importCurlIntoCurrent(...args); }
+  function closeTab(...args) { return tabActions.closeTab(...args); }
+  function performTabAction(...args) { return tabActions.performTabAction(...args); }
+  function showTabContext(...args) { return tabActions.showTabContext(...args); }
+  function selectTabFromDraft(...args) { return tabActions.selectTabFromDraft(...args); }
   useEffect(() => { localStorage.setItem('pakpost_split', split); setSplitPercent(50); }, [split]);
   function onSplitterMove(e) {
     if (!draggingRef.current || !panesRef.current) return;
@@ -1249,32 +457,8 @@ export default function App() {
     draggingRef.current = false;
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
-  function loadSavedRequest(item) {
-    openBoundRequest(workspaceDraft(item),
-      {scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId||selectedCol,requestId:item.id,revision:item.revision});
-  }
-  async function resetSandboxRequest() {
-    const tab=openTabs.find(t=>t.id===activeTabRef.current);
-    if(!isReadOnlyCloudTab(tab,canEditCloud,selectedWs)||!tab?.source?.requestId)return;
-    if(tab.source.workspaceId!==selectedWs){setNotice("Switch to the request's workspace before resetting its sandbox.");return;}
-    const source=tab.source;
-    const requestTabId=tab.id;
-    const originalToken=token;
-    const currentWorkspace=selectedWs;
-    try {
-      const path=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`;
-      const requests=await api(path,'GET',undefined,originalToken);
-      if(originalToken!==currentTokenRef.current||currentWorkspace!==selectedWs)throw Error('Workspace changed. Open the Cloud request again.');
-      const saved=requests.find(r=>r.id===source.requestId);
-      if(!saved)throw Error('Cloud request no longer exists.');
-      const baseline={...freshRequest(saved.name),...workspaceDraft(saved),result:null,scriptLog:[],scriptTests:[],scriptError:'',resTab:'body'};
-      draftsRef.current[requestTabId]=baseline;
-      sessionDocumentationOverlays.current.delete(sandboxDocKey({...source,type:'request'}));
-      setOpenTabs(tabs=>tabs.map(t=>t.id===requestTabId?{...tabSaved(t,{...source,revision:saved.revision},baseline,saved.name),status:undefined}:t));
-      if(activeTabRef.current===requestTabId)restoreDraft(baseline);
-      setNotice('Sandbox reset to the latest Cloud version. No shared data was changed.');
-    }catch(error){setNotice(`Could not reset sandbox: ${getMessage(error)}`);}
-  }
+  function loadSavedRequest(...args) { return tabActions.loadSavedRequest(...args); }
+  async function resetSandboxRequest(...args) { return tabActions.resetSandboxRequest(...args); }
 
 
   useEffect(()=>{if(!token&&envScope===STORAGE_WORKSPACE)setStorageScope(STORAGE_LOCAL);},[token,envScope]);
@@ -1337,97 +521,14 @@ export default function App() {
     source:activeEnvironment?`${envScope===STORAGE_WORKSPACE?`Cloud · ${workspaces.find(w=>w.id===selectedWs)?.name||'Workspace'}`:'Local · Browser'} / ${activeEnvironment.name}${envScope===STORAGE_WORKSPACE&&!canWriteEnvironment?' · Session-only edits':''}`:'No active environment',
     onEditVariable:activeEnvironment?quickEditVariable:null,
     onOpenEnvironments:()=>setExplorerTab('environments')};
-  function updateStorageScope(scope){
-    setStorageScope(allowedStorageScope(!!token,scope));
-    // Keep each context's selection while switching Local, Cloud and workspaces.
-    setCreatingLocalCollection(false);
-  }
-  async function importEnvironmentFile(sourceText,requestedDestination){
-    let doc;
-    try{doc=JSON.parse(sourceText)}catch{throw Error('Invalid JSON environment file. Use Postman, Hoppscotch or Insomnia v4 JSON (not YAML).');}
-    const imported=parseEnvironmentDocument(doc);
-    if(!imported?.length)throw Error('No supported environments found. Choose a Postman, Hoppscotch or Insomnia v4 JSON environment export.');
-    const destination=allowedStorageScope(!!token,requestedDestination);
-    const count=await importPreparedEnvironments(imported,destination);
-    setNotice(`Imported ${count} environment(s) into ${destination===STORAGE_WORKSPACE?'Cloud · Neon':'Local · Browser'}.`);
-  }
-  async function createEnvironment(name){
-    if(envScope==='workspace'){
-      if(!selectedWs||!token)throw new Error('Sign in and choose a workspace');
-      const env=await api(`/api/workspaces/${selectedWs}/environments`,'POST',{name},token);
-      setWorkspaceEnvironments(v=>[...v,env]);setActiveEnvId(env.id);return env;
-    }else{const env={id:crypto.randomUUID(),name,variables:[]};setLocalEnvironments(v=>[...v,env]);setActiveEnvId(env.id);return env;}
-  }
-  async function duplicateEnvironment(source){
-    let nextName=`${source.name} (copy)`;let sequence=2;
-    while(currentEnvironments.some(x=>x.name.toLowerCase()===nextName.toLowerCase()))nextName=`${source.name} (copy ${sequence++})`;
-    const created=await createEnvironment(nextName);
-    // A failed update is not silently treated as a successful duplicate.
-    await persistEnvironment({...created,name:nextName,variables:(source.variables||[]).map(v=>({...v}))});
-    setNotice(`Duplicated ${source.name}`);
-    return created;
-  }
-  function openExportChoice(choice){
-    setExportFormat('postman');setExportIncludeSecrets(false);setExportChoice(choice);
-  }
-  async function confirmExport(){
-    if(!exportChoice)return;
-    try{
-      // Export formats (Postman/OpenAPI/Insomnia) are not required to open
-      // PakPost or send a request; load the converters only when exporting.
-      const {exportCollectionByFormat,exportEnvironmentByFormat,exportFileName}=await import('./features/exportFormats.js');
-      const {kind,scope,collectionId,environment,name}=exportChoice;
-      if(kind==='environment'){
-        downloadJson(exportEnvironmentByFormat(environment,{format:exportFormat,includeSecrets:exportIncludeSecrets}),exportFileName(name,exportFormat,'environment'));
-      }else{
-        let drafts,localCollection=null;
-        if(scope==='local'){
-          localCollection=localCollections.find(c=>c.id===collectionId);
-          if(!localCollection)throw new Error('Collection no longer exists');
-          drafts=localCollection.requests||[];
-        }else{
-          const list=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
-          drafts=list.map(workspaceDraft);
-        }
-        const documentation=scope==='workspace'?workspaceCollectionDocs[workspaceDocKey(selectedWs,collectionId)]||'':'';
-        const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection,documentation});
-        if(scope==='workspace'&&exportFormat==='postman'){
-          const cloudVars=await readSavedCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId},{reload:true});
-          output.variable=(cloudVars.variables||[]).map(v=>({key:v.key,value:v.isRedacted||v.isSecret&&!exportIncludeSecrets?'':v.value,type:v.isSecret?'secret':'string'}));
-        }
-        downloadJson(output,exportFileName(name,exportFormat));
-      }
-      setNotice(`Exported ${name} as ${exportFormat==='openapi'?'OpenAPI 3.1':exportFormat==='insomnia'?'Insomnia v4':'Postman'}`);setExportChoice(null);
-    }catch(e){setNotice(`Export failed: ${getMessage(e)}`);}
-  }
-  async function persistEnvironment(env){
-    if(envScope==='workspace'){
-      const saved=await api(`/api/workspaces/${selectedWs}/environments/${env.id}`,'PUT',{name:env.name,variables:env.variables},token);
-      setWorkspaceEnvironments(v=>v.map(x=>x.id===saved.id?saved:x));
-    }else setLocalEnvironments(v=>v.map(x=>x.id===env.id?env:x));
-    setNotice('Environment saved');
-  }
-  async function deleteEnvironment(id){
-    if(envScope==='workspace'){
-      await api(`/api/workspaces/${selectedWs}/environments/${id}`,'DELETE',undefined,token);
-      setWorkspaceEnvironments(v=>v.filter(x=>x.id!==id));
-    }else setLocalEnvironments(v=>v.filter(x=>x.id!==id));
-    setActiveEnvId('');
-  }
-  async function applyScriptVariables(values,runEnvironment){
-    const {environment,scope,sessionKey,canWrite,initialValues}=runEnvironment;
-    if(!environment||JSON.stringify(initialValues)===JSON.stringify(values))return;
-    if(scope===STORAGE_WORKSPACE&&!canWrite){
-      // QA, Writer and Developer (without environment.write): pm.environment.set/unset
-      // updates only a personal in-memory overlay; never calls the Cloud PUT endpoint.
-      rememberSessionValues(sessionKey,environment,values);
-      return;
-    }
-    const old=environment.variables;
-    const merged=Object.entries(values).map(([key,value])=>({key,value:String(value),isSecret:old.find(x=>x.key===key)?.isSecret||isSensitiveVariable(key)}));
-    // This preserves the existing persistence behavior for Local and authorized Cloud editors.
-    await persistEnvironment({...environment,variables:merged});
-  }
+  const { updateStorageScope, importEnvironmentFile, createEnvironment, duplicateEnvironment, openExportChoice, confirmExport, persistEnvironment, deleteEnvironment, applyScriptVariables } = createEnvironmentActions({
+    STORAGE_WORKSPACE, allowedStorageScope, api, currentEnvironments, documentation, downloadJson,
+    envScope, exportChoice, exportFormat, exportIncludeSecrets, getMessage, importPreparedEnvironments,
+    isSensitiveVariable, localCollections, parseEnvironmentDocument, readSavedCollectionVariables, rememberSessionValues, selectedWs,
+    setActiveEnvId, setCreatingLocalCollection, setExportChoice, setExportFormat, setExportIncludeSecrets, setLocalEnvironments,
+    setNotice, setStorageScope, setWorkspaceEnvironments, token, workspaceCollectionDocs, workspaceDocKey,
+    workspaceDraft,
+  });
   const selectFormat=(v)=>{setFormat(v);};
   async function beautifyBody(){
     try{if(languageFromMime(format)==='json'&&hasJsonComments(body))throw Error('Remove JSON comments before Beautify (to avoid losing them).');setBody(await formatSource(body,languageFromMime(format)));setNotice('Body formatted');}
@@ -1494,59 +595,13 @@ export default function App() {
     restoreDraft(planned.activeDraft);
     setNotice('Signed out. Your Local requests remain available.');
   }
-  function requiresLogin(target = 'workspace') {
-    if (token) return true;
-    setAuthMode('login'); setAuthError(''); setAuthOpen(true);
-    setNotice(`Sign in to access ${target}. The request tester is always available.`);
-    return false;
-  }
-  function navigate(target) {
-    if (target !== 'tester' && !requiresLogin(target)) return;
-    setPage(target);
-    if (target === 'workspace') loadWorkspaces();
-  }
-  function completeSignIn(data) {
-    sessionStorage.setItem('pakpost_token', data.accessToken);
-    setToken(data.accessToken);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
-    setAuthForm({ displayName: '', email: '', password: '' });
-    setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
-  }
-  async function submitAuth(e) {
-    e.preventDefault(); setAuthBusy(true); setAuthError('');
-    try {
-      const path = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-      const payload = authMode === 'register' ? authForm : { email: authForm.email, password: authForm.password };
-      completeSignIn(await api(path, 'POST', payload));
-    } catch (e) { setAuthError(getMessage(e)); }
-    finally { setAuthBusy(false); }
-  }
-  async function submitGoogleAuth(credential) {
-    if (authBusy) return;
-    setAuthBusy(true);setAuthError('');
-    try { completeSignIn(await api('/api/auth/google','POST',{credential})); }
-    catch(e) {setAuthError(getMessage(e));}
-    finally {setAuthBusy(false);}
-  }
-  async function submitGoogleLink(credential) {
-    if (authBusy || !token || !googleLinkPassword) return;
-    setAuthBusy(true);setGoogleLinkError('');
-    try {
-      await api('/api/auth/google/link','POST',{credential,password:googleLinkPassword},token);
-      setGoogleLinked(true);setGoogleLinkOpen(false);setGoogleLinkPassword('');setNotice('Google account connected. You can sign in with Google next time.');
-    } catch(e) {setGoogleLinkError(getMessage(e));}
-    finally {setAuthBusy(false);}
-  }
-  async function loadWorkspaces(auth = token) {
-    if (!auth) return;
-    try {
-      const data = await api('/api/workspaces', 'GET', undefined, auth);
-      // Logout or account switch may happen before this request resolves.
-      if(auth!==currentTokenRef.current)return;
-      setWorkspaces(data);
-      api('/api/workspaces/capabilities','GET',undefined,auth).then(cap=>{if(auth===currentTokenRef.current)setCanCreateWorkspace(!!cap.canCreateWorkspace)}).catch(()=>setCanCreateWorkspace(false));
-      setSelectedWs(current => data.some(x => x.id === current) ? current : (data[0]?.id || ''));
-    } catch (e) { if(auth===currentTokenRef.current)setNotice(getMessage(e)); }
-  }
+  const { requiresLogin, navigate, completeSignIn, submitAuth, submitGoogleAuth, submitGoogleLink, loadWorkspaces } = createAuthActions({
+    STORAGE_WORKSPACE, api, authBusy, authForm, authMode, currentTokenRef,
+    getMessage, googleLinkPassword, setAuthBusy, setAuthError, setAuthForm, setAuthMode,
+    setAuthOpen, setCanCreateWorkspace, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, setGoogleLinked,
+    setMe, setNotice, setPage, setSelectedWs, setStorageScope, setToken,
+    setWorkspaceEnvironmentResult, setWorkspaces, token,
+  });
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
   useWorkspaceRealtimeLifecycle({
     enabled: collectionsScope===STORAGE_WORKSPACE,
@@ -1668,8 +723,6 @@ export default function App() {
   },[url,openTabs,localCollections,workspaceRequestLists,localEnvironments,workspaceEnvironments]);
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
-  const selfMember=membersWorkspaceId===selectedWs?currentWorkspaceMember(members,me):null;
-  const canEditCloud=canWorkspace(selfMember,'collection.write');
   const canManageMembers=canWorkspace(selfMember,'member.manage');
   useEffect(()=>{
     let active=true;
@@ -1680,39 +733,9 @@ export default function App() {
       .catch(e=>{if(active&&workspaceId===selectedWorkspaceRef.current)setInvitationError(getMessage(e))});
     return()=>{active=false};
   },[token,selectedWs,canManageMembers]);
-  async function inviteMember(e){
-    e.preventDefault();
-    if(invitationBusy||!inviteEmail.trim()||!inviteRoles.length||!selectedWs||!canManageMembers)return;
-    const workspaceId=selectedWs;const auth=token;
-    setInvitationBusy(true);setInvitationError('');
-    try{
-      await api(`/api/workspaces/${workspaceId}/invitations`,'POST',{email:inviteEmail.trim(),roles:inviteRoles},auth);
-      const all=await api(`/api/workspaces/${workspaceId}/invitations`,'GET',undefined,auth);
-      if(workspaceId!==selectedWorkspaceRef.current||auth!==currentTokenRef.current)return;
-      setInvitationRows(all);setInviteOpen(false);setInviteEmail('');setInviteRoles(['Developer']);setNotice('Invitation email sent.');
-    }catch(err){if(workspaceId===selectedWorkspaceRef.current)setInvitationError(getMessage(err));}
-    finally{setInvitationBusy(false);}
-  }
-  async function actOnInvitation(invitation,operation){
-    if(invitationBusy||!selectedWs||!canManageMembers)return;
-    const workspaceId=selectedWs;const auth=token;
-    setInvitationBusy(true);setInvitationError('');
-    try{
-      await api(`/api/workspaces/${workspaceId}/invitations/${invitation.id}${operation==='resend'?'/resend':''}`,operation==='resend'?'POST':'DELETE',undefined,auth);
-      const all=await api(`/api/workspaces/${workspaceId}/invitations`,'GET',undefined,auth);
-      if(workspaceId===selectedWorkspaceRef.current&&auth===currentTokenRef.current){setInvitationRows(all);setNotice(operation==='resend'?'Invitation resent':'Invitation revoked');}
-    }catch(err){if(workspaceId===selectedWorkspaceRef.current)setInvitationError(getMessage(err));}
-    finally{setInvitationBusy(false);}
-  }
-  async function acceptInvitation(){
-    if(!token||!inviteToken||acceptingInvite)return;
-    setAcceptingInvite(true);setInviteAcceptError('');
-    try{
-      const workspace=await api('/api/invitations/accept','POST',{token:inviteToken},token);
-      setInviteToken('');await loadWorkspaces(token);setSelectedWs(workspace.id);setPage('workspace');setWsTab('members');setNotice('Workspace invitation accepted');
-    }catch(err){setInviteAcceptError(getMessage(err));}
-    finally{setAcceptingInvite(false);}
-  }
+  async function inviteMember(...args) { return invitationActions.inviteMember(...args); }
+  async function actOnInvitation(...args) { return invitationActions.actOnInvitation(...args); }
+  async function acceptInvitation(...args) { return invitationActions.acceptInvitation(...args); }
 
   const canManageTeams=canWorkspace(selfMember,'team.manage');
   const canAssignRoles=canWorkspace(selfMember,'role.assign');
@@ -1722,219 +745,110 @@ export default function App() {
   const activeTeam = teams.find(x => x.id === selectedTeam);
   const headerCount = rows.filter(x => x.key.trim()&&isEnabled(x)).length;
   const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()&&isEnabled(x)).map(x => [x.key.trim(), x.value]));
-  async function sendRequest() {
-    if(!url.trim()){setNotice('Enter a request URL first');return;}
-    if(loading)return;
-    const tabId=activeTabRef.current;
-    const executionId=globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const startedAt=performance.now();
-    const trace=(level,phase,message,details={})=>appendConsoleEvent({executionId,tabId,level,phase,message,...details});
-    trace('info','request','Execution started',{method});
-    stashActive();setLoading(true);setResult(null);setPrettyResponse('');setResponsePretty(true);
-    setScriptError('');setScriptDiagnostic(null);setScriptJump(null);setScriptLog([]);setScriptTests([]);
-    // Freeze the account, workspace, environment and Collection for this Send.
-    const environmentValues=varsFromEnv();
-    const runToken=currentTokenRef.current;
-    const runEnvironment={environment:activeEnvironment,scope:envScope,sessionKey:activeSessionEnvironmentKey,
-      canWrite:canWriteEnvironment,initialValues:{...environmentValues}};
-    const sourceAtSend=openTabsRef.current.find(t=>t.id===tabId)?.source;
-    const collectionKey=collectionVariableKey(sourceAtSend,tabId,me?.id||'guest');
-    const collectionValues=readCollectionVariables(sessionCollectionVariables.current,collectionKey);
-    try {
-      const executed=await executeWorkbenchRequest({
-        request:{method,url,rows,body,format,formFields,binaryFile,preScript,postScript,interceptorMode},
-        environmentValues,collectionValues,trace,
-        loadCollectionValues:sourceAtSend?.collectionId?async()=>{
-          const savedData=await readSavedCollectionVariables(sourceAtSend);
-          return readCollectionVariables(sessionCollectionVariables.current,collectionKey,savedCollectionVariableMap(savedData.variables));
-        }:null,
-        // In-flight responses from a previous account must never restore data
-        // or write variables after logout/account switch.
-        isCurrent:()=>runToken===currentTokenRef.current,
-        saveCollectionValues:values=>{if(runToken===currentTokenRef.current)writeCollectionVariables(sessionCollectionVariables.current,collectionKey,values)},
-        saveEnvironmentValues:values=>runToken===currentTokenRef.current?applyScriptVariables(values,runEnvironment):undefined,
-        buildOutgoing:vars=>buildOutgoing(vars),
-        dispatch:command=>{
-          if(runToken!==currentTokenRef.current)throw Error('Request cancelled: account changed');
-          return interceptorMode==='proxy'?api('/api/proxy/send','POST',command):dispatchRequest(command,interceptorMode);
-        },
-      });
-      if(runToken!==currentTokenRef.current)return;
-      const {response:r,command,logs,tests,scriptError,scriptDiagnostic}=executed;
-      draftsRef.current[tabId]={...draftsRef.current[tabId],result:r,resTab:'body',scriptLog:logs,scriptTests:tests,scriptError,scriptDiagnostic};
-      if(tabId===activeTabRef.current){setResult(r);setResTab('body');setScriptLog(logs);setScriptTests(tests);setScriptError(scriptError);setScriptDiagnostic(scriptDiagnostic);}
-      setOpenTabs(t=>t.map(x=>x.id===tabId?{...x,status:r.statusCode}:x));
-      if(!isReadOnlyCloudTab(openTabsRef.current.find(t=>t.id===tabId),canEditCloud,selectedWs))
-        setRecent(old=>[{method,url:command.url,status:r.statusCode,elapsed:r.elapsedMs,body,rows:rows.map(x=>({...x}))},...old].slice(0,20));
-    }catch(e){
-      if(runToken!==currentTokenRef.current)return;
-      trace('error','request','Execution failed',{errorCode:e?.name||'Error'});
-      const error={error:getMessage(e)};
-      const diagnostic=e?.scriptDiagnostic||null;
-      const logs=e?.executionLogs||[];
-      const tests=e?.executionTests||[];
-      draftsRef.current[tabId]={...draftsRef.current[tabId],result:error,scriptLog:logs,scriptTests:tests,scriptError:getMessage(e),scriptDiagnostic:diagnostic};
-      if(tabId===activeTabRef.current){setResult(error);setScriptLog(logs);setScriptTests(tests);setScriptError(getMessage(e));setScriptDiagnostic(diagnostic);}
-    }finally{trace('info','request','Execution finished',{elapsedMs:Math.round(performance.now()-startedAt)});setLoading(false)}
-  }
+  async function sendRequest(...args) { return requestActions.sendRequest(...args); }
 
   const doAction = async fn => {
     setBusyAction(true);
     try { await fn(); return true; } catch (e) { setNotice(getMessage(e)); return false; } finally { setBusyAction(false); }
   };
-  function loadRequest(item) {
-    if (Array.isArray(item.rows)) addTab({ ...item, name: item.name || 'From history' });
-    else loadSavedRequest(item);
-  }
-
-  const activeSource=()=>openTabs.find(t=>t.id===activeTabRef.current)?.source;
-  const currentSavePayload=(name,examples=responseExamples)=>({name,method,url,headersJson:encodeStoredHeaders(rows,params,documentation,examples,currentAuth()),body,
-    bodyMode:bodyFormat(format).mode,contentType:format,
-    formFieldsJson:JSON.stringify(formFields.map(({key,value,fileName,contentType})=>({key,value,fileName,contentType}))),
-    preRequestScript:preScript,postResponseScript:postScript});
-  function openSaveAs(destination=null){
-    const origin=destination||activeSource();
-    setSaveScope(origin?.scope==='workspace'&&!canEditCloud?'local':origin?.scope||'local');
-    setSaveLocalCollection(origin?.scope==='local'?origin.collectionId:localCollections[0]?.id||'');
-    setSaveWs(origin?.workspaceId||selectedWs||workspaces[0]?.id||'');
-    setSaveCollection(origin?.scope==='workspace'?origin.collectionId:selectedCol||'');
-    setSaveName(activeRequestName==='Untitled Request'?`${method} ${url||'request'}`:activeRequestName);
-    setSaveOpen(true);
-  }
-  async function saveCurrent(){
-    const origin=activeSource();
-    if(origin?.scope==='workspace' && (!canEditCloud || origin.workspaceId!==selectedWs)){
-      setNotice('Sandbox request: Cloud save is disabled. Use Save as… to create a Local copy.');return;
-    }
-    if(!origin){openSaveAs();return;}
-    const name=activeRequestName.trim();
-    if(!name){setNotice('Request name cannot be empty');return;}
-    const tabId=activeTabRef.current;
-    if(remoteAlerts[tabId]){showConflictDialog(tabId);return;}
-    const savedDraft=snapshot();
-    await doAction(async()=>{
-      let savedSource={...origin};
-      if(origin.scope==='local'){
-        if(origin.pending){
-          const next=createLocalSavedRequest(localCollections,origin.collectionId,
-            {...savedDraft,name,folderPath:origin.folderPath||[]});
-          setLocalCollections(next.collections);
-          savedSource={scope:'local',collectionId:origin.collectionId,requestId:next.request.id};
-        }else setLocalCollections(updateLocalRequest(localCollections,origin.collectionId,origin.requestId,{...savedDraft,name}));
-      }else{
-        if(!token)throw Error('Sign in to save workspace requests');
-        if(!url.trim())throw Error('Request URL is required. Please enter a URL before saving.');
-        const savedPayload=currentSavePayload(name);
-        if(origin.pending){
-          const saved=await createWorkspaceRequest(origin.workspaceId,origin.collectionId,savedPayload,token);
-          savedSource={scope:'workspace',workspaceId:origin.workspaceId,collectionId:origin.collectionId,requestId:saved.id,revision:saved.revision};
-        }else{
-          try{
-            const saved=await updateWorkspaceRequest(origin.workspaceId,origin.collectionId,origin.requestId,{...savedPayload,revision:origin.revision},token);
-            savedSource={...origin,revision:saved.revision};
-          }catch(error){
-            if(error.status===409||error.status===428){
-              setRemoteAlerts(old=>({...old,[tabId]:{kind:'conflict',revision:null}}));
-              showConflictDialog(tabId);return;
-            }
-            throw error;
-          }
-        }
-        invalidateWorkspaceRequestLists(origin.workspaceId,[origin.collectionId]);
-        if(origin.workspaceId===selectedWs){
-          // Saving has already completed; a list refresh failure must not turn it into an unsaved draft.
-          try {
-            const latest=await getWorkspaceRequests(origin.workspaceId,origin.collectionId,token);
-            setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(origin.workspaceId,origin.collectionId)]:latest}));
-            if(origin.collectionId===selectedCol)setSavedRequests(latest);
-          }catch{ /* The next explorer fetch can retry. */ }
-        }
-      }
-      // The request now belongs to a real saved entity; later Save calls update that same ID.
-      setOpenTabs(tabs=>tabs.map(t=>t.id===tabId?tabSaved(t,savedSource,savedDraft,name):t));
-      setRemoteAlerts(old=>{if(!old[tabId])return old;const next={...old};delete next[tabId];return next;});
-      setNotice(origin.pending?`Created ${name} in collection`:`Saved changes to ${name}`);
-    });
-  }
-  async function saveRequest(e){
-    e.preventDefault();
-    if(!saveName.trim())return;
-    const savedDraft=snapshot();
-    const tabId=activeTabRef.current;
-    await doAction(async()=>{
-      let source;
-      if(saveScope==='local'){
-        const next=createLocalSavedRequest(localCollections,saveLocalCollection,{...savedDraft,name:saveName});
-        setLocalCollections(next.collections);
-        source={scope:'local',collectionId:saveLocalCollection,requestId:next.request.id};
-      }else{
-        if(!token)throw Error('Sign in to save to workspace');
-        if(!canEditCloud||saveWs!==selectedWs)throw Error('Cloud destination is not writable in your current workspace.');
-        const saved=await createWorkspaceRequest(saveWs,saveCollection,currentSavePayload(saveName),token);
-        source={scope:'workspace',workspaceId:saveWs,collectionId:saveCollection,requestId:saved.id,revision:saved.revision};
-        invalidateWorkspaceRequestLists(saveWs,[saveCollection]);
-        if(saveWs===selectedWs){
-          try {
-            const latest=await getWorkspaceRequests(saveWs,saveCollection,token);
-            setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(saveWs,saveCollection)]:latest}));
-            if(saveCollection===selectedCol)setSavedRequests(latest);
-          }catch{ /* Save succeeded; keep the source ID and retry the list later. */ }
-        }
-      }
-      setOpenTabs(ts=>ts.map(t=>t.id===tabId?tabSaved(t,source,savedDraft,saveName):t));
-      setSaveOpen(false);setNotice(`Saved ${saveName}`);
-    });
-  }
-
-  function openSaveExampleDialog(){
-    if(!result||result.error)return;
-    setExampleName(suggestExampleName(result));
-    setExampleDescription('');
-    setSaveExampleOpen(true);
-  }
-  async function persistResponseExamples(nextExamples){
-    const source=activeSource();
-    if(source?.scope==='local'&&!source.pending){
-      setLocalCollections(old=>applyLocalAction(old,{type:'saveExamples',collectionId:source.collectionId,requestId:source.requestId,responseExamples:nextExamples}));
-    }
-    if(source?.scope==='workspace'&&!source.pending&&!isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabRef.current),canEditCloud,selectedWs)){
-      if(!token)throw Error('Sign in to update workspace examples');
-      const base=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`;
-      const latest=await api(base,'GET',undefined,token);
-      const original=latest.find(request=>request.id===source.requestId);
-      if(!original)throw Error('Saved request not found');
-      const metadata=decodeStoredHeaders(original.headersJson);
-      const saved=await api(`${base}/${source.requestId}`,'PUT',{
-        ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,nextExamples,metadata.auth)
-      },token);
-      adoptSavedRevision(saved);
-    const updated=latest.map(request=>request.id===saved.id?saved:request);
-      setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(source.workspaceId,source.collectionId)]:updated}));
-      if(source.workspaceId===selectedWs&&source.collectionId===selectedCol)setSavedRequests(updated);
-    }
-    const tabId=activeTabRef.current;
-    draftsRef.current[tabId]={...snapshot(),responseExamples:nextExamples};
-    setResponseExamples(nextExamples);
-  }
-  async function saveResponseExample(e){
-    e?.preventDefault?.();
-    if(!result||result.error)return;
-    const name=(exampleName||'').trim()||suggestExampleName(result);
-    const example=createResponseExample(result,{name,description:exampleDescription});
-    const nextExamples=upsertResponseExample(responseExamples,example);
-    const source=activeSource();
-    const success=await doAction(async()=>{
-      await persistResponseExamples(nextExamples);
-      const sandbox=isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabRef.current),canEditCloud,selectedWs);
-      setNotice(sandbox?`Example ${name} added to sandbox only. Cloud is unchanged.`:
-        !source||source.pending?`Added ${name} to draft. Save the request to keep it in a collection.`:`Saved example ${name}`);
-    });
-    if(success)setSaveExampleOpen(false);
-  }
-
+  const activeRequestName = openTabs.find(t => t.id === activeTabId)?.name || 'Untitled Request';
+  const { loadRequest, activeSource, currentSavePayload, openSaveAs, saveCurrent, saveRequest, openSaveExampleDialog, persistResponseExamples, saveResponseExample } = createRequestSaveActions({
+    activeRequestName, activeTabRef, addTab, adoptSavedRevision, api, applyLocalAction,
+    body, bodyFormat, canEditCloud, createLocalSavedRequest, createResponseExample, createWorkspaceRequest,
+    currentAuth, decodeStoredHeaders, doAction, documentation, draftsRef, encodeStoredHeaders,
+    exampleDescription, exampleName, formFields, format, getWorkspaceRequests, invalidateWorkspaceRequestLists,
+    isReadOnlyCloudTab, loadSavedRequest, localCollections, method, openTabs, params,
+    postScript, preScript, remoteAlerts, responseExamples, result, rows,
+    saveCollection, saveLocalCollection, saveName, saveScope, saveWs, selectedCol,
+    selectedWs, setExampleDescription, setExampleName, setLocalCollections, setNotice, setOpenTabs,
+    setRemoteAlerts, setResponseExamples, setSaveCollection, setSaveExampleOpen, setSaveLocalCollection, setSaveName,
+    setSaveOpen, setSaveScope, setSaveWs, setSavedRequests, setWorkspaceRequestLists, showConflictDialog,
+    snapshot, suggestExampleName, tabSaved, token, updateLocalRequest, updateWorkspaceRequest,
+    upsertResponseExample, url, workspaceCollectionKey, workspaces,
+  });
+  // Realtime operations use the same Workbench state as the old inline handlers.
+  const realtimeActions = createRealtimeActions({
+    activeTabRef, currentTokenRef, draftsRef, expandedCollections, getWorkspaceCollections, getWorkspaceRequests,
+    openTabsRef, realtimeHandlerRef, realtimeQueueRef, realtimeTimerRef, reconcileRequestTabs, restoreDraft,
+    selectedColRef, selectedWorkspaceRef, setCollections, setOpenTabs, setRemoteAlerts, setSavedRequests,
+    setSelectedCol, setWorkspaceRequestLists, snapshotRef, synchronizeWorkspaceChanges, workspaceDraft, workspaceRequestLists,
+  });
+  // History operations use the same Workbench state as the old inline handlers.
+  const historyActions = createRequestHistoryActions({
+    activeTabRef, api, applyFieldMerge, canEditCloud, conflictDialog, currentTokenRef,
+    draftsRef, freshRequest, getMessage, localCollections, openSaveAs, openTabsRef,
+    reconcileCloudRequests, restoreDraft, rows, selectTab, selectedColRef, selectedWorkspaceRef,
+    setConflictDialog, setCurrentRequestName, setNotice, setOpenTabs, setRemoteAlerts, setSavedRequests,
+    setVersionDialog, setWorkspaceRequestLists, snapshotRef, tabSaved, token, versionDialog,
+    workspaceCollectionKey, workspaceDraft,
+  });
+  // Tabs operations use the same Workbench state as the old inline handlers.
+  const tabActions = createRequestTabActions({
+    EMPTY_HEADER, activeTabRef, api, binaryFile, body, canEditCloud,
+    cancelledRequestNameRef, currentAuth, currentTokenRef, documentation, draftsRef, formFields,
+    format, freshRequest, getMessage, isReadOnlyCloudTab, method, needsCloseConfirmation,
+    openBoundRequest, openTabs, originalRequestNameRef, params, parseCurl, planTabClose,
+    postScript, preScript, prettyResponse, reqTab, requestFingerprint, resTab,
+    responseExamples, responsePretty, result, rows, sandboxDocKey, sanitizeResponseExamples,
+    scriptDiagnostic, scriptError, scriptLog, scriptTests, selectedCol, selectedWs,
+    sessionDocumentationOverlays, setActiveTabId, setApiKeyIn, setApiKeyName, setApiKeyValue, setAuthType,
+    setBasicPassword, setBasicUsername, setBearerToken, setBinaryFile, setBody, setCloseConfirmation,
+    setConsoleOpen, setDocumentation, setEditingRequestName, setFormFields, setFormat, setMethod,
+    setNotice, setOpenTabs, setPage, setParams, setPostScript, setPreScript,
+    setPrettyResponse, setReqTab, setResTab, setResponseExamples, setResponsePretty, setResult,
+    setRows, setScriptDiagnostic, setScriptError, setScriptJump, setScriptLog, setScriptTests,
+    setTabMenu, setUrl, tabSaved, tabSequence, token, url,
+    workspaceDraft,
+  });
+  // Collections operations use the same Workbench state as the old inline handlers.
+  const collectionActions = createCollectionActions({
+    EMPTY_HEADER, STORAGE_LOCAL, STORAGE_WORKSPACE, WORKSPACE_DRAG, actionDialog, actionName,
+    activeSource, activeTabRef, addTab, adoptSavedRevision, allowedStorageScope, api,
+    applyLocalAction, blankDraft, busyAction, canEditCloud, collectionImportBusy, collectionImportDestination,
+    collectionImportFile, collectionImportSources, collections, collectionsScope, decodeStoredHeaders, doAction,
+    draftsRef, encodeStoredHeaders, exampleToResult, findBoundTab, freshRequest, getMessage,
+    importRequestsAndEnvironments, loadSavedRequest, localCollectionName, localCollections, openCollectionRunner, openCollectionVariables,
+    openDocumentation, openExportChoice, openRequestHistory, openTabs, openTabsRef, parseImportText,
+    pendingSource, readSavedCollectionVariables, renameResponseExample, requestFingerprint, responseExamples, restoreDraft,
+    rows, sanitizeResponseExamples, savedRequests, selectTab, selectedCol, selectedWs,
+    setActionDialog, setActionName, setActiveTabId, setAllWorkspaceCollections, setCollectionImportBusy, setCollectionImportDestination,
+    setCollectionImportError, setCollectionImportFile, setCollectionImportOpen, setCollections, setCreatingLocalCollection, setExpandedCollections,
+    setExplorerTab, setLocalCollectionName, setLocalCollections, setLocalExpandAllSignal, setNotice, setOpenTabs,
+    setPage, setResTab, setResponseExamples, setResult, setRevealLocalDraft, setSavedRequests,
+    setSelectedCol, setSidebarCollapsed, setWorkspaceCollectionDocs, setWorkspaceMenu, setWorkspaceRequestLists, setWorkspaceSorted,
+    snapshot, storageScope, toLocalCollection, toggleWorkspaceCollection, token, url,
+    validateLibrary, workspaceCollectionKey, workspaceDocKey, workspaceRequestLists,
+  });
+  // Runner operations use the same Workbench state as the old inline handlers.
+  const runnerActions = createCollectionRunnerActions({
+    STORAGE_WORKSPACE, activeEnvironment, activeTabRef, api, collectionVariableKey, collections,
+    collectionsScope, getMessage, interceptorMode, localCollections, me, openTabs,
+    readCollectionVariables, readSavedCollectionVariables, runnerFetchId, savedCollectionVariableMap, selectedCol, selectedWs,
+    sessionCollectionVariables, setNotice, setRunnerLoading, setRunnerTarget, token, varsFromEnv,
+    workspaceDraft,
+  });
+  // Invitations operations use the same Workbench state as the old inline handlers.
+  const invitationActions = createInvitationActions({
+    acceptingInvite, api, canManageMembers, currentTokenRef, getMessage, invitationBusy,
+    inviteEmail, inviteRoles, inviteToken, loadWorkspaces, selectedWorkspaceRef, selectedWs,
+    setAcceptingInvite, setInvitationBusy, setInvitationError, setInvitationRows, setInviteAcceptError, setInviteEmail,
+    setInviteOpen, setInviteRoles, setInviteToken, setNotice, setPage, setSelectedWs,
+    setWsTab, token,
+  });
+  // Request operations use the same Workbench state as the old inline handlers.
+  const requestActions = createRequestExecutionActions({
+    activeEnvironment, activeSessionEnvironmentKey, activeTabRef, api, appendConsoleEvent, applyScriptVariables,
+    binaryFile, body, buildOutgoing, canEditCloud, canWriteEnvironment, collectionVariableKey,
+    currentTokenRef, dispatchRequest, draftsRef, envScope, executeWorkbenchRequest, formFields,
+    format, getMessage, interceptorMode, isReadOnlyCloudTab, loading, me,
+    method, openTabsRef, postScript, preScript, readCollectionVariables, readSavedCollectionVariables,
+    rows, savedCollectionVariableMap, scriptDiagnostic, scriptError, selectedWs, sessionCollectionVariables,
+    setLoading, setNotice, setOpenTabs, setPrettyResponse, setRecent, setResTab,
+    setResponsePretty, setResult, setScriptDiagnostic, setScriptError, setScriptJump, setScriptLog,
+    setScriptTests, stashActive, url, varsFromEnv, writeCollectionVariables,
+  });
   const visibleCollections = sortCollectionRoots(collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (workspaceRequestLists[workspaceCollectionKey(selectedWs,c.id)]||[]).some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase()))),collectionSort);
   const visibleLocalCollections = sortCollectionRoots(localCollections,collectionSort);
-  const activeRequestName = openTabs.find(t => t.id === activeTabId)?.name || 'Untitled Request';
   const responseType = result && !result.error ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain') : 'text/plain';
   const commandItems = [
     {key:'new-request', title:'New HTTP request', subtitle:'Open an empty request tab', icon:'action', run:()=>addTab()},
@@ -1950,35 +864,18 @@ export default function App() {
   const responseText = result && !result.error ? (resTab === 'body' ? (responsePretty ? (prettyResponse||prettyJson(result.body||'')) : (result.body||'')) : JSON.stringify(result.headers || {}, null, 2)) : '';
 
   return <div className="pp-app">
-    <header className="pp-top">
-      <div className="pp-logo pp-branding-v17" aria-label="Pakpost"><img src={isDarkAppearance(theme)?"/branding/pakpost-logo-dark.svg":"/branding/pakpost-logo-light.svg"} alt="Pakpost" width="155" height="48" decoding="async"/></div>
-      <button className="pp-top-search" type="button" aria-label="Search requests and commands" onClick={()=>{setCommandQuery('');setCommandIndex(0);setCommandOpen(true);}}><Search size={15}/><span>Search requests and commands</span><kbd>Ctrl K</kbd></button>
-      <div className="pp-top-right">
-        <div className="pp-env-top pp-unified-storage-top">
-          <span>STORAGE</span>
-          {token?<RetroSelect ariaLabel="Storage location for collections and environments" title="Controls storage for both Collections and Environments" className="pp-top-scope" value={storageScope} onChange={updateStorageScope} options={[{value:STORAGE_LOCAL,label:'Local · Browser'},{value:STORAGE_WORKSPACE,label:'Cloud · Neon',disabled:!selectedWs}]}/>:<span className="pp-top-env-local" title="Sign in to use Cloud · Neon">Local · Browser</span>}
-          {token&&envScope===STORAGE_WORKSPACE&&<span className="pp-v6-workspace-indicator" title={`Active environment workspace: ${activeWorkspace?.name||'Select workspace'}`}>{activeWorkspace?.name||'Select workspace'}</span>}
-          <span className="pp-top-env-label">ENV</span>
-          <RetroSelect ariaLabel="Active environment" title={envScope===STORAGE_WORKSPACE?`Environment for ${workspaces.find(w=>w.id===selectedWs)?.name||'selected workspace'}`:'Local environment'} className="pp-top-environment" value={activeEnvId} onChange={setActiveEnvId} options={[{value:'',label:'No environment'},...currentEnvironments.map(e=>({value:e.id,label:e.name}))]}/>
-          <button title="Manage environments" onClick={()=>openContext('environments')}><Settings2 size={16}/></button>
-        </div>
-        <span className="pp-connection"><span/> Local development</span>
-        {me ? <><button className="pp-profile" type="button" title={`Sign out · ${me.email}`} aria-label="Sign out" onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button>{GOOGLE_CLIENT_ID&&!googleLinked && <button type="button" className="pp-google-link-top" title="Connect Google to your existing PakPost account" onClick={()=>{setGoogleLinkError('');setGoogleLinkPassword('');setGoogleLinkOpen(true);}}><Link2 size={14}/> Connect Google</button>}</> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
-      </div>
-    </header>
+<AppHeader {...{        GOOGLE_CLIENT_ID, Link2, LogIn, LogOut, RetroSelect, STORAGE_LOCAL,
+        STORAGE_WORKSPACE, Search, Settings2, activeEnvId, activeWorkspace, currentEnvironments,
+        envScope, googleLinked, isDarkAppearance, logout, me, openContext,
+        selectedWs, setActiveEnvId, setAuthOpen, setCommandIndex, setCommandOpen, setCommandQuery,
+        setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, storageScope, theme, token,
+        updateStorageScope, workspaces,}}/>
 
-    <div className={`pp-main-frame ${page==='settings'?'pp-view-settings':page==='workspace'?'pp-view-workspace':'pp-view-tester'} ${sidebarCollapsed?'pp-navigator-collapsed':''}`} style={{'--pp-v14-right-width':`${rightWidth}px`}}>
-      <nav className="pp-rail pp-module-rail" aria-label="Main modules">
-        <button className={page!=='settings'?'selected':''} aria-label="REST" title="REST API client" onClick={()=>setPage('tester')}><Code2 size={20}/><span>REST</span></button>
-        <div className="pp-rail-spacer"/>
-        <button className={page==='settings'?'selected':''} aria-label="Settings" title="Settings" onClick={()=>setPage('settings')}><Settings2 size={20}/><span>Settings</span></button>
-      </nav>
-      {page==='tester'&&<nav className="pp-context-rail" aria-label="Context panels">
-        {[["collections","Collections",Layers3],["environments","Environments",Variable],["history","History",History],["code","Generate Code",Code2],["exchange","Import / Export",FileUp],["teams","Teams",Users]].map(([id,title,Icon])=><button key={id} className={!sidebarCollapsed&&explorerTab===id?'selected':''} aria-label={title} title={title} onClick={()=>{if(!sidebarCollapsed&&explorerTab===id)setSidebarCollapsed(true);else openContext(id)}}><Icon size={18}/></button>)}
-        <div className="pp-rail-spacer"/>
-        <button title={sidebarCollapsed?'Show context panel':'Hide context panel'} aria-label={sidebarCollapsed?'Show context panel':'Hide context panel'} onClick={()=>setSidebarCollapsed(v=>!v)}>{sidebarCollapsed?<PanelLeftOpen size={17}/>:<PanelLeftClose size={17}/>}</button>
-        {!sidebarCollapsed&&<div className="pp-context-resizer" role="separator" aria-label="Resize context panel" aria-orientation="vertical" tabIndex={0} onPointerDown={e=>{e.preventDefault();resizingRight.current=true;e.currentTarget.setPointerCapture(e.pointerId)}} onPointerMove={resizeRight} onPointerUp={endRightResize} onPointerCancel={endRightResize} onKeyDown={e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setRightWidth(w=>Math.max(280,Math.min(650,w+(e.key==='ArrowLeft'?16:-16))))}}}><span/></div>}
-      </nav>}
+    <div className={`pp-main-frame ${page==='settings'?'pp-view-settings':page==='workspace'?'pp-view-workspace':'pp-view-tester'} ${sidebarCollapsed?'pp-navigator-collapsed':''}`} style={{'--pp-context-panel-width':`${rightWidth}px`}}>
+<WorkbenchNavigation {...{        Code2, FileUp, History, Layers3, PanelLeftClose, PanelLeftOpen,
+        Settings2, Users, Variable, endRightResize, explorerTab, openContext,
+        page, resizeRight, resizingRight, setPage, setRightWidth, setSidebarCollapsed,
+        sidebarCollapsed,}}/>
 
       {page==='tester' && !sidebarCollapsed && <WorkbenchExplorer
   data={{
@@ -2029,69 +926,29 @@ export default function App() {
           <button role="menuitem" disabled={openTabs.findIndex(t=>t.id===tabMenu.id)>=openTabs.length-1} onClick={()=>performTabAction('right',tabMenu.id)}><ArrowRight size={14}/> Close tabs to the right</button>
         </div>}
 
-        {page==='tester'&&remoteAlerts[activeTabId]&&<div className="pp-v84-conflict-banner" role="status">
+        {page==='tester'&&remoteAlerts[activeTabId]&&<div className="pp-conflict-conflict-banner" role="status">
           <AlertTriangle size={17}/><span><strong>{remoteAlerts[activeTabId].kind==='deleted'?'Cloud request deleted or moved':'A newer Cloud version is available'}</strong><small>Your current draft was not overwritten. Review before saving.</small></span>
           <button type="button" onClick={()=>showConflictDialog(activeTabId)}>Review / Resync</button>
         </div>}
-        {page === 'tester' ? <div key={activeTabId} className="pp-tester pp-fade-content">
-          <div className="pp-crumb"><span>REST</span><ChevronRight size={13}/>{editingRequestName ? <input
-            ref={requestNameInputRef}
-            className="pp-inline-request-name"
-            aria-label="Request name"
-            title="Press Enter to finish, Ctrl/Cmd+S to save, Escape to cancel"
-            value={activeRequestName}
-            maxLength={120}
-            spellCheck={false}
-            onChange={event=>setCurrentRequestName(event.target.value)}
-            onBlur={finishRequestRename}
-            onKeyDown={event=>{
-              if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur();}
-              if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancelRequestRename();}
-            }}
-          /> : <button type="button" className="pp-editable-request-name" onClick={beginRequestRename} title="Rename request" aria-label={`Rename ${activeRequestName}`}><span>{activeRequestName}</span><Pencil size={13}/></button>}<span className="pp-crumb-sub">HTTP request</span>
-            {isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)&&<span className="pp-sandbox-badge" title="QA sandbox: changes and scripts are session-only. Cloud is read-only."><ShieldCheck size={13}/> Sandbox · Cloud read-only</span>}
-            <div className="pp-crumb-spacer"/><div className="pp-layout-actions"><span>Layout</span><button className={split === 'horizontal' ? 'active' : ''} onClick={() => setSplit('horizontal')} title="Request above response"><LayoutPanelTop size={16}/></button><button className={split === 'vertical' ? 'active' : ''} onClick={() => setSplit('vertical')} title="Request to left of response"><Columns2 size={16}/></button></div></div>
-          <div className="pp-url-bar"><div className="pp-url-entry"><div className="pp-method-wrap"><RetroSelect className={`pp-method ${method.toLowerCase()}`} ariaLabel="HTTP method" value={method} options={METHODS.map(m=>({value:m,label:m,method:true}))} onChange={v=>{setMethod(v);setOpenTabs(t=>t.map(x=>x.id===activeTabId?{...x,method:v}:x));}}/></div><div className="pp-url-input"><Link2 size={16}/><VariableUrlInput value={url} onChange={setUrl} {...variableUi} onSend={sendRequest} onPaste={e=>{const raw=e.clipboardData.getData('text');if(isCurl(raw)){e.preventDefault();importCurlIntoCurrent(raw)}}}/></div></div><button className="pp-send" disabled={loading} onClick={sendRequest}>{loading ? <span className="spinner"/> : <Send size={15}/>} {loading ? 'Sending' : 'Send'} <span className="pp-send-shortcut">↵</span></button>{isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)&&<button type="button" className="pp-sandbox-reset" onClick={resetSandboxRequest} disabled={loading||busyAction} title="Discard sandbox changes and reload the request from Cloud"><History size={14}/> Reset</button>}
-            <button className="pp-save-action" onClick={saveCurrent} disabled={busyAction||isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)} title={isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Cloud save disabled in QA sandbox. Use Save as… for a Local copy.":"Save changes (Ctrl/Cmd+S)"}><Save size={15}/><span>Save</span></button><button className="pp-save-as-action" onClick={()=>openSaveAs()} title={isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Save sandbox request as a separate Local copy":"Save as a new request"}>Save as…</button></div>
-          <div className={`pp-panes pp-${split}`} ref={panesRef} style={{ '--pp-split': `${splitPercent}%` }}>
-            <section className="pp-request-pane">
-              <div className="pp-pane-heading"><span className="pp-pane-title"><Code2 size={15}/> Request</span><span className="pp-pane-meta">{method} · {headerCount} headers</span></div>
-              <div className="pp-panel-tabs">
-                {[[ 'params','Params' ],[ 'headers','Headers' ],[ 'body','Body' ],[ 'auth','Authorization' ],[ 'scripts','Scripts' ]].map(([id, name]) => <button key={id} className={reqTab === id ? 'active' : ''} onClick={() => setReqTab(id)}>{name}{id === 'headers' && headerCount > 0 && <span className="pp-tiny-count">{headerCount}</span>}</button>)}
-              </div>
-              <div className="pp-panel-body pp-request-body">
-                {reqTab === 'params' && <KeyValueEditor kind="params" rows={params} onChange={setParams} variableUi={variableUi}/>}
-                {reqTab === 'headers' && <KeyValueEditor kind="headers" rows={rows} onChange={setRows} variableUi={variableUi}/>}
-                {reqTab === 'body' && <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Body…</div>}><RequestBody format={format} selectFormat={selectFormat} beautifyBody={beautifyBody} body={body} setBody={setBody} theme={theme} variableUi={variableUi} formFields={formFields} setFormFields={setFormFields} binaryFile={binaryFile} setBinaryFile={setBinaryFile} setNotice={setNotice} TextEditor={TextEditor} /></Suspense>}
-                {reqTab === 'auth' && <><div className="pp-form-caption"><span>REQUEST AUTHORIZATION</span><span>Applied when sending the request</span></div><div className="pp-auth-form pp-auth-v26"><div className="pp-auth-select"><span>Auth type</span><RetroSelect ariaLabel="Auth type" value={authType} onChange={setAuthType} options={AUTH_OPTIONS}/></div>
-                  {authType==='bearer'&&<label>Token<VariableAwareInput placeholder="{{AuthToken}} or paste bearer token" ariaLabel="Bearer token" value={bearerToken} onChange={value=>setBearerToken(value)} {...variableUi}/></label>}
-                  {authType==='basic'&&<><label>Username<VariableAwareInput placeholder="{{username}} or username" ariaLabel="Basic auth username" value={basicUsername} onChange={value=>setBasicUsername(value)} {...variableUi}/></label><label>Password<VariableAwareInput placeholder="{{password}} or password" ariaLabel="Basic auth password" value={basicPassword} onChange={value=>setBasicPassword(value)} {...variableUi}/></label></>}
-                  {authType==='apiKey'&&<><label>Key<VariableAwareInput placeholder="X-API-Key" ariaLabel="API key name" value={apiKeyName} onChange={value=>setApiKeyName(value)} {...variableUi}/></label><label>Value<VariableAwareInput placeholder="{{apiKey}}" ariaLabel="API key value" value={apiKeyValue} onChange={value=>setApiKeyValue(value)} {...variableUi}/></label><div className="pp-auth-select"><span>Add to</span><RetroSelect ariaLabel="API Key location" value={apiKeyIn} onChange={setApiKeyIn} options={[{value:'header',label:'Header'},{value:'query',label:'Query Param'}]}/></div></>}
-                  {authType==='none'?<p>No automatic authorization. Custom Authorization headers remain available in Headers.</p>:<p>Use {'{{variable}}'} for credentials. Workspace saves only variable references for secrets; raw credentials are never written to Neon. Values are visible here by design—avoid screen sharing sensitive tokens.</p>}
-                </div></>}
-                {reqTab === 'scripts' && <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Scripts…</div>}><ScriptEditor preScript={preScript} setPreScript={setPreScript} postScript={postScript} setPostScript={setPostScript} scriptDiagnostic={scriptDiagnostic} setScriptDiagnostic={setScriptDiagnostic} scriptError={scriptError} setScriptError={setScriptError} scriptJump={scriptJump} setScriptJump={setScriptJump} scriptLog={scriptLog} scriptTests={scriptTests} theme={theme} TextEditor={TextEditor} /></Suspense>}
-              </div>
-              <div className="pp-pane-footer"><ShieldCheck size={14}/><span>{isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?"Sandbox: edits and post-scripts do not change Cloud. Real API calls still execute.":"Public API tester · No sign-in needed"}</span><span className="pp-footer-tail">Proxy protected</span></div>
-            </section>
-            <div role="separator" aria-label="Resize request and response panels" aria-orientation={split === 'vertical' ? 'vertical' : 'horizontal'} className="pp-splitter" onPointerDown={e => { draggingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={onSplitterMove} onPointerUp={onSplitterEnd} onPointerCancel={onSplitterEnd}><span className="pp-splitter-handle"/></div>
-            <ResponsePane
-              result={result}
-              loading={loading}
-              resTab={resTab}
-              onResTabChange={setResTab}
-              responsePretty={responsePretty}
-              onResponsePrettyChange={setResponsePretty}
-              responseText={responseText}
-              responseType={responseType}
-              exampleCount={responseExamples.length}
-              onBeautify={beautifyResult}
-              onSaveExample={openSaveExampleDialog}
-              onCopy={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}
-              isDark={isDarkAppearance(theme)}
-              Editor={TextEditor}
-            />
-          </div>
-        </div> : <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Workspace…</div>}><WorkspaceManager
+        {page === 'tester' ? <RequestWorkbench key={activeTabId} {...{        AUTH_OPTIONS, ChevronRight, Code2, Columns2, History, KeyValueEditor,
+        LayoutPanelTop, Link2, METHODS, Pencil, RequestBody, ResponsePane,
+        RetroSelect, Save, ScriptEditor, Send, ShieldCheck, Suspense,
+        TextEditor, VariableAwareInput, VariableUrlInput, activeRequestName, activeTabId, apiKeyIn,
+        apiKeyName, apiKeyValue, authType, basicPassword, basicUsername, bearerToken,
+        beautifyBody, beautifyResult, beginRequestRename, binaryFile, body, busyAction,
+        canEditCloud, cancelRequestRename, draggingRef, editingRequestName, finishRequestRename, formFields,
+        format, headerCount, importCurlIntoCurrent, isCurl, isDarkAppearance, isReadOnlyCloudTab,
+        loading, method, onSplitterEnd, onSplitterMove, openSaveAs, openSaveExampleDialog,
+        openTabs, panesRef, params, postScript, preScript, reqTab,
+        requestNameInputRef, resTab, resetSandboxRequest, responseExamples, responsePretty, responseText,
+        responseType, result, rows, saveCurrent, scriptDiagnostic, scriptError,
+        scriptJump, scriptLog, scriptTests, selectFormat, selectedWs, sendRequest,
+        setApiKeyIn, setApiKeyName, setApiKeyValue, setAuthType, setBasicPassword, setBasicUsername,
+        setBearerToken, setBinaryFile, setBody, setCurrentRequestName, setFormFields, setMethod,
+        setNotice, setOpenTabs, setParams, setPostScript, setPreScript, setReqTab,
+        setResTab, setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump,
+        setSplit, setUrl, split, splitPercent, theme, url,
+        variableUi,}}/> : <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Workspace…</div>}><WorkspaceManager
   data={{
     activeWorkspace, workspaces, canCreateWorkspace, newWs, token,
     busyAction, selectedWs, wsTab, canEditCloud, newCollection,
@@ -2118,39 +975,14 @@ export default function App() {
       </main>
     </div>
     <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">{interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Allowed destinations only':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
-    {commandOpen && <div className="pp-command-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setCommandOpen(false);}}><section className="pp-command-dialog" role="dialog" aria-modal="true" aria-label="Quick search and commands"><div className="pp-command-input-wrap"><Search size={18}/><input autoFocus aria-label="Search commands" value={commandQuery} onChange={e=>{setCommandQuery(e.target.value);setCommandIndex(0);}} onKeyDown={e=>{if(e.key==='ArrowDown'){e.preventDefault();setCommandIndex(i=>Math.min(visibleCommandItems.length-1,i+1));}else if(e.key==='ArrowUp'){e.preventDefault();setCommandIndex(i=>Math.max(0,i-1));}else if(e.key==='Enter'&&visibleCommandItems.length){e.preventDefault();setCommandOpen(false);visibleCommandItems[Math.min(commandIndex,visibleCommandItems.length-1)].run();}}} placeholder="Find a request or run a command..."/><kbd>Esc</kbd></div><div className="pp-command-results" role="listbox">{visibleCommandItems.length?visibleCommandItems.map((item,i)=><button type="button" role="option" aria-selected={commandIndex===i} onMouseEnter={()=>setCommandIndex(i)} key={item.key} onClick={()=>{setCommandOpen(false);item.run();}}>{item.method?<span className={`pp-http-label ${item.method.toLowerCase()}`}>{item.method}</span>:<Code2 size={15}/>}<span><strong>{item.title}</strong><small>{item.subtitle}</small></span><ArrowRight size={14}/></button>):<div className="pp-command-empty">No matching requests or commands.</div>}</div></section></div>}
-    {notice && createPortal(<div className="pp-toast pp-toast-v17" role="status" aria-live="polite"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
-    {collectionVariablesTarget&&<Suspense fallback={<div className="pp-cv-loading">Loading Collection Variables editor…</div>}>
-      <CollectionVariablesEditor
-        target={collectionVariablesTarget}
-        initial={collectionVariablesData}
-        current={sessionCollectionVariables.current.has(collectionTargetKey(collectionVariablesTarget))
-          ?readCollectionVariables(sessionCollectionVariables.current,collectionTargetKey(collectionVariablesTarget)):null}
-        readOnly={collectionVariablesTarget.scope==='workspace'&&(!canWorkspace(selfMember,'collection.write')||!!collectionVariablesError)}
-        busy={collectionVariablesLoading||collectionVariablesBusy}
-        loadError={collectionVariablesError}
-        onClose={()=>{collectionVariablesFetchId.current++;setCollectionVariablesTarget(null);}}
-        onSave={saveCollectionVariableDefaults}
-        onApplySession={applyCollectionVariableSession}
-        onReset={resetCollectionVariableSession}
-        onReload={reloadCollectionVariables}
-      />
-    </Suspense>}
-    {documentationTarget&&<Dialog title={`Documentation · ${documentationTarget.type}`} subtitle="Write Markdown notes for OpenAPI/Postman exports." onClose={()=>setDocumentationTarget(null)}><DocumentationEditor key={`${documentationTarget.scope}:${documentationTarget.collectionId}:${documentationTarget.requestId||JSON.stringify(documentationTarget.folderPath||[])}`} title={documentationTarget.name||'Item'} initial={documentationTarget.initial} busy={docBusy} onCancel={()=>setDocumentationTarget(null)} onSave={saveDocumentation}/></Dialog>}
-    {exportChoice&&<Dialog title={`Export ${exportChoice.kind}`} subtitle={`Export “${exportChoice.name}” as a downloadable JSON file.`} onClose={()=>setExportChoice(null)}>
-      <div className="pp-v17-export-options">
-        <p>Format</p><div className="pp-v17-export-choices">
-          <button className={exportFormat==='postman'?'active':''} onClick={()=>setExportFormat('postman')}><FileJson size={17}/><span><strong>Postman JSON</strong><small>{exportChoice.kind==='environment'?'Postman environment':'Postman Collection v2.1'}</small></span></button>
-          <button className={exportFormat==='openapi'?'active':''} onClick={()=>setExportFormat('openapi')}><Braces size={17}/><span><strong>OpenAPI 3.1</strong><small>{exportChoice.kind==='environment'?'Vendor-extension environment metadata':'API endpoint description'}</small></span></button>
-          <button className={exportFormat==='insomnia'?'active':''} onClick={()=>setExportFormat('insomnia')}><FileJson size={17}/><span><strong>Insomnia v4 JSON</strong><small>Legacy portable format · imports in current Insomnia</small></span></button>
-        </div>
-        <label className="pp-v17-export-secret"><input type="checkbox" checked={exportIncludeSecrets} onChange={e=>setExportIncludeSecrets(e.target.checked)}/> Include secret variable values / known sensitive headers</label>
-        {exportIncludeSecrets&&<p className="pp-v17-export-warning">The exported JSON may contain credentials. Store it securely.</p>}
-        <p className="pp-v17-export-note">OpenAPI cannot execute Postman scripts; Insomnia v4 JSON is a legacy interchange format, not Insomnia v5 YAML. Environment OpenAPI export uses an x-pakpost-environment extension. Always check payloads/examples for credentials.</p>
-        <div className="pp-action-dialog-buttons"><button onClick={()=>setExportChoice(null)}>Cancel</button><button className="pp-modal-submit" onClick={confirmExport}><ArrowDownToLine size={15}/> Export JSON</button></div>
-      </div>
-    </Dialog>}
-    <AuthOverlays
+<CommandPalette {...{        ArrowRight, Code2, Search, commandIndex, commandOpen, commandQuery,
+        setCommandIndex, setCommandOpen, setCommandQuery, visibleCommandItems,}}/>    {notice && createPortal(<div className="pp-toast pp-toast-note" role="status" aria-live="polite"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
+<CollectionDialogs {...{        ArrowDownToLine, Braces, CollectionVariablesEditor, Dialog, DocumentationEditor, FileJson,
+        Suspense, applyCollectionVariableSession, canWorkspace, collectionTargetKey, collectionVariablesBusy, collectionVariablesData,
+        collectionVariablesError, collectionVariablesFetchId, collectionVariablesLoading, collectionVariablesTarget, confirmExport, docBusy,
+        documentationTarget, exportChoice, exportFormat, exportIncludeSecrets, readCollectionVariables, reloadCollectionVariables,
+        resetCollectionVariableSession, saveCollectionVariableDefaults, saveDocumentation, selfMember, sessionCollectionVariables, setCollectionVariablesTarget,
+        setDocumentationTarget, setExportChoice, setExportFormat, setExportIncludeSecrets,}}/>    <AuthOverlays
   data={{
     inviteToken, inviteAcceptError, me, token, acceptingInvite,
     googleLinked, authOpen, authMode, authForm, authError,
@@ -2162,79 +994,19 @@ export default function App() {
     setGoogleLinkPassword, submitGoogleLink, setGoogleLinkError,
   }}
 />
-    {closeConfirmation&&<Dialog title="Unsaved changes" subtitle="Changes in these tabs have not been saved to their collections." onClose={()=>setCloseConfirmation(null)}>
-      <div className="pp-unsaved-confirm">
-        <p>{closeConfirmation.unsaved.length===1?'This request has unsaved changes:':`${closeConfirmation.unsaved.length} requests have unsaved changes:`}</p>
-        <ul>{closeConfirmation.unsaved.map(id=><li key={id}>{openTabs.find(t=>t.id===id)?.name||'Request'}</li>)}</ul>
-        <p>Discard these changes and close {closeConfirmation.action==='close'?'the tab':'the selected tabs'}?</p>
-        <div className="pp-action-dialog-buttons">
-          <button type="button" onClick={()=>setCloseConfirmation(null)}>Keep editing</button>
-          <button className="pp-destructive-confirm" type="button" onClick={()=>performTabAction(closeConfirmation.action,closeConfirmation.id,true)}>Discard & close</button>
-        </div>
-      </div>
-    </Dialog>}
-    {saveExampleOpen && <Dialog title="Save response example" subtitle="Capture the latest response as an example for this request." onClose={()=>setSaveExampleOpen(false)}><form className="modal-form" onSubmit={saveResponseExample}>
-      <label>Example name<input autoFocus required maxLength={140} value={exampleName} onChange={e=>setExampleName(e.target.value)}/></label>
-      <label>Description <textarea rows={3} maxLength={1000} placeholder="Optional note, e.g. when to expect this response" value={exampleDescription} onChange={e=>setExampleDescription(e.target.value)}/></label>
-      <p className="pp-example-warning">Review the response body before saving. It can contain personal data, tokens, or account details. Known sensitive response headers are redacted; the body is saved as-is (up to 64 KB). {isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabId),canEditCloud,selectedWs)?'Sandbox only: this example is not saved to Cloud and is lost when you close or refresh the session.':(!activeSource()||activeSource()?.pending?'This is a draft; use Save to keep this example in a collection.':'')}</p>
-      {result && !result.error && <div className="pp-example-preview"><span className={`pp-example-status ${statusTone(result.statusCode)}`}>{result.statusCode}</span><strong>{result.reasonPhrase || 'HTTP response'}</strong><small>{new Blob([result.body || '']).size.toLocaleString()} B · {result.elapsedMs} ms</small></div>}
-      <button className="pp-modal-submit" type="submit" disabled={!result||!!result.error||busyAction}><Save size={16}/> Save example</button>
-    </form></Dialog>}
-    {versionDialog&&<Dialog wide title="Request Version History" subtitle="Encrypted revision snapshots · Field-level comparison · No silent Cloud overwrite" onClose={()=>{if(!versionDialog.busy)setVersionDialog(null)}}>
-      {versionDialog.loading&&!versionDialog.entries.length?<p className="pp-v85-empty">Loading version history…</p>:
-        <Suspense fallback={<p className="pp-v85-empty">Loading revision viewer…</p>}><RequestRevisionPanel mode="history"
-          history={versionDialog.entries} selectedRevision={versionDialog.selectedRevision}
-          localDraft={{...((versionDialog.tabId===activeTabId?snapshot():draftsRef.current[versionDialog.tabId])||{}),name:openTabs.find(t=>t.id===versionDialog.tabId)?.name}}
-          remoteDraft={versionDialog.detail?workspaceDraft(versionDialog.detail.request):null}
-          currentRevision={versionDialog.latest?.revision} canRestore={canEditCloud}
-          busy={versionDialog.busy||versionDialog.loading} error={versionDialog.error}
-          onSelectRevision={rev=>selectRequestHistoryRevision(versionDialog.tabId,versionDialog.path,rev)}
-          onMerge={chosen=>{applyMergedRevision(versionDialog.tabId,versionDialog.detail?.request,chosen);setVersionDialog(null);}}
-          onRestore={restoreRequestRevision} onClose={()=>setVersionDialog(null)}/></Suspense>}
-    </Dialog>}
-    {conflictDialog&&<Dialog wide title="Cloud changes detected" subtitle="Another session has saved a newer version. Your local draft has not been overwritten." onClose={()=>setConflictDialog(null)}>
-      <div className="pp-v84-conflict-dialog">
-        {conflictDialog.loading?<p>Loading latest Cloud revision…</p>:<>
-          <p><strong>Local revision:</strong> {conflictDialog.source.revision||'Unknown'} · <strong>Cloud revision:</strong> {conflictDialog.latest?.revision||'Not found'}</p>
-          {conflictDialog.error&&<p role="alert" className="pp-v84-error">{conflictDialog.error}</p>}
-          {!conflictDialog.latest&&<p>Cloud request is missing or inaccessible. Save your current draft as a Local copy to keep it.</p>}
-          {!!conflictDialog.latest&&<Suspense fallback={<p>Loading compare view…</p>}><RequestRevisionPanel mode="conflict"
-            localDraft={{...((conflictDialog.tabId===activeTabId?snapshot():draftsRef.current[conflictDialog.tabId])||{}),name:openTabs.find(t=>t.id===conflictDialog.tabId)?.name}}
-            remoteDraft={workspaceDraft(conflictDialog.latest)} baseDraft={conflictDialog.base?workspaceDraft(conflictDialog.base):null}
-            onMerge={chosen=>applyMergedRevision(conflictDialog.tabId,conflictDialog.latest,chosen,{resolveConflict:true})}
-            onClose={()=>setConflictDialog(null)} /></Suspense>}
-          <p className="pp-v84-warning">Reload discards your unsaved changes. Applying selected fields preserves the draft; review it and press Save separately. Force Overwrite remains unavailable.</p>
-        </>}
-        <div className="pp-v84-actions">
-          <button type="button" onClick={()=>setConflictDialog(null)}>Keep editing</button>
-          <button type="button" onClick={saveConflictCopy}>Save as Local Copy</button>
-          <button type="button" disabled={conflictDialog.loading||!conflictDialog.latest} onClick={reloadCloudConflict} className="pp-v84-destructive">Discard draft & reload Cloud</button>
-        </div>
-      </div>
-    </Dialog>}
-    {saveOpen && <Dialog title="Save as new request" subtitle="Keep an independent copy in a local collection or a signed-in workspace." onClose={()=>setSaveOpen(false)}><form className="modal-form" onSubmit={saveRequest}>
-      <label>Request name<input autoFocus required maxLength={120} value={saveName} onChange={e=>setSaveName(e.target.value)}/></label>
-      <div className="pp-modal-select-label"><span>Destination</span><RetroSelect ariaLabel="Save scope" value={saveScope} onChange={setSaveScope} options={[{value:'local',label:'Local browser'},...(token&&canEditCloud?[{value:'workspace',label:'Workspace · Neon'}]:[])]}/></div>
-      {saveScope==='local'?<div className="pp-modal-select-label"><span>Local collection</span><RetroSelect ariaLabel="Local collection" value={saveLocalCollection} onChange={setSaveLocalCollection} options={localCollections.map(c=>({value:c.id,label:c.name}))}/></div>:
-        <><div className="pp-modal-select-label"><span>Workspace</span><RetroSelect ariaLabel="Save workspace" value={saveWs} onChange={setSaveWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/></div><div className="pp-modal-select-label"><span>Collection</span><RetroSelect ariaLabel="Save collection" value={saveCollection} onChange={setSaveCollection} options={saveCols.map(c=>({value:c.id,label:c.name}))}/></div></>}
-      {!(saveScope==='local'?localCollections.length:saveCols.length)&&<div className="form-error">Create a collection first.</div>}
-      <button className="pp-modal-submit" type="submit" disabled={!(saveScope==='local'?saveLocalCollection:saveCollection)||busyAction}><Save size={16}/> Save new request</button>
-    </form></Dialog>}
-    {collectionImportOpen&&<Dialog title="Import collection" subtitle="Postman v2.1, OpenAPI JSON, Insomnia v4 JSON or cURL" onClose={()=>{if(!collectionImportBusy)setCollectionImportOpen(false)}}>
-      <div className="pp-collection-import-dialog">
-        <ImportDestinationPicker authenticated={!!token} allowCloud={canEditCloud} workspaceName={activeWorkspace?.name||''} value={collectionImportDestination} onChange={setCollectionImportDestination} onLogin={()=>{setCollectionImportOpen(false);setAuthMode('login');setAuthOpen(true);}}/>
-        <label className="pp-collection-file-picker"><FileUp size={17}/><span>{collectionImportFile?.name||'Choose a collection file'}</span><input type="file" accept=".json,.txt,.curl,.sh,application/json,text/plain" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;setCollectionImportError('');if(file.size>3*1024*1024){setCollectionImportError('Maximum collection import size is 3 MB.');return;}setCollectionImportFile(file);}}/></label>
-        {collectionImportError&&<p role="alert" className="pp-env-error">{collectionImportError}</p>}
-        <div className="pp-collection-import-actions"><button type="button" disabled={collectionImportBusy} onClick={()=>setCollectionImportOpen(false)}>Cancel</button><button type="button" className="pp-env-primary" disabled={collectionImportBusy||!collectionImportFile} onClick={submitCollectionImport}><FileUp size={15}/>{collectionImportBusy?'Importing…':'Import collection'}</button></div>
-      </div>
-    </Dialog>}
-    {actionDialog&&<Dialog title={{renameCollection:'Rename collection',renameRequest:'Rename request',renameFolder:'Rename folder',deleteCollection:'Delete collection',deleteRequest:'Delete request',deleteFolder:'Delete folder',renameExample:'Rename example',deleteExample:'Delete example'}[actionDialog.action]||'Manage collection'} subtitle={actionDialog.action.startsWith('delete')?'This action cannot be undone. Open tabs will not be closed.':'Changes will be reflected in Collections.'} onClose={()=>setActionDialog(null)}>
-      <form className="modal-form" onSubmit={executeActionDialog} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setActionDialog(null);}}}>
-        {actionDialog.action.startsWith('rename')?<label>Name<input autoFocus required maxLength={actionDialog.action==='renameExample'?140:120} value={actionName} onChange={e=>setActionName(e.target.value)}/></label>:<p>Delete <strong>{actionDialog.name}</strong>?</p>}
-        <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
-      </form>
-    </Dialog>}
-  {runnerTarget&&<Suspense fallback={<div className="pp-console-loading">Opening Collection Runner…</div>}>
+<RequestDialogs {...{        Dialog, FileUp, ImportDestinationPicker, RequestRevisionPanel, RetroSelect, Save,
+        Suspense, actionDialog, actionName, activeSource, activeTabId, activeWorkspace,
+        applyMergedRevision, busyAction, canEditCloud, closeConfirmation, collectionImportBusy, collectionImportDestination,
+        collectionImportError, collectionImportFile, collectionImportOpen, conflictDialog, draftsRef, exampleDescription,
+        exampleName, executeActionDialog, isReadOnlyCloudTab, localCollections, openTabs, performTabAction,
+        reloadCloudConflict, restoreRequestRevision, result, saveCollection, saveCols, saveConflictCopy,
+        saveExampleOpen, saveLocalCollection, saveName, saveOpen, saveRequest, saveResponseExample,
+        saveScope, saveWs, selectRequestHistoryRevision, selectedWs, setActionDialog, setActionName,
+        setAuthMode, setAuthOpen, setCloseConfirmation, setCollectionImportDestination, setCollectionImportError, setCollectionImportFile,
+        setCollectionImportOpen, setConflictDialog, setExampleDescription, setExampleName, setSaveCollection, setSaveExampleOpen,
+        setSaveLocalCollection, setSaveName, setSaveOpen, setSaveScope, setSaveWs, setVersionDialog,
+        snapshot, statusTone, submitCollectionImport, token, versionDialog, workspaceDraft,
+        workspaces,}}/>  {runnerTarget&&<Suspense fallback={<div className="pp-console-loading">Opening Collection Runner…</div>}>
     <CollectionRunner key={`${runnerTarget.scope}:${runnerTarget.workspaceId||''}:${runnerTarget.collectionId}`}
       target={runnerTarget} requests={runnerTarget.requests} environmentVariables={runnerTarget.environmentVariables}
       collectionVariables={runnerTarget.collectionVariables} onClose={closeRunner}

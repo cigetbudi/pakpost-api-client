@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -63,7 +64,7 @@ test('tabs reuse matching source; duplicates stay independent',()=>{
   assert.deepEqual(reorderTabs(tabs,'t1','t2').map(x=>x.id),['t2','t1']);
 });
 test('Save uses Ctrl/Cmd+S and binding survives session cache',()=>{
-  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const app=readWorkbenchSource();
   const cache=readFileSync(new URL('../src/features/workspaceCache.js',import.meta.url),'utf8');
   assert.match(app,/e\.key\.toLowerCase\(\) === 's'/);
   assert.match(app,/e\.preventDefault\(\)/);

@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -30,7 +31,7 @@ test('logout credentials are invalidated even if recovery clearing throws', () =
   invalidateBrowserSession({removeItem:key=>removed.push(key)},()=>{throw Error('quota')});
   assert.deepEqual(removed,['pakpost_token']);
   assert.doesNotThrow(()=>invalidateBrowserSession({removeItem:()=>{throw Error('blocked')}},()=>{throw Error('blocked')}));
-  const app=read('App.jsx');
+  const app=readWorkbenchSource();
   assert.match(app,/onClick=\{logout\}/);
   assert.match(app,/aria-label="Sign out"/);
   const handler=app.slice(app.indexOf('  function logout() {'),app.indexOf('  function requiresLogin('));
@@ -156,7 +157,7 @@ test('realtime connection remains opt-in and does not import SignalR in initial 
   const hub=read('features/workspaceRealtime.js');
   assert.match(hook,/if \(!enabled \|\| !token \|\| !workspaceId\)/);
   assert.match(hub,/import\('@microsoft\/signalr'\)/);
-  assert.doesNotMatch(read('App.jsx'),/from ['"]@microsoft\/signalr['"]/);
+  assert.doesNotMatch(readWorkbenchSource(),/from ['"]@microsoft\/signalr['"]/);
 });
 
 test('a pristine Cloud tab reloads revision 2 while keeping its previous response', () => {

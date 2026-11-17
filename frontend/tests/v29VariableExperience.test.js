@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -37,7 +38,7 @@ test('quick create supports missing variables and safeguards redacted variables'
 });
 
 test('URL, param/header, authorization, form data and raw body share variable support',()=>{
-  const app=read('../src/App.jsx');
+  const app=readWorkbenchSource();
   const kv=read('../src/features/KeyValueEditor.jsx');
   const url=read('../src/features/VariableUrlInput.jsx');
   const cm=read('../src/features/Editors.jsx');
@@ -53,7 +54,7 @@ test('URL, param/header, authorization, form data and raw body share variable su
 
 test('security: secret previews are masked by default; edits reuse the active environment API',()=>{
   const visual=read('../src/features/VariableAwareInput.jsx');
-  const app=read('../src/App.jsx');
+  const app=readWorkbenchSource();
   assert.match(visual,/item\.sensitive&&!revealed/);
   assert.match(visual,/masked\?'••••••••••••'/);
   assert.match(app,/const variables=putEnvironmentVariable\(activeEnvironment\.variables,key,value\)/);

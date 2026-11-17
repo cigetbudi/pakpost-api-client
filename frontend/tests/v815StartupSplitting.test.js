@@ -1,8 +1,9 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
-const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+const app=readWorkbenchSource();
 const sidebars=readFileSync(new URL('../src/features/WorkbenchSidebars.jsx',import.meta.url),'utf8');
 
 test('CodeMirror is loaded on demand, never imported eagerly by the app shell',()=>{
@@ -26,7 +27,7 @@ test('optional workbench panels are dynamically imported only when visible',()=>
 
 test('exports are requested on demand and keep format selection unchanged',()=>{
   assert.doesNotMatch(app,/^import\s+.*from\s+['"]\.\/features\/exportFormats['"]/m);
-  assert.match(app,/await import\('\.\/features\/exportFormats\.js'\)/);
+  assert.match(app,/await import\('\.\.\/\.\.\/exportFormats\.js'\)/);
   assert.match(app,/downloadJson\(exportEnvironmentByFormat\(/);
   assert.match(app,/const output=exportCollectionByFormat\(/);
 });

@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -70,7 +71,7 @@ test('session overlay memory cache has a bounded size',()=>{
 });
 
 test('Send does not call Cloud PUT for read-only QA, Writer or Developer',()=>{
-  const app=read('frontend/src/App.jsx');
+  const app=readWorkbenchSource();
   assert.match(app,/if\(scope===STORAGE_WORKSPACE&&!canWrite\)\{[\s\S]*?rememberSessionValues\(sessionKey,environment,values\);[\s\S]*?return;/);
   const executor=read('frontend/src/features/requests/services/executeWorkbenchRequest.js');
   assert.match(app,/saveEnvironmentValues:values=>runToken===currentTokenRef\.current\?applyScriptVariables\(values,runEnvironment\)/);

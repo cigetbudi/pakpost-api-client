@@ -1,0 +1,84 @@
+/* — final header sizing pass. Override earlier responsive width rules in one place. */
+.pp-top{
+  display:flex;align-items:center;gap:12px;min-width:0;overflow:hidden;
+  padding-inline:14px;
+}
+.pp-top>.pp-logo{flex:0 0 148px;min-width:0;width:148px;overflow:hidden}
+.pp-top>.pp-logo img{width:100%;height:auto;max-height:44px;object-fit:contain;object-position:left center}
+.pp-top>.pp-top-search{
+  flex:1 1 190px;width:auto;max-width:400px;min-width:100px;
+  margin:0 auto 0 0;overflow:hidden;
+}
+.pp-top>.pp-top-right{
+  display:flex;align-items:center;justify-content:flex-end;
+  flex:0 1 auto;min-width:0;max-width:min(760px,74vw);gap:8px;
+}
+.pp-top-right>.pp-unified-storage-top{
+  display:flex;align-items:center;flex:1 1 auto;
+  max-width:none!important;min-width:0;width:auto;
+  overflow:hidden;white-space:nowrap;
+}
+.pp-top-right>.pp-unified-storage-top>.pp-top-scope{
+  display:block!important;flex:0 1 142px;min-width:84px;max-width:142px;width:auto;
+}
+.pp-top-right>.pp-unified-storage-top>.pp-top-environment{
+  flex:1 1 150px;width:auto;min-width:76px;max-width:210px;
+}
+.pp-unified-storage-top .pp-retro-select,.pp-unified-storage-top .pp-select-trigger,
+.pp-unified-storage-top .pp-select-label{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-unified-storage-top>.pp-top-env-label{flex:0 0 auto;padding-left:7px}
+.pp-unified-storage-top>button{flex:0 0 26px}
+.pp-unified-storage-top>.pp-workspace-indicator{flex:0 1 90px;max-width:90px;min-width:0}
+.pp-top-right>.pp-connection{flex:0 0 auto;font-size:10px}
+.pp-top-right>.pp-profile{flex:0 1 155px;min-width:45px;max-width:155px;overflow:hidden;padding-inline:8px}
+.pp-profile>span:first-child,.pp-profile svg{flex:none}
+.pp-profile .pp-profile-name{display:block;flex:1;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-top-right>.pp-google-link-top{flex:none;max-width:130px;overflow:hidden}
+@media(max-width:1350px){
+  .pp-top-right>.pp-connection{display:none}
+  .pp-top-right>.pp-unified-storage-top>.pp-workspace-indicator{display:none}
+}
+@media(max-width:1080px){
+  .pp-top>.pp-logo{flex-basis:135px;width:135px}
+  .pp-top>.pp-top-right{max-width:72vw}
+  .pp-top-right>.pp-profile{max-width:115px}
+  .pp-top-right>.pp-google-link-top{max-width:34px;font-size:0;justify-content:center;padding:7px}
+}
+@media(max-width:850px){
+  .pp-top>.pp-top-search{display:none}
+  .pp-top>.pp-top-right{margin-left:auto;max-width:calc(100% - 140px)}
+  .pp-top-right>.pp-unified-storage-top>.pp-top-scope{min-width:94px;flex-basis:108px}
+  .pp-top-right>.pp-unified-storage-top>.pp-top-environment{min-width:90px;flex-basis:130px}
+}
+@media(max-width:640px){
+  .pp-top{gap:7px;padding-inline:9px}
+  .pp-top>.pp-logo{flex-basis:112px;width:112px}
+  .pp-top>.pp-top-right{max-width:calc(100% - 120px);gap:5px}
+  .pp-top-right>.pp-unified-storage-top>.pp-top-env-label,
+  .pp-top-right>.pp-unified-storage-top>.pp-top-environment,
+  .pp-top-right>.pp-unified-storage-top>button{display:none}
+  .pp-top-right>.pp-unified-storage-top>.pp-top-scope{display:block!important;min-width:80px;max-width:120px;flex:1 1 100px}
+  .pp-top-right>.pp-profile{flex:0 0 40px;min-width:40px;max-width:40px;padding:0 8px;gap:0}
+  .pp-top-right>.pp-profile .pp-profile-name,.pp-top-right>.pp-profile svg{display:none}
+  .pp-top-right>.pp-google-link-top{max-width:28px}
+}
+@media(max-width:410px){
+  .pp-top>.pp-logo{flex-basis:96px;width:96px}
+  .pp-top>.pp-top-right{max-width:calc(100% - 103px)}
+  .pp-top-right>.pp-unified-storage-top>span:first-child{display:none}
+}
+/* Invitation management follows the existing Clean Minimal components. */
+.pp-member-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}
+.pp-invite-form{margin-bottom:12px}
+.pp-invitations{border:1px solid var(--border);border-radius:9px;padding:12px 13px;margin-bottom:15px;background:var(--editor)}
+.pp-invitations-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;font-size:12px}
+.pp-invitations-heading span{color:var(--muted);font-size:10px}
+.pp-invite-item{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:11px 0;border-top:1px solid var(--border-soft);min-width:0}
+.pp-invite-info{display:flex;flex-direction:column;min-width:0;gap:4px}
+.pp-invite-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.pp-invite-info small{color:var(--muted);font-size:10px;overflow-wrap:anywhere}
+.pp-invite-actions{display:flex;gap:5px;flex:none}
+.pp-invite-actions button{border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:11px;color:var(--text2)}
+.pp-invite-actions button:hover:not(:disabled){color:var(--accent);border-color:var(--accent)}
+.pp-invite-actions button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:550px){.pp-invite-item{flex-wrap:wrap}.pp-invite-actions{width:100%}.pp-member-actions{justify-content:flex-start}}

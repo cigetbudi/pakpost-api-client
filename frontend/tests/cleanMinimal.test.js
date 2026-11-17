@@ -1,13 +1,14 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../src/clean-minimal.css', import.meta.url), 'utf8');
+const app = readWorkbenchSource();
+const css = readFileSync(new URL('../src/styles/clean-workbench.css', import.meta.url), 'utf8');
 
 test('clean minimal styles load after base styles without replacing v6 themes', () => {
-  assert.ok(main.indexOf("import './styles.css'") < main.indexOf("import './clean-minimal.css'"));
+  assert.ok(main.indexOf("import './styles/base.css'") < main.indexOf("import './styles/clean-workbench.css'"));
   assert.match(css, /--pp-radius-sm:\s*4px/);
   assert.match(css, /--pp-radius-md:\s*5px/);
   assert.doesNotMatch(css, /:root\[data-theme\s*=/);

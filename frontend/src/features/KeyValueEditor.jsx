@@ -44,9 +44,9 @@ export function KeyValueEditor({kind,rows,onChange,variableUi={}}){
   function update(index,patch){onChange(previous=>previous.map((row,i)=>i===index?{...row,...patch}:row));}
   return <>
     <div className="pp-form-caption"><span>{headers?'REQUEST HEADERS':'QUERY PARAMETERS'}</span><span>Disabled rows are saved but not sent</span></div>
-    <div className="pp-kv21-heading"><span>ON</span><span>KEY</span><span>VALUE</span><span>DESCRIPTION (OPTIONAL)</span><span/></div>
-    {(rows||[]).map((r,i)=><div className={`pp-kv21-row ${!isEnabled(r)?'disabled':''}`} key={i}>
-      <label className="pp-kv21-checkbox" title={isEnabled(r)?'Disable row':'Enable row'}><input type="checkbox" aria-label={`${headers?'Header':'Query parameter'} ${i+1} enabled`} checked={isEnabled(r)} onChange={e=>update(i,{enabled:e.target.checked})}/></label>
+    <div className="pp-kv-detail-heading"><span>ON</span><span>KEY</span><span>VALUE</span><span>DESCRIPTION (OPTIONAL)</span><span/></div>
+    {(rows||[]).map((r,i)=><div className={`pp-kv-detail-row ${!isEnabled(r)?'disabled':''}`} key={i}>
+      <label className="pp-kv-detail-checkbox" title={isEnabled(r)?'Disable row':'Enable row'}><input type="checkbox" aria-label={`${headers?'Header':'Query parameter'} ${i+1} enabled`} checked={isEnabled(r)} onChange={e=>update(i,{enabled:e.target.checked})}/></label>
       <VariableAwareInput value={r.key||''} placeholder={headers?'Content-Type':'parameter'} ariaLabel={headers?'Header key':'Query key'} onChange={value=>update(i,{key:value})} {...variableUi}/>
       {headers&&r.key?.trim().toLowerCase()==='content-type'?<ContentTypeInput value={r.value||''} onChange={value=>update(i,{value})} variableUi={variableUi}/>:
         <VariableAwareInput value={r.value||''} placeholder="value" ariaLabel={headers?'Header value':'Query value'} onChange={value=>update(i,{value})} {...variableUi}/>}

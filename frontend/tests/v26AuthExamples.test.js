@@ -1,3 +1,4 @@
+import { readWorkbenchSource } from './support/workbenchSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -57,7 +58,7 @@ test('Postman and OpenAPI can describe Basic and API Key auth',()=>{
 });
 test('local and Neon collection examples collapse by default and provide accessible chevrons',()=>{
   const local=readFileSync(new URL('../src/features/LocalCollectionsTree.jsx',import.meta.url),'utf8');
-  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8');
+  const app=readWorkbenchSource();
   assert.match(local,/expanded\[exampleKey\]\?\?!!search/);
   assert.match(local,/pp-endpoint-example-toggle/);
   const explorer=readFileSync(new URL('../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
