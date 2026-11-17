@@ -24,6 +24,10 @@ public sealed class AuthController(ISender sender) : ControllerBase
     public async Task<ActionResult<GoogleLinkResult>> LinkGoogle(GoogleLinkRequest request, CancellationToken ct)
         => Ok(await sender.Send(new GoogleLinkCommand(User.GetUserId(), request.Credential, request.Password), ct));
 
+    [Authorize, HttpGet("google/status")]
+    public async Task<ActionResult<GoogleConnectionStatus>> GoogleStatus(CancellationToken ct)
+        =>Ok(await sender.Send(new GoogleConnectionStatusQuery(User.GetUserId()),ct));
+
     [Authorize, HttpGet("me")]
     public async Task<ActionResult<UserProfile>> Me(CancellationToken ct)
         => Ok(await sender.Send(new GetMeQuery(User.GetUserId()),ct));

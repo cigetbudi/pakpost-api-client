@@ -39,3 +39,4 @@ import './v32-multi-role.css';
 
 import './v33-qa-sandbox.css';
 import './v34-manage-roles.css';
+import './v35-invitations-topbar.css';

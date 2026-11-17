@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import {
-  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
+  ArrowDownToLine, ArrowRight, Braces, WandSparkles, AlertTriangle, FileUp, Variable, Bolt, ChevronDown, ChevronRight, Clock3, Code2, Columns2, Copy, FileJson, FolderClosed, FolderPlus, History, Layers3, LayoutPanelTop, LockKeyhole, LogIn, LogOut, Moon, Plus, Save, Search, Send, Mail, Pencil, Settings2, ShieldCheck, Sun, Terminal, Trash2, Users, X, Zap, PanelLeftClose, PanelLeftOpen, Link2, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react';
 import { TextEditor } from './features/Editors';
 import { GoogleSignInButton } from './features/GoogleSignInButton';
 import { WorkspaceRolePicker } from './features/WorkspaceRolePicker.jsx';
 import { WorkspaceAccessBreakdown } from './features/WorkspaceAccessBreakdown.jsx';
 import {filterWorkspaceMembers,roleSelectionChanged,summarizeWorkspaceMembers} from './features/workspaceRoleInsights.js';
+import {pendingInvitations,canManageInvitation} from './features/workspaceInvitations.js';
 import {canGrantRole,canWorkspace,currentWorkspaceMember,normalizeRoles,WORKSPACE_ROLES} from './features/workspaceRoles.js';
 import { KeyValueEditor } from './features/KeyValueEditor';
 import { DocumentationEditor } from './features/DocumentationEditor';
@@ -114,6 +115,7 @@ export default function App() {
   const [commandIndex, setCommandIndex] = useState(0);
   const [theme, setTheme] = useState(() => readAppearance(localStorage));
   const [token, setToken] = useState(storedToken);
+  useEffect(()=>{if(new URLSearchParams(window.location.search).has('invite')){const u=new URL(window.location.href);u.searchParams.delete('invite');window.history.replaceState({},'',u.pathname+u.search+u.hash)}},[]);
   const currentTokenRef=useRef(token);
   currentTokenRef.current=token;
   // Shared header storage context for both Collections and Environments.
@@ -130,6 +132,10 @@ export default function App() {
   const [googleLinkOpen, setGoogleLinkOpen] = useState(false);
   const [googleLinkPassword, setGoogleLinkPassword] = useState('');
   const [googleLinkError, setGoogleLinkError] = useState('');
+  const [googleLinked,setGoogleLinked] = useState(false);
+  const [inviteToken,setInviteToken] = useState(()=>new URLSearchParams(window.location.search).get('invite')||'');
+  const [acceptingInvite,setAcceptingInvite] = useState(false);
+  const [inviteAcceptError,setInviteAcceptError] = useState('');
   const [notice, setNotice] = useState('');
   const [exportChoice,setExportChoice] = useState(null);
   const [exportFormat,setExportFormat] = useState('postman');
@@ -221,6 +227,12 @@ export default function App() {
   const [memberSearch,setMemberSearch]=useState('');
   const [memberRoleFilter,setMemberRoleFilter]=useState('all');
   const [showMemberAdd,setShowMemberAdd]=useState(false);
+  const [inviteOpen,setInviteOpen]=useState(false);
+  const [inviteEmail,setInviteEmail]=useState('');
+  const [inviteRoles,setInviteRoles]=useState(['Developer']);
+  const [invitationRows,setInvitationRows]=useState([]);
+  const [invitationError,setInvitationError]=useState('');
+  const [invitationBusy,setInvitationBusy]=useState(false);
   const [expandedMemberAccess,setExpandedMemberAccess]=useState('');
   const [canCreateWorkspace,setCanCreateWorkspace]=useState(false);
   const [newTeamMember, setNewTeamMember] = useState('');
@@ -1200,7 +1212,7 @@ export default function App() {
     setRecent([]); // previous account's request history must not survive sign-out.
     sessionEnvironmentOverlays.current.clear();sessionDocumentationOverlays.current.clear();
     clearWorkbenchCache(); // Never expose another account's Cloud tabs after logout.
-    setCanCreateWorkspace(false);sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]);
+    setGoogleLinked(false);setCanCreateWorkspace(false);sessionStorage.removeItem('pakpost_token');setStorageScope(STORAGE_LOCAL);setToken('');setMe(null);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setPage('tester');setWorkspaces([]);
   }
   function requiresLogin(target = 'workspace') {
     if (token) return true;
@@ -1240,7 +1252,7 @@ export default function App() {
     setAuthBusy(true);setGoogleLinkError('');
     try {
       await api('/api/auth/google/link','POST',{credential,password:googleLinkPassword},token);
-      setGoogleLinkOpen(false);setGoogleLinkPassword('');setNotice('Google account connected. You can sign in with Google next time.');
+      setGoogleLinked(true);setGoogleLinkOpen(false);setGoogleLinkPassword('');setNotice('Google account connected. You can sign in with Google next time.');
     } catch(e) {setGoogleLinkError(getMessage(e));}
     finally {setAuthBusy(false);}
   }
@@ -1256,8 +1268,11 @@ export default function App() {
     } catch (e) { if(auth===currentTokenRef.current)setNotice(getMessage(e)); }
   }
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
+  useEffect(()=>{let current=true;if(!token){setGoogleLinked(false);return;}
+    api('/api/auth/google/status','GET',undefined,token).then(x=>{if(current)setGoogleLinked(!!x.connected)}).catch(()=>{if(current)setGoogleLinked(false)});
+    return()=>{current=false};},[token]);
   // Role editor state is scoped to the selected Workspace, never carried to another team.
-  useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);setMemberSearch('');setMemberRoleFilter('all');setShowMemberAdd(false);setExpandedMemberAccess('');},[selectedWs]);
+  useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);setInviteOpen(false);setInviteEmail('');setInviteRoles(['Developer']);setInvitationRows([]);setInvitationError('');setMemberSearch('');setMemberRoleFilter('all');setShowMemberAdd(false);setExpandedMemberAccess('');},[selectedWs]);
   useEffect(() => {
     if (!token || !selectedWs) { setCollections([]); setMembers([]); setMembersWorkspaceId(''); setTeams([]); return; }
     let cancelled=false;
@@ -1362,6 +1377,49 @@ export default function App() {
   const selfMember=membersWorkspaceId===selectedWs?currentWorkspaceMember(members,me):null;
   const canEditCloud=canWorkspace(selfMember,'collection.write');
   const canManageMembers=canWorkspace(selfMember,'member.manage');
+  useEffect(()=>{
+    let active=true;
+    if(!token||!selectedWs||!canManageMembers){setInvitationRows([]);return;}
+    const workspaceId=selectedWs;
+    api(`/api/workspaces/${workspaceId}/invitations`,'GET',undefined,token)
+      .then(data=>{if(active&&workspaceId===selectedWorkspaceRef.current)setInvitationRows(data)})
+      .catch(e=>{if(active&&workspaceId===selectedWorkspaceRef.current)setInvitationError(getMessage(e))});
+    return()=>{active=false};
+  },[token,selectedWs,canManageMembers]);
+  async function inviteMember(e){
+    e.preventDefault();
+    if(invitationBusy||!inviteEmail.trim()||!inviteRoles.length||!selectedWs||!canManageMembers)return;
+    const workspaceId=selectedWs;const auth=token;
+    setInvitationBusy(true);setInvitationError('');
+    try{
+      await api(`/api/workspaces/${workspaceId}/invitations`,'POST',{email:inviteEmail.trim(),roles:inviteRoles},auth);
+      const all=await api(`/api/workspaces/${workspaceId}/invitations`,'GET',undefined,auth);
+      if(workspaceId!==selectedWorkspaceRef.current||auth!==currentTokenRef.current)return;
+      setInvitationRows(all);setInviteOpen(false);setInviteEmail('');setInviteRoles(['Developer']);setNotice('Invitation email sent.');
+    }catch(err){if(workspaceId===selectedWorkspaceRef.current)setInvitationError(getMessage(err));}
+    finally{setInvitationBusy(false);}
+  }
+  async function actOnInvitation(invitation,operation){
+    if(invitationBusy||!selectedWs||!canManageMembers)return;
+    const workspaceId=selectedWs;const auth=token;
+    setInvitationBusy(true);setInvitationError('');
+    try{
+      await api(`/api/workspaces/${workspaceId}/invitations/${invitation.id}${operation==='resend'?'/resend':''}`,operation==='resend'?'POST':'DELETE',undefined,auth);
+      const all=await api(`/api/workspaces/${workspaceId}/invitations`,'GET',undefined,auth);
+      if(workspaceId===selectedWorkspaceRef.current&&auth===currentTokenRef.current){setInvitationRows(all);setNotice(operation==='resend'?'Invitation resent':'Invitation revoked');}
+    }catch(err){if(workspaceId===selectedWorkspaceRef.current)setInvitationError(getMessage(err));}
+    finally{setInvitationBusy(false);}
+  }
+  async function acceptInvitation(){
+    if(!token||!inviteToken||acceptingInvite)return;
+    setAcceptingInvite(true);setInviteAcceptError('');
+    try{
+      const workspace=await api('/api/invitations/accept','POST',{token:inviteToken},token);
+      setInviteToken('');await loadWorkspaces(token);setSelectedWs(workspace.id);setPage('workspace');setWsTab('members');setNotice('Workspace invitation accepted');
+    }catch(err){setInviteAcceptError(getMessage(err));}
+    finally{setAcceptingInvite(false);}
+  }
+
   const canManageTeams=canWorkspace(selfMember,'team.manage');
   const canAssignRoles=canWorkspace(selfMember,'role.assign');
   const assignableRoles=selfMember?.roles||[];
@@ -1597,7 +1655,7 @@ export default function App() {
           <button title="Manage environments" onClick={()=>openContext('environments')}><Settings2 size={16}/></button>
         </div>
         <span className="pp-connection"><span/> Local development</span>
-        {me ? <><button className="pp-profile" title={me.email} onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button>{GOOGLE_CLIENT_ID && <button type="button" className="pp-google-link-top" title="Connect Google to your existing PakPost account" onClick={()=>{setGoogleLinkError('');setGoogleLinkPassword('');setGoogleLinkOpen(true);}}><Link2 size={14}/> Connect Google</button>}</> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
+        {me ? <><button className="pp-profile" title={me.email} onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button>{GOOGLE_CLIENT_ID&&!googleLinked && <button type="button" className="pp-google-link-top" title="Connect Google to your existing PakPost account" onClick={()=>{setGoogleLinkError('');setGoogleLinkPassword('');setGoogleLinkOpen(true);}}><Link2 size={14}/> Connect Google</button>}</> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
       </div>
     </header>
 
@@ -1827,7 +1885,10 @@ export default function App() {
                 <div className="pp-v34-hero">
                   <div className="pp-v34-header">
                     <div><h3>Members & roles</h3><p>Roles apply only to <strong className="pp-v34-strong">{activeWorkspace?.name||'this workspace'}</strong>. Members can have multiple roles.</p></div>
-                    {canManageMembers&&<button type="button" className="pp-v34-button primary" aria-expanded={showMemberAdd} onClick={()=>setShowMemberAdd(previous=>!previous)}><Plus size={15}/>{showMemberAdd?'Close':'Add existing member'}</button>}
+                    {canManageMembers&&<div className="pp-v8-member-actions">
+                      <button type="button" className="pp-v34-button" aria-expanded={showMemberAdd} onClick={()=>{setShowMemberAdd(v=>!v);setInviteOpen(false)}}><Plus size={15}/> Add existing</button>
+                      <button type="button" className="pp-v34-button primary" aria-expanded={inviteOpen} onClick={()=>{setInviteOpen(v=>!v);setShowMemberAdd(false)}}><Mail size={15}/> Invite via email</button>
+                    </div>}
                   </div>
                   <div className="pp-v34-stats" aria-label="Workspace member statistics">
                     <span className="pp-v34-stat"><strong>{workspaceMemberStats.count}</strong> members</span>
@@ -1845,9 +1906,26 @@ export default function App() {
                   <input id="pp-member-email" type="email" required maxLength={254} placeholder="teammate@company.com" value={newMember} onChange={e=>setNewMember(e.target.value)}/>
                   <div className="pp-rbac-heading">Assign initial roles</div>
                   <WorkspaceRolePicker value={newMemberRoles} onChange={setNewMemberRoles} actorRoles={assignableRoles} disabled={busyAction}/>
-                  <p className="pp-v34-add-help">This adds an already-registered PakPost user. Sending an email invitation is planned for V8.</p>
+                  <p className="pp-v34-add-help">Only for users already registered in PakPost. Use Invite via email for new members.</p>
                   <div className="pp-v34-add-actions"><button type="button" className="pp-v34-button" onClick={()=>setShowMemberAdd(false)}>Cancel</button><button type="submit" className="pp-v34-button primary" disabled={busyAction||!newMemberRoles.length||!newMember.trim()}>Add member</button></div>
                 </form>}
+                {canManageMembers&&inviteOpen&&<form className="pp-v34-add pp-v8-invite-form" onSubmit={inviteMember}>
+                  <label htmlFor="pp-invite-email">Invite a new member via email</label>
+                  <input id="pp-invite-email" type="email" autoFocus required maxLength={254} placeholder="teammate@company.com" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/>
+                  <div className="pp-rbac-heading">Roles to assign when invitation is accepted</div>
+                  <WorkspaceRolePicker value={inviteRoles} onChange={setInviteRoles} actorRoles={assignableRoles} disabled={invitationBusy}/>
+                  <p className="pp-v34-add-help">Invitation lasts 7 days. The recipient must sign in with a Google-verified email matching this invitation.</p>
+                  <div className="pp-v34-add-actions"><button type="button" className="pp-v34-button" onClick={()=>setInviteOpen(false)}>Cancel</button><button type="submit" className="pp-v34-button primary" disabled={invitationBusy||!inviteEmail.trim()||!inviteRoles.length}><Mail size={14}/> {invitationBusy?'Sending…':'Send invitation'}</button></div>
+                </form>}
+                {canManageMembers&&<section className="pp-v8-invitations" aria-label="Workspace invitations">
+                  <div className="pp-v8-invitations-heading"><strong>Pending invitations</strong><span>{pendingInvitations(invitationRows).length} pending</span></div>
+                  {invitationError&&<p className="pp-env-error" role="alert">{invitationError}</p>}
+                  {pendingInvitations(invitationRows).map(i=><div className="pp-v8-invite-item" key={i.id}>
+                    <div className="pp-v8-invite-info"><strong>{i.email}</strong><small>{(i.roles||[]).join(' + ')} · Expires {new Date(i.expiresAt).toLocaleDateString()}</small></div>
+                    <div className="pp-v8-invite-actions"><button type="button" disabled={invitationBusy||!canManageInvitation(assignableRoles,i.roles)} onClick={()=>actOnInvitation(i,'resend')}>Resend</button><button type="button" disabled={invitationBusy||!canManageInvitation(assignableRoles,i.roles)} onClick={()=>actOnInvitation(i,'revoke')}>Revoke</button></div>
+                  </div>)}
+                  {!pendingInvitations(invitationRows).length&&!invitationError&&<p className="pp-muted-small">No pending invitations for this workspace.</p>}
+                </section>}
                 <div className="pp-v34-toolbar">
                   <label className="pp-v34-search"><Search size={15}/><input aria-label="Search workspace members" type="search" placeholder="Search name or email" value={memberSearch} onChange={e=>setMemberSearch(e.target.value)}/></label>
                   <RetroSelect className="pp-v34-filter" ariaLabel="Filter members by role" value={memberRoleFilter} onChange={setMemberRoleFilter}
@@ -1916,6 +1994,17 @@ export default function App() {
         {exportIncludeSecrets&&<p className="pp-v17-export-warning">The exported JSON may contain credentials. Store it securely.</p>}
         <p className="pp-v17-export-note">OpenAPI cannot execute Postman scripts; Insomnia v4 JSON is a legacy interchange format, not Insomnia v5 YAML. Environment OpenAPI export uses an x-pakpost-environment extension. Always check payloads/examples for credentials.</p>
         <div className="pp-action-dialog-buttons"><button onClick={()=>setExportChoice(null)}>Cancel</button><button className="pp-modal-submit" onClick={confirmExport}><ArrowDownToLine size={15}/> Export JSON</button></div>
+      </div>
+    </Dialog>}
+    {inviteToken&&<Dialog title="Workspace invitation" subtitle="Accept an invitation to collaborate in a PakPost workspace." onClose={()=>{setInviteToken('');setInviteAcceptError('')}}>
+      <div className="modal-form">
+        <p className="pp-muted-small">To accept, sign in with the Google-verified account matching the invitation email. The invitation link is one-time and expires after 7 days.</p>
+        {me&&<p>Signed in as <strong>{me.email}</strong></p>}
+        {inviteAcceptError&&<div className="form-error" role="alert">{inviteAcceptError}</div>}
+        {token?<button type="button" className="pp-modal-submit" disabled={acceptingInvite} onClick={acceptInvitation}>{acceptingInvite?'Accepting…':'Accept invitation'}</button>:
+          <button type="button" className="pp-modal-submit" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}>Sign in to accept</button>}
+        {token&&!googleLinked&&<p className="pp-muted-small">Your current account has no linked Google identity. Connect Google from the top bar first if the invitation email matches.</p>}
+        <button type="button" className="pp-v34-button" onClick={()=>{setInviteToken('');setInviteAcceptError('')}}>Not now</button>
       </div>
     </Dialog>}
     {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}>

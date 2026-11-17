@@ -21,6 +21,8 @@ public static class DependencyInjection
         services.AddScoped<IUserExternalIdentityRepository, UserExternalIdentityRepository>();
         services.AddSingleton<IGoogleIdentityVerifier, GoogleIdentityVerifier>();
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+        services.AddScoped<IWorkspaceInvitationRepository, WorkspaceInvitationRepository>();
+        services.AddScoped<IWorkspaceInvitationEmailSender, SmtpWorkspaceInvitationEmailSender>();
         services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<ISavedRequestRepository, SavedRequestRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();

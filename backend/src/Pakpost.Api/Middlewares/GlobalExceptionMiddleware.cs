@@ -23,6 +23,12 @@ public sealed class GlobalExceptionMiddleware(RequestDelegate next, ILogger<Glob
             context.Response.StatusCode = ex.StatusCode;
             await context.Response.WriteAsJsonAsync(new { message = ex.Message });
         }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            logger.LogWarning(ex,"Concurrent update conflict");
+            context.Response.StatusCode=(int)HttpStatusCode.Conflict;
+            await context.Response.WriteAsJsonAsync(new { message="Resource changed; refresh and retry" });
+        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
         {
             logger.LogWarning(ex, "Unique constraint conflict");

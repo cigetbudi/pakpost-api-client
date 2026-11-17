@@ -84,3 +84,12 @@ public sealed class GoogleLinkHandler(
         return new GoogleLinkResult(true);
     }
 }
+
+public sealed record GoogleConnectionStatusQuery(Guid UserId):IRequest<GoogleConnectionStatus>;
+public sealed record GoogleConnectionStatus(bool Connected);
+public sealed class GoogleConnectionStatusHandler(IUserExternalIdentityRepository identities)
+    :IRequestHandler<GoogleConnectionStatusQuery,GoogleConnectionStatus>
+{
+    public async ValueTask<GoogleConnectionStatus> Handle(GoogleConnectionStatusQuery q,CancellationToken ct)
+        =>new(await identities.FindByUserProviderAsync(q.UserId,"google",ct) is not null);
+}

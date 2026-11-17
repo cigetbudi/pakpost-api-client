@@ -10,6 +10,7 @@ public sealed class PakpostDbContext(DbContextOptions<PakpostDbContext> options)
     public DbSet<Workspace> Workspaces => Set<Workspace>();
     public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
     public DbSet<WorkspaceMemberRole> WorkspaceMemberRoles => Set<WorkspaceMemberRole>();
+    public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
     public DbSet<Collection> Collections => Set<Collection>();
     public DbSet<SavedRequest> SavedRequests => Set<SavedRequest>();
     public DbSet<Team> Teams => Set<Team>();

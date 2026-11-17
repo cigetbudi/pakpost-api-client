@@ -290,6 +290,27 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("users", "auth");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceInvitation", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid");
+                    b.Property<Guid>("WorkspaceId").HasColumnType("uuid");
+                    b.Property<Guid>("InvitedByUserId").HasColumnType("uuid");
+                    b.Property<string>("Email").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)");
+                    b.Property<string>("RolesJson").IsRequired().HasColumnType("jsonb");
+                    b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+                    b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset>("SentAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset>("ExpiresAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset?>("AcceptedAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset?>("RevokedAt").HasColumnType("timestamp with time zone");
+                    b.Property<int>("Version").IsConcurrencyToken().ValueGeneratedOnAdd().HasColumnType("integer").HasDefaultValue(1);
+                    b.HasKey("Id");
+                    b.HasIndex("TokenHash").IsUnique();
+                    b.HasIndex("WorkspaceId", "Email");
+                    b.HasIndex("InvitedByUserId");
+                    b.ToTable("workspace_invitations", "organization");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.Workspace", b =>
                 {
                     b.Property<Guid>("Id")
@@ -329,6 +350,14 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
 
                     b.HasKey("WorkspaceId", "UserId", "Role");
                     b.ToTable("workspace_member_roles", "organization");
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceInvitation", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.Workspace", null).WithMany()
+                        .HasForeignKey("WorkspaceId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("Pakpost.Domain.Entities.User", null).WithMany()
+                        .HasForeignKey("InvitedByUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 
             modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceMember", b =>

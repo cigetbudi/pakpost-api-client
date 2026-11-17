@@ -63,7 +63,8 @@ app.Use(async (context,next)=>
 {
     // Private API responses must not be cached by intermediaries or HTTP caches.
     if(context.Request.Path.StartsWithSegments("/api/workspaces") ||
-       context.Request.Path.StartsWithSegments("/api/auth"))
+       context.Request.Path.StartsWithSegments("/api/auth") ||
+       context.Request.Path.StartsWithSegments("/api/invitations"))
     {
         context.Response.Headers.CacheControl="no-store, private";
         context.Response.Headers.Pragma="no-cache";
