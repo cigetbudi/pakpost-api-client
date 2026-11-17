@@ -125,3 +125,38 @@ test('Import dialog keeps explicit Local/Cloud destination and guards against en
   assert.match(app,/importRequestsAndEnvironments\(parsed,allowedStorageScope/);
   assert.match(app,/<ImportDestinationPicker authenticated={!!token}/);
 });
+
+test('Cloud import preflights backend method, body and script limits before writes',async()=>{
+  const calls=[];
+  const settings={workspaceId:'ws',token:'auth',request:async(...args)=>{calls.push(args);return {id:'id'};}};
+  for(const invalid of [
+    {name:'Bad method',url:'https://example.org',method:'TRACE'},
+    {name:'Oversized body',url:'https://example.org',body:'x'.repeat(131073)},
+    {name:'Oversized pre-script',url:'https://example.org',preScript:'x'.repeat(64001)},
+    {name:'Oversized post-script',url:'https://example.org',postScript:'x'.repeat(64001)}
+  ]){
+    await assert.rejects(saveCloudCollections([{name:'One',requests:[{name:'Valid',url:'https://example.org'},invalid]}],settings));
+  }
+  assert.equal(calls.length,0);
+});
+
+test('Cloud import limits total nested requests before creating collections',async()=>{
+  let calls=0;
+  const sources=Array.from({length:3},(_,i)=>({name:`Part ${i}`,requests:Array.from({length:70},(_,j)=>({name:`Req ${j}`,url:'https://example.org'}))}));
+  await assert.rejects(saveCloudCollections(sources,{workspaceId:'ws',token:'auth',request:async()=>{calls++;}}),/maximum 200 requests/);
+  assert.equal(calls,0);
+});
+
+test('Cloud import error reports precise partial progress and keeps completed writes',async()=>{
+  const calls=[];
+  await assert.rejects(saveCloudCollections([{name:'Part A',requests:[
+    {name:'One',url:'https://example.org'},
+    {name:'Two',url:'https://example.org'}
+  ]}],{workspaceId:'ws',token:'auth',request:async(url,method)=>{
+    calls.push([url,method]);
+    if(calls.length===1)return {id:'new-collection-id'};
+    if(calls.length===2)return {id:'first-request-id'};
+    throw Error('backend unavailable');
+  }}),error=>/1\/2 requests saved/.test(error.message)&&/new-collection-id/.test(error.message)&&/Existing Cloud writes were kept/.test(error.message));
+  assert.equal(calls.length,3);
+});
