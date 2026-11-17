@@ -1,12 +1,19 @@
-.pp-console-drawer{position:fixed;z-index:55;left:var(--pp-sidebar-width,0px);right:0;bottom:0;height:min(340px,52vh);display:flex;flex-direction:column;background:var(--surface,#161b22);color:var(--text,#e6edf3);border-top:1px solid var(--border,#56606a);box-shadow:0 -8px 30px #0002;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.pp-console-drawer{position:fixed;z-index:55;left:var(--pp-sidebar-width,0px);right:0;bottom:0;max-height:75vh;display:flex;flex-direction:column;background:var(--surface,#161b22);color:var(--text,#e6edf3);border-top:1px solid var(--border,#56606a);box-shadow:0 -8px 30px #0002;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
 .pp-console-head,.pp-console-controls{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border,#56606a)}
 .pp-console-head strong,.pp-console-head button,.pp-console-controls label{display:flex;align-items:center;gap:7px}
 .pp-console-head>span{opacity:.6}.pp-console-spacer{flex:1}
-.pp-console-head button,.pp-console-controls select{color:inherit;background:transparent;border:1px solid var(--border,#56606a);padding:5px 8px;border-radius:6px;cursor:pointer}
-.pp-console-controls label{flex:1;min-width:90px}.pp-console-controls input{background:transparent;color:inherit;border:0;outline:0;width:100%;min-width:0}
-.pp-console-scroll{overflow:auto;flex:1;overscroll-behavior:contain}
+.pp-console-head button,.pp-console-head select,.pp-console-controls select,.pp-console-jump{color:inherit;background:transparent;border:1px solid var(--border,#56606a);padding:5px 8px;border-radius:6px;cursor:pointer;font:inherit}
+.pp-console-head button:hover,.pp-console-jump:hover{background:var(--hover,#8882)}
+.pp-console-head button:focus-visible,.pp-console-jump:focus-visible,.pp-console-controls input:focus-visible,.pp-console-controls select:focus-visible{outline:2px solid var(--accent,#429af4);outline-offset:2px}
+.pp-console-controls .pp-console-search{flex:1;min-width:90px}.pp-console-controls input[type="text"],.pp-console-search input{background:transparent;color:inherit;border:0;outline:0;width:100%;min-width:0}
+.pp-console-controls .pp-console-follow{white-space:nowrap;cursor:pointer;user-select:none}
+.pp-console-follow input{accent-color:var(--accent,#429af4)}
+.pp-console-scroll{overflow:auto;flex:1;min-height:0;overscroll-behavior:contain}
 .pp-console-event{display:flex;align-items:baseline;gap:12px;padding:5px 14px;border-bottom:1px solid #8882;white-space:pre-wrap;overflow-wrap:anywhere}
 .pp-console-event time,.pp-console-event code{opacity:.56;white-space:nowrap}.pp-console-event code{margin-left:auto}
 .pp-console-level{width:34px;flex:none;text-transform:uppercase;opacity:.8}.pp-console-phase{min-width:78px;opacity:.7}.pp-console-message{min-width:0;flex:1}
+.pp-console-jump{flex:none;display:inline-flex;align-items:center;gap:2px;padding:1px 5px}
 .pp-console-error{color:#e97878}.pp-console-warn{color:#edb85e}.pp-console-empty,.pp-console-loading{padding:18px;opacity:.7}.pp-console-toggle{display:inline-flex;align-items:center;gap:6px}.pp-console-toggle.active{font-weight:700}
-@media(max-width:720px){.pp-console-drawer{left:0}.pp-console-head>span,.pp-console-phase,.pp-console-event code{display:none}.pp-console-controls{flex-wrap:wrap}.pp-console-controls label{flex-basis:100%}}
+.pp-console-foot{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;padding:5px 14px;border-top:1px solid var(--border,#56606a);font-size:11px;opacity:.7}
+@media(max-width:900px){.pp-console-head>span{display:none}.pp-console-controls{flex-wrap:wrap}.pp-console-controls .pp-console-search{flex-basis:100%}.pp-console-head{gap:6px}.pp-console-event{gap:6px}}
+@media(max-width:720px){.pp-console-drawer{left:0}.pp-console-phase,.pp-console-event code{display:none}.pp-console-controls select{max-width:32%}.pp-console-foot span:nth-child(2){display:none}}

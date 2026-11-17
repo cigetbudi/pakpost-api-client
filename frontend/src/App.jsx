@@ -49,7 +49,7 @@ import {createResponseExample,exampleToResult,renameResponseExample,sanitizeResp
 import {applyAuthorization,AUTH_OPTIONS} from './features/authorization';
 import {readInterceptorMode,writeInterceptorMode,probeExtension,dispatchRequest,EXTENSION_CHANNEL} from './features/interceptorClient';
 import {discoverApiDestinations} from './features/interceptorDiscovery';
-import {appendConsoleEvent, subscribeConsoleEvents, clearConsoleEvents} from './features/pakpostConsoleStore.js';
+import {appendConsoleEvent, subscribeConsoleEvents, clearConsoleEvents, scriptConsoleLevel} from './features/pakpostConsoleStore.js';
 import {collectionVariableKey, readCollectionVariables, writeCollectionVariables, resetCollectionVariables, savedCollectionVariableMap, validateCollectionVariableRows, resolvedScriptVariables} from './features/collectionVariableSession.js';
 const PakpostConsole = lazy(() => import('./features/PakpostConsole.jsx'));
 const CollectionVariablesEditor = lazy(() => import('./features/CollectionVariablesEditor.jsx'));
@@ -114,7 +114,12 @@ export default function App() {
   const [page, setPage] = useState('tester');
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [consoleEvents, setConsoleEvents] = useState([]);
-  useEffect(() => subscribeConsoleEvents(setConsoleEvents), []);
+  // Keep the ring buffer alive, but do not re-render the entire workbench for
+  // every log line when the Console drawer is closed.
+  useEffect(() => {
+    if (!consoleOpen) { setConsoleEvents([]); return; }
+    return subscribeConsoleEvents(setConsoleEvents);
+  }, [consoleOpen]);
   const [interceptorMode,setInterceptorMode]=useState(()=>readInterceptorMode(localStorage));
   const [extensionStatus,setExtensionStatus]=useState({state:'unknown',version:''});
   const [commandOpen, setCommandOpen] = useState(false);
@@ -415,6 +420,17 @@ export default function App() {
     restoreDraft(next);
 
     setPage('tester');
+  }
+  function navigateConsoleEvent(event) {
+    if (!event?.line || !['pre-script','post-script'].includes(event.phase)) return;
+    if (!openTabs.some(tab => tab.id === event.tabId)) {
+      setNotice('The request tab for this Console event is no longer open.');
+      return;
+    }
+    selectTab(event.tabId);
+    setReqTab('scripts');
+    setScriptJump({phase:event.phase==='pre-script'?'pre':'post',line:event.line,column:event.column||1,serial:Date.now()});
+    setConsoleOpen(false);
   }
   function addTab(request, source = null, { focusName = false } = {}) {
     stashActive();
@@ -1551,13 +1567,13 @@ export default function App() {
       if(pre.error){
         const failure=new Error(`Pre-request script: ${pre.error}`);
         failure.scriptDiagnostic=pre.diagnostic||null;
-        pre.logs?.forEach(line=>trace('log','pre-script',line));
+        pre.logs?.forEach(line=>trace(scriptConsoleLevel(line),'pre-script',line));
         logs.push(...(pre.logs||[]).map(line=>'PRE: '+line));
-        trace('error','pre-script',pre.error);
+        trace('error','pre-script',pre.error,{line:pre.diagnostic?.line,column:pre.diagnostic?.column});
         throw failure;
       }
       trace('info','pre-script','Pre-request script completed');
-      pre.logs.forEach(line=>trace('log','pre-script',line));
+      pre.logs.forEach(line=>trace(scriptConsoleLevel(line),'pre-script',line));
       collectionVars=pre.collectionVariables||collectionVars;
       writeCollectionVariables(sessionCollectionVariables.current,collectionKey,collectionVars);
       variables=pre.variables;logs.push(...pre.logs.map(x=>'PRE: '+x));tests.push(...pre.tests);
@@ -1585,9 +1601,9 @@ export default function App() {
       try {
         const post=await runSandbox(postScript,'post',pre.environmentVariables||varsFromEnv(),command,r,pre.localVariables||{},collectionVars);
         logs.push(...post.logs.map(x=>'POST: '+x));tests.push(...post.tests);
-        post.logs.forEach(line=>trace('log','post-script',line));
+        post.logs.forEach(line=>trace(scriptConsoleLevel(line),'post-script',line));
         post.tests.forEach(test=>trace(test.passed===false?'error':'info','test',test.name||'Assertion completed',{passed:test.passed}));
-        if(post.error){scriptErrorNext=post.error;scriptDiagnosticNext=post.diagnostic||null;logs.push('SCRIPT ERROR: '+post.error);trace('error','post-script',post.error);}
+        if(post.error){scriptErrorNext=post.error;scriptDiagnosticNext=post.diagnostic||null;logs.push('SCRIPT ERROR: '+post.error);trace('error','post-script',post.error,{line:post.diagnostic?.line,column:post.diagnostic?.column});}
         else {
           writeCollectionVariables(sessionCollectionVariables.current,collectionKey,post.collectionVariables||collectionVars);
           await applyScriptVariables(post.environmentVariables||post.variables,runEnvironment);
@@ -1595,7 +1611,7 @@ export default function App() {
       }catch(scriptFailure){
         scriptErrorNext=getMessage(scriptFailure);
         scriptDiagnosticNext=scriptFailure.scriptDiagnostic||null;
-        logs.push('SCRIPT ERROR: '+scriptErrorNext);trace('error','post-script',scriptErrorNext);
+        logs.push('SCRIPT ERROR: '+scriptErrorNext);trace('error','post-script',scriptErrorNext,{line:scriptDiagnosticNext?.line,column:scriptDiagnosticNext?.column});
       }
       draftsRef.current[tabId]={...draftsRef.current[tabId],result:r,resTab:'body',scriptLog:logs,scriptTests:tests,scriptError:scriptErrorNext,scriptDiagnostic:scriptDiagnosticNext};
       if(tabId===activeTabRef.current){setResult(r);setResTab('body');setScriptLog(logs);setScriptTests(tests);setScriptError(scriptErrorNext);setScriptDiagnostic(scriptDiagnosticNext);}
@@ -2222,7 +2238,7 @@ export default function App() {
         <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setActionDialog(null)}>Cancel</button><button type="submit" disabled={busyAction} className="pp-modal-submit">{actionDialog.action.startsWith('delete')?'Delete':'Rename'}</button></div>
       </form>
     </Dialog>}
-  {consoleOpen && <Suspense fallback={<div className="pp-console-loading">Opening PakPost Console…</div>}><PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents}/></Suspense>}
+  {consoleOpen && <Suspense fallback={<div className="pp-console-loading">Opening PakPost Console…</div>}><PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents} onNavigate={navigateConsoleEvent}/></Suspense>}
   <FastTooltip/>
   </div>;
 }

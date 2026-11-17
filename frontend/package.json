@@ -9,7 +9,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "bun test",
     "test:node": "node --test tests/*.test.js",
-    "audit": "bun audit"
+    "audit": "bun audit",
+    "perf:audit": "node scripts/performance-audit.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
