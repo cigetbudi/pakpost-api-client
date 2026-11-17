@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { environmentContextKey, environmentsForContext,
-  selectionForContext, setSelectionForContext } from '../../environmentContext.js';
-import { STORAGE_WORKSPACE } from '../../storageScope.js';
+  selectionForContext, setSelectionForContext } from '../services/environmentContext.js';
+import { STORAGE_WORKSPACE } from '../../import-export/services/storageScope.js';
 
 /**
  * Resolve the currently-visible Environment without ever using the previous

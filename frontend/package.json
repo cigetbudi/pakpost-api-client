@@ -8,9 +8,10 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "bun test",
-    "test:node": "node --test tests/*.test.js",
+    "test:node": "node scripts/check-source-imports.mjs && node --test tests/*/*.test.js",
     "audit": "bun audit",
-    "perf:audit": "node scripts/performance-audit.mjs"
+    "perf:audit": "node scripts/performance-audit.mjs",
+    "verify:imports": "node scripts/check-source-imports.mjs"
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.0",

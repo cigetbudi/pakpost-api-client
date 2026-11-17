@@ -1,10 +1,10 @@
 import React from 'react';
 import { AlertTriangle, FileUp, Plus, WandSparkles, X } from 'lucide-react';
 import { IconButton } from '../../../components/ui/WorkbenchPrimitives.jsx';
-import { RetroSelect } from '../../RetroSelect';
-import { VariableAwareInput } from '../../VariableAwareInput.jsx';
-import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem } from '../../requestTools';
-import { isDarkAppearance } from '../../appearance';
+import { RetroSelect } from '../../../components/ui/RetroSelect';
+import { VariableAwareInput } from './VariableAwareInput.jsx';
+import { BODY_FORMATS, bodyFormat, languageFromMime, syntaxProblem } from '../services/requestTools';
+import { isDarkAppearance } from '../../settings/services/appearance';
 import { encodeFile } from '../../../utils/workbenchHelpers.js';
 
 export function RequestBody({ format, selectFormat, beautifyBody, body, setBody,

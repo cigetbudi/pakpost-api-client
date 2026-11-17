@@ -1,4 +1,4 @@
-import { freshRequest } from '../../draftLifecycle.js';
+import { freshRequest } from '../../requests/services/draftLifecycle.js';
 
 /**
  * Preserve non-Cloud tabs on sign-out, but never depend on an existing saved

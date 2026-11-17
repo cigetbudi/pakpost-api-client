@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Dialog } from '../../../components/ui/WorkbenchPrimitives.jsx';
-import { GoogleSignInButton } from '../../GoogleSignInButton.jsx';
+import { GoogleSignInButton } from './GoogleSignInButton.jsx';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
 

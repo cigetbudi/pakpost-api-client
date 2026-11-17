@@ -9,8 +9,8 @@ import {
   WandSparkles,
   X,
 } from 'lucide-react';
-import { statusTone } from '../../features/responseExamples.js';
-import { languageFromMime } from '../../features/requestTools.js';
+import { statusTone } from '../../features/requests/services/responseExamples.js';
+import { languageFromMime } from '../../features/requests/services/requestTools.js';
 
 /**
  * Read-only response view. All state lives in the workbench owner; this

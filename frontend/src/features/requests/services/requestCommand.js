@@ -1,7 +1,7 @@
-import { applyAuthorization } from '../../authorization.js';
-import { bodyFormat, buildCommand, languageFromMime, resolveRows, resolveVars } from '../../requestTools.js';
-import { stripJsonComments } from '../../jsonComments.js';
-import { isEnabled } from '../../requestMetadata.js';
+import { applyAuthorization } from './authorization.js';
+import { bodyFormat, buildCommand, languageFromMime, resolveRows, resolveVars } from './requestTools.js';
+import { stripJsonComments } from './jsonComments.js';
+import { isEnabled } from './requestMetadata.js';
 
 /** Shared transport command: used by Send, codegen and script preview. */
 export function buildRequestCommand(request, vars) {

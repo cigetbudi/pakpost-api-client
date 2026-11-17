@@ -46,7 +46,7 @@ export function createEnvironmentActions(dependencies) {
     try{
       // Export formats (Postman/OpenAPI/Insomnia) are not required to open
       // PakPost or send a request; load the converters only when exporting.
-      const {exportCollectionByFormat,exportEnvironmentByFormat,exportFileName}=await import('../../exportFormats.js');
+      const {exportCollectionByFormat,exportEnvironmentByFormat,exportFileName}=await import('../../import-export/services/exportFormats.js');
       const {kind,scope,collectionId,environment,name}=exportChoice;
       if(kind==='environment'){
         downloadJson(exportEnvironmentByFormat(environment,{format:exportFormat,includeSecrets:exportIncludeSecrets}),exportFileName(name,exportFormat,'environment'));

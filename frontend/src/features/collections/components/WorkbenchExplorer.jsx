@@ -1,14 +1,14 @@
 import React from 'react';
 import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History, Users, Plus, Search, ChevronsUpDown, ChevronsDownUp, FileUp, X, ChevronDown, FolderClosed, ArrowRight } from 'lucide-react';
-import { RetroSelect } from '../../RetroSelect.jsx';
-import { EnvironmentExplorer } from '../../EnvironmentExplorer.jsx';
-import { LocalCollectionsTree } from '../../LocalCollectionsTree.jsx';
-import { isDarkAppearance } from '../../appearance.js';
-import { canWorkspace } from '../../workspaceRoles.js';
-import { STORAGE_LOCAL, STORAGE_WORKSPACE, cloudEndpointCount } from '../../storageScope.js';
-import { isWorkspaceCollectionOpen, workspaceCollectionKey } from '../../collectionExpansion.js';
-import { decodeStoredHeaders } from '../../requestMetadata.js';
-import { statusTone } from '../../responseExamples.js';
+import { RetroSelect } from '../../../components/ui/RetroSelect.jsx';
+import { EnvironmentExplorer } from '../../environments/components/EnvironmentExplorer.jsx';
+import { LocalCollectionsTree } from './LocalCollectionsTree.jsx';
+import { isDarkAppearance } from '../../settings/services/appearance.js';
+import { canWorkspace } from '../../workspace/services/workspaceRoles.js';
+import { STORAGE_LOCAL, STORAGE_WORKSPACE, cloudEndpointCount } from '../../import-export/services/storageScope.js';
+import { isWorkspaceCollectionOpen, workspaceCollectionKey } from '../services/collectionExpansion.js';
+import { decodeStoredHeaders } from '../../requests/services/requestMetadata.js';
+import { statusTone } from '../../requests/services/responseExamples.js';
 
 // Only the visible explorer mounts. Code generator and import/export panels are
 // still supplied lazily by the workbench; this module never fetches user data.

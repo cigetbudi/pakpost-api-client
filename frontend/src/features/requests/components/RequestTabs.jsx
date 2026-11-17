@@ -1,9 +1,9 @@
 import React from 'react';
 import { useStore } from 'zustand';
 import { AlertTriangle, History, Layers3, Play, Plus, Terminal, X } from 'lucide-react';
-import { hasUnsavedMarker, freshRequest } from '../../draftLifecycle';
-import { reorderTabs } from '../../tabActions';
-import { STORAGE_WORKSPACE } from '../../storageScope';
+import { hasUnsavedMarker, freshRequest } from '../services/draftLifecycle';
+import { reorderTabs } from '../services/tabActions';
+import { STORAGE_WORKSPACE } from '../../import-export/services/storageScope';
 
 export function RequestTabs({ store, page, remoteAlerts, snapshot, draftsRef,
   tabDragRef, selectTab, closeTab, showTabContext, setTabMenu, addTab,

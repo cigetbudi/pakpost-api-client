@@ -12,7 +12,7 @@ import './styles/layers/collection-workflows.css';
 import './styles/layers/workbench-details.css';
 import './styles/layers/context-sidebar.css';
 import './styles/layers/request-drafts.css';
-import { readAppearance } from './features/appearance.js';
+import { readAppearance } from './features/settings/services/appearance.js';
 document.documentElement.dataset.theme = readAppearance(window.localStorage);
 createRoot(document.getElementById('root')).render(<React.StrictMode><WorkbenchErrorBoundary><App/></WorkbenchErrorBoundary></React.StrictMode>);
 import './styles/layers/environment-branding.css';

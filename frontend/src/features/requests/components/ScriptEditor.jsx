@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { isDarkAppearance } from '../../appearance';
+import { isDarkAppearance } from '../../settings/services/appearance';
 
 // Presentation only: script execution stays inside the isolated QuickJS worker.
 export function ScriptEditor({ preScript, setPreScript, postScript, setPostScript,

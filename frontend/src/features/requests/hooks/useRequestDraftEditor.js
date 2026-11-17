@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { sanitizeResponseExamples } from '../../responseExamples.js';
+import { sanitizeResponseExamples } from '../services/responseExamples.js';
 
 /** Editable request data stays in React state; persist only via existing guarded recovery path. */
 export function useRequestDraftEditor(recovered, emptyHeader) {

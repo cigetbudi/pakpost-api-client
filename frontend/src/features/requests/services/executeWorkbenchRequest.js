@@ -1,9 +1,9 @@
-import { runSandbox } from '../../runScript.js';
-import { postmanRequestSnapshot } from '../../postmanCompat.js';
-import { languageFromMime, syntaxProblem } from '../../requestTools.js';
-import { stripJsonComments } from '../../jsonComments.js';
-import { scriptConsoleLevel } from '../../pakpostConsoleStore.js';
-import { resolvedScriptVariables } from '../../collectionVariableSession.js';
+import { runSandbox } from './runScript.js';
+import { postmanRequestSnapshot } from './postmanCompat.js';
+import { languageFromMime, syntaxProblem } from './requestTools.js';
+import { stripJsonComments } from './jsonComments.js';
+import { scriptConsoleLevel } from '../../console/services/pakpostConsoleStore.js';
+import { resolvedScriptVariables } from '../../collections/services/collectionVariableSession.js';
 
 /**
  * Execute one HTTP request and its Postman-style scripts without React state.

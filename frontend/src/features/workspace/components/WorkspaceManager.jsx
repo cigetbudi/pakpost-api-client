@@ -2,12 +2,12 @@ import React from 'react';
 import { Layers3, ArrowRight, Plus, ChevronRight, FolderClosed, LockKeyhole, Users, ShieldCheck, FolderPlus, Trash2, Mail, Search, Pencil } from 'lucide-react';
 import { api } from '../../../services/httpClient.js';
 import { IconButton, Empty } from '../../../components/ui/WorkbenchPrimitives.jsx';
-import { WorkspaceRolePicker } from '../../WorkspaceRolePicker.jsx';
-import { WorkspaceAccessBreakdown } from '../../WorkspaceAccessBreakdown.jsx';
-import { RetroSelect } from '../../RetroSelect.jsx';
-import { pendingInvitations, canManageInvitation } from '../../workspaceInvitations.js';
-import { normalizeRoles, WORKSPACE_ROLES } from '../../workspaceRoles.js';
-import { roleSelectionChanged } from '../../workspaceRoleInsights.js';
+import { WorkspaceRolePicker } from './WorkspaceRolePicker.jsx';
+import { WorkspaceAccessBreakdown } from './WorkspaceAccessBreakdown.jsx';
+import { RetroSelect } from '../../../components/ui/RetroSelect.jsx';
+import { pendingInvitations, canManageInvitation } from '../services/workspaceInvitations.js';
+import { normalizeRoles, WORKSPACE_ROLES } from '../services/workspaceRoles.js';
+import { roleSelectionChanged } from '../services/workspaceRoleInsights.js';
 
 // Workspace is intentionally a separate view. It has no access to request
 // drafts or authentication secrets; all mutations still use the same API/RBAC.

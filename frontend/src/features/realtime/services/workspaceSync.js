@@ -1,8 +1,8 @@
 import { CLIENT_INSTANCE_ID } from '../../../services/httpClient.js';
-import { validWorkspaceEvent, shouldRefreshRequestList } from '../../workspaceRealtime.js';
-import { decideCloudTabSync } from '../../cloudConflict.js';
-import { isWorkspaceCollectionOpen, workspaceCollectionKey } from '../../collectionExpansion.js';
-import { freshRequest, tabSaved } from '../../draftLifecycle.js';
+import { validWorkspaceEvent, shouldRefreshRequestList } from './workspaceRealtime.js';
+import { decideCloudTabSync } from '../../requests/services/cloudConflict.js';
+import { isWorkspaceCollectionOpen, workspaceCollectionKey } from '../../collections/services/collectionExpansion.js';
+import { freshRequest, tabSaved } from '../../requests/services/draftLifecycle.js';
 
 /**
  * A side-effect boundary for the SignalR-to-REST reconciliation workflow.

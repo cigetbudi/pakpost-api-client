@@ -15,7 +15,7 @@ export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, onE
       return;
     }
     let disposed = false, stop = null;
-    import('../../workspaceRealtime.js').then(({connectWorkspaceRealtime}) =>
+    import('../services/workspaceRealtime.js').then(({connectWorkspaceRealtime}) =>
       connectWorkspaceRealtime({workspaceId, getToken: () => token,
         onEvent: event => { if (!disposed) callbacks.current.onEvent?.(event); },
         onAccessChanged: () => { if (!disposed) callbacks.current.onAccessChanged?.(workspaceId, token); },
