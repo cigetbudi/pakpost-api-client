@@ -129,16 +129,17 @@ var cases=new (string Name,Func<Task> Test)[]
         var ws=Guid.NewGuid();var id=Guid.NewGuid();var collections=new FakeCollections();
         var collection=new Collection(ws,"Cloud",id);collections.Items.Add(collection);
         var repo=new FakeWorkspaces(ws,id,WorkspaceRole.Member,[WorkspaceAccessRole.QA]);
-        var requests=new FakeSavedRequests();var uow=new FakeUnitOfWork();
+        var requests=new FakeSavedRequests();var revisions=new ForbiddenRevisionRepository();
+        var cipher=new FakeCipher();var uow=new FakeUnitOfWork();
         await MustBeForbidden(async()=>{await new CreateCollectionHandler(collections,repo,uow)
             .Handle(new CreateCollectionCommand(id,ws,"New"),CancellationToken.None);});
         await MustBeForbidden(async()=>{await new RenameCollectionHandler(collections,repo,uow)
             .Handle(new RenameCollectionCommand(id,ws,collection.Id,"Renamed"),CancellationToken.None);});
-        await MustBeForbidden(async()=>{await new SaveRequestHandler(repo,collections,requests,uow)
+        await MustBeForbidden(async()=>{await new SaveRequestHandler(repo,collections,requests,revisions,cipher,uow)
             .Handle(new SaveRequestCommand(id,ws,collection.Id,"Testing","GET","https://example.com","{}",""),CancellationToken.None);});
-        await MustBeForbidden(async()=>{await new UpdateSavedRequestHandler(repo,collections,requests,uow)
+        await MustBeForbidden(async()=>{await new UpdateSavedRequestHandler(repo,collections,requests,revisions,cipher,uow)
             .Handle(new UpdateSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid(),"Testing","GET","https://example.com","{}",""),CancellationToken.None);});
-        await MustBeForbidden(async()=>{await new MoveSavedRequestHandler(repo,collections,requests,uow)
+        await MustBeForbidden(async()=>{await new MoveSavedRequestHandler(repo,collections,requests,revisions,cipher,uow)
             .Handle(new MoveSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid(),collection.Id),CancellationToken.None);});
         await MustBeForbidden(async()=>{await new DeleteSavedRequestHandler(repo,collections,requests,uow)
             .Handle(new DeleteSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid()),CancellationToken.None);});
@@ -254,6 +255,17 @@ sealed class FakeSavedRequests:ISavedRequestRepository
         =>Task.FromResult<IReadOnlyList<SavedRequest>>([]);
     public void Add(SavedRequest value){}
     public void Remove(SavedRequest value){}
+}
+// QA mutations must fail permission checks before accessing revision history.
+sealed class ForbiddenRevisionRepository:ISavedRequestRevisionRepository
+{
+    private static InvalidOperationException Unexpected() =>
+        new("Forbidden operation accessed request revision history");
+    public Task<bool> AnyAsync(Guid requestId,CancellationToken ct) => throw Unexpected();
+    public Task<IReadOnlyList<SavedRequestRevision>> ListAsync(Guid requestId,int take,CancellationToken ct) => throw Unexpected();
+    public Task<SavedRequestRevision?> FindAsync(Guid requestId,int revision,CancellationToken ct) => throw Unexpected();
+    public Task TrimAsync(Guid requestId,int keepExisting,CancellationToken ct) => throw Unexpected();
+    public void Add(SavedRequestRevision revision) => throw Unexpected();
 }
 sealed class FakeUnitOfWork:IUnitOfWork
 {

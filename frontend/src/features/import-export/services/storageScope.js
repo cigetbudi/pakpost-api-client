@@ -58,6 +58,7 @@ export async function saveCloudCollections(sources,{workspaceId,token,request,on
   if(!workspaceId||!token)throw Error('Sign in and select a workspace before importing collections to Cloud.');
   const base=`/api/workspaces/${workspaceId}/collections`;
   if(!Array.isArray(sources))throw Error('Cloud import sources must be an array.');
+  if(sources.length<1||sources.length>30)throw Error('Cloud import requires 1–30 collections.');
   // Validate the entire batch before writes, including requests nested in collections.
   const totalRequests=sources.reduce((sum,source)=>sum+(Array.isArray(source?.requests)?source.requests.length:0),0);
   if(totalRequests>CLOUD_IMPORT_MAX_REQUESTS)throw Error(`Cloud import limit: maximum ${CLOUD_IMPORT_MAX_REQUESTS} requests across all collections.`);
@@ -69,28 +70,16 @@ export async function saveCloudCollections(sources,{workspaceId,token,request,on
   for(const source of prepared){
     if(!source.name||source.name.length>120)throw Error('Cloud collection name must be 1–120 characters.');
   }
-  let count=0,createdCount=0,firstId='';
-  let activeCollectionId='',activeCollectionName='';
+  // Atomic backend endpoint. Never use the legacy per-request loop: it leaves partial data.
+  // Do not retry automatically after a timeout; the server may already have committed.
+  let result;
   try{
-    for(const source of prepared){
-      activeCollectionName=source.name;
-      activeCollectionId='';
-      const created=await request(base,'POST',{name:source.name},token);
-      if(!created?.id)throw Error('Cloud API did not return a collection ID.');
-      activeCollectionId=created.id;
-      createdCount++;firstId ||= created.id;
-      onCreated(created);
-      if(source.variables.length){
-        await request(`${base}/${created.id}/variables`,'PUT',{version:0,variables:source.variables},token);
-      }
-      for(const payload of source.requests){
-        await request(`${base}/${created.id}/requests`,'POST',payload,token);
-        count++;
-      }
-    }
+    result=await request(`${base}/import`,'POST',{collections:prepared},token);
   }catch(error){
-    const location=activeCollectionId?`collection "${activeCollectionName}" (${activeCollectionId})`:`collection "${activeCollectionName}"`;
-    throw Error(`Cloud import partially completed (${createdCount} collections created, ${count}/${totalRequests} requests saved; stopped at ${location}). Existing Cloud writes were kept. ${error?.message||String(error)}`);
+    throw Error(`Cloud import failed or its result is unknown. Refresh Cloud before retrying to avoid duplicates. ${error?.message||String(error)}`);
   }
-  return {count,createdCount,firstId};
+  if(!result||!Number.isInteger(result.count)||!Number.isInteger(result.createdCount))
+    throw Error('Cloud import response was invalid. Refresh Cloud before retrying.');
+  for(const created of result.collections||[])onCreated(created);
+  return {count:result.count,createdCount:result.createdCount,firstId:result.firstId||''};
 }

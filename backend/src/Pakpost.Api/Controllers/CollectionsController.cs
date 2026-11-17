@@ -50,6 +50,18 @@ public sealed class CollectionsController(ISender sender,IWorkspaceChangePublish
         return NoContent();
     }
 
+    // Atomic bulk import: backend validates permissions + every row, then commits once.
+    [HttpPost("import")]
+    public async Task<ActionResult<CloudImportResult>> Import(Guid workspaceId,
+        [FromBody] ImportCollectionsBody body, CancellationToken ct)
+    {
+        var result=await sender.Send(new ImportCollectionsCommand(User.GetUserId(), workspaceId, body.Collections), ct);
+        foreach (var collection in result.Collections)
+            await realtime.PublishAsync(workspaceId,"collection.created",collection.Id,null,null,Instance,ct);
+        return Ok(result);
+    }
+    public sealed record ImportCollectionsBody(List<CloudImportCollection> Collections);
+
     [HttpPost]
     public async Task<ActionResult<CollectionDto>> Create(Guid workspaceId, [FromBody] CreateCollectionRequest body, CancellationToken ct)
     {

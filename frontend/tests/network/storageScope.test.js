@@ -51,29 +51,27 @@ test('a session backup restores tabs rather than creating Cloud collections',()=
 });
 
 
-test('Cloud collection import uses the existing API, not browser storage',async()=>{
+test('Cloud import sends one atomic request and never writes to browser storage',async()=>{
   const calls=[];
   const result=await saveCloudCollections([{name:'Imported',requests:[{name:'Request',url:'https://api.example.com'}]}],{
     workspaceId:'workspace-id',token:'signed-token',
-    request:async (...args)=>{calls.push(args);return args[0].endsWith('/requests')?{id:'saved-request'}:{id:'collection-id'};}
+    request:async (...args)=>{calls.push(args);return {count:1,createdCount:1,firstId:'collection-id',collections:[{id:'collection-id',name:'Imported',requestCount:1}]};}
   });
-  assert.deepEqual(calls.map(x=>x[0]),[
-    '/api/workspaces/workspace-id/collections',
-    '/api/workspaces/workspace-id/collections/collection-id/requests'
-  ]);
-  assert.equal(calls[0][2].name,'Imported');
-  assert.equal(calls[1][2].name,'Request');
-  assert.equal(calls[1][3],'signed-token');
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][0],'/api/workspaces/workspace-id/collections/import');
+  assert.equal(calls[0][1],'POST');
+  assert.equal(calls[0][2].collections[0].requests[0].name,'Request');
+  assert.equal(calls[0][3],'signed-token');
   assert.deepEqual(result,{count:1,createdCount:1,firstId:'collection-id'});
 });
 
-test('Cloud preflight rejects invalid requests before any write, and failed write never falls back',async()=>{
+test('Cloud preflight rejects invalid requests before any write, server failure is not retried',async()=>{
   let calls=0;
   const request=async()=>{calls++;throw Error('backend validation failure')};
   const settings={workspaceId:'ws',token:'auth',request};
   await assert.rejects(saveCloudCollections([{name:'Bad',requests:[{url:''}]}],settings),/needs a URL/);
   assert.equal(calls,0);
-  await assert.rejects(saveCloudCollections([{name:'Good',requests:[{url:'https://example.org'}]}],settings),/Cloud import partially completed/);
+  await assert.rejects(saveCloudCollections([{name:'Good',requests:[{url:'https://example.org'}]}],settings),/backend validation failure/);
   assert.equal(calls,1);
 });
 
@@ -147,16 +145,24 @@ test('Cloud import limits total nested requests before creating collections',asy
   assert.equal(calls,0);
 });
 
-test('Cloud import error reports precise partial progress and keeps completed writes',async()=>{
+test('atomic import failure makes only one API call without partial-write reporting',async()=>{
   const calls=[];
   await assert.rejects(saveCloudCollections([{name:'Part A',requests:[
     {name:'One',url:'https://example.org'},
     {name:'Two',url:'https://example.org'}
   ]}],{workspaceId:'ws',token:'auth',request:async(url,method)=>{
     calls.push([url,method]);
-    if(calls.length===1)return {id:'new-collection-id'};
-    if(calls.length===2)return {id:'first-request-id'};
     throw Error('backend unavailable');
-  }}),error=>/1\/2 requests saved/.test(error.message)&&/new-collection-id/.test(error.message)&&/Existing Cloud writes were kept/.test(error.message));
-  assert.equal(calls.length,3);
+  }}),/backend unavailable/);
+  assert.deepEqual(calls,[['/api/workspaces/ws/collections/import','POST']]);
+});
+
+test('atomic import preserves server collection IDs for sidebar refresh',async()=>{
+  const created=[];
+  const result=await saveCloudCollections([{name:'One',requests:[]}],{
+    workspaceId:'ws',token:'auth',onCreated:row=>created.push(row),
+    request:async()=>({count:0,createdCount:1,firstId:'col-id',collections:[{id:'col-id',name:'One',requestCount:0}]})
+  });
+  assert.equal(result.firstId,'col-id');
+  assert.equal(created[0].requestCount,0);
 });

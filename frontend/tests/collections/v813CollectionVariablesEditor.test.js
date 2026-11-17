@@ -61,19 +61,19 @@ test('Postman collection variable roundtrip preserves scope and secret masking',
   assert.equal(parseImportText(JSON.stringify(unsafe)).collections[0].variables[1].isSecret,true);
 });
 
-test('Cloud import writes explicit saved collection variables before requests',async()=>{
+test('Cloud import writes collection variables and requests in one atomic batch',async()=>{
   const calls=[];
   const request=async(path,method,body)=>{
     calls.push({path,method,body});
-    if(method==='POST'&&!path.includes('/requests'))return {id:'new-col'};
-    return {};
+    return {count:1,createdCount:1,firstId:'new-col',collections:[{id:'new-col',name:'Token Service',requestCount:1}]};
   };
   await saveCloudCollections([{name:'Token Service',variables:[{key:'client',value:'RAYA'}],requests:[{name:'Ping',url:'https://example.com'}]}],
     {workspaceId:'ws',token:'jwt',request});
+  assert.equal(calls.length,1);
   assert.equal(calls[0].method,'POST');
-  assert.equal(calls[1].path,'/api/workspaces/ws/collections/new-col/variables');
-  assert.equal(calls[1].body.version,0);
-  assert.equal(calls[2].method,'POST');
+  assert.equal(calls[0].path,'/api/workspaces/ws/collections/import');
+  assert.equal(calls[0].body.collections[0].variables[0].key,'client');
+  assert.equal(calls[0].body.collections[0].requests[0].name,'Ping');
 });
 
 test('Cloud saved updates are permissioned, version checked and encrypted for secrets',()=>{
