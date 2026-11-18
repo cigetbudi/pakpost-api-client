@@ -1,11 +1,14 @@
 namespace Pakpost.Domain.Entities;
+
 public sealed class SavedRequest
 {
-    private SavedRequest() { }
+    private SavedRequest()
+    {
+    }
+
     public Guid Id { get; private set; }
     public Guid CollectionId { get; private set; }
     public Guid? FolderId { get; private set; }
-    // Optimistic concurrency token. Every modification gets a new revision.
     public int Revision { get; private set; } = 1;
     public string Name { get; private set; } = "";
     public string Method { get; private set; } = "GET";
@@ -19,15 +22,75 @@ public sealed class SavedRequest
     public string PostResponseScript { get; private set; } = "";
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
-    public SavedRequest(Guid collectionId,string name,string method,string url,string headersJson,string body,string bodyMode="raw",string contentType="application/json",string formFieldsJson="[]",string preRequestScript="",string postResponseScript="",Guid? folderId=null)
+
+    public SavedRequest(
+        Guid collectionId,
+        string name,
+        string method,
+        string url,
+        string headersJson,
+        string body,
+        string bodyMode = "raw",
+        string contentType = "application/json",
+        string formFieldsJson = "[]",
+        string preRequestScript = "",
+        string postResponseScript = "",
+        Guid? folderId = null)
     {
-        Id = Guid.NewGuid();CollectionId = collectionId;FolderId=folderId;CreatedAt = DateTimeOffset.UtcNow;
-        Update(name,method,url,headersJson,body,bodyMode,contentType,formFieldsJson,preRequestScript,postResponseScript);
+        Id = Guid.NewGuid();
+        CollectionId = collectionId;
+        FolderId = folderId;
+        CreatedAt = DateTimeOffset.UtcNow;
+
+        Update(
+            name,
+            method,
+            url,
+            headersJson,
+            body,
+            bodyMode,
+            contentType,
+            formFieldsJson,
+            preRequestScript,
+            postResponseScript);
     }
-    public void MoveTo(Guid collectionId,Guid? folderId=null) { CollectionId = collectionId; FolderId=folderId; Revision++; UpdatedAt = DateTimeOffset.UtcNow; }
-    public void Update(string name,string method,string url,string headersJson,string body,string bodyMode="raw",string contentType="application/json",string formFieldsJson="[]",string preRequestScript="",string postResponseScript="")
+
+    public void MoveTo(Guid collectionId, Guid? folderId = null)
     {
-        Name = name.Trim();Method = method.ToUpperInvariant();Url = url.Trim();
-        HeadersJson = headersJson;Body = body;BodyMode=bodyMode;ContentType=contentType;FormFieldsJson=formFieldsJson;PreRequestScript=preRequestScript;PostResponseScript=postResponseScript;if(CreatedAt!=default && UpdatedAt!=default)Revision++;UpdatedAt = DateTimeOffset.UtcNow;
+        CollectionId = collectionId;
+        FolderId = folderId;
+        Revision++;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void Update(
+        string name,
+        string method,
+        string url,
+        string headersJson,
+        string body,
+        string bodyMode = "raw",
+        string contentType = "application/json",
+        string formFieldsJson = "[]",
+        string preRequestScript = "",
+        string postResponseScript = "")
+    {
+        Name = name.Trim();
+        Method = method.ToUpperInvariant();
+        Url = url.Trim();
+        HeadersJson = headersJson;
+        Body = body;
+        BodyMode = bodyMode;
+        ContentType = contentType;
+        FormFieldsJson = formFieldsJson;
+        PreRequestScript = preRequestScript;
+        PostResponseScript = postResponseScript;
+
+        if (CreatedAt != default && UpdatedAt != default)
+        {
+            Revision++;
+        }
+
+        UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

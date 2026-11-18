@@ -1,0 +1,6 @@
+namespace Pakpost.Application.Common.Interfaces;
+
+public interface ITransactionScope : IAsyncDisposable
+{
+    Task CommitAsync(CancellationToken cancellationToken);
+}

@@ -45,7 +45,7 @@ test('history model is immutable and encrypted, not plaintext in table',()=>{
  assert.match(codec,/cipher\.Protect\(JsonSerializer\.Serialize\(snapshot\)\)/);
  assert.match(codec,/cipher\.Unprotect\(revision\.EncryptedSnapshot\)/);
  assert.match(entity,/EncryptedSnapshot/);assert.match(model,/encrypted_snapshot/);
- assert.match(codec,/ExpectedRevision/);assert.match(codec,/item\.Revision\s*!=\s*c\.ExpectedRevision/);
+ assert.match(codec,/ExpectedRevision/);assert.match(codec,/item\.Revision\s*!=\s*(?:c|command)\.ExpectedRevision/);
  assert.match(codec,/WorkspacePermissions.CollectionWrite/);
 });
 test('create, update and restore append version snapshots in a database transaction',()=>{
@@ -57,8 +57,8 @@ test('create, update and restore append version snapshots in a database transact
  const controller=source('backend/src/Pakpost.Api/Controllers/SavedRequestsController.cs');
  assert.match(handlers,/history\.Add\(SavedRequestHistoryCodec\.Capture\(item,\s*c\.ActorId,\s*"created",\s*cipher\)\)/);
  assert.match(handlers,/history\.Add\(SavedRequestHistoryCodec\.Capture\(item,\s*cmd\.ActorId,\s*"updated",\s*cipher\)\)/);
- assert.match(history,/history\.Add\(SavedRequestHistoryCodec\.Capture\(item,\s*c\.ActorId,\s*"restored",\s*cipher\)\)/);
- assert.match(history,/await uow.SaveChangesAsync\(ct\)/);
+ assert.match(history,/history\.Add\(SavedRequestHistoryCodec\.Capture\(item,\s*(?:c|command)\.ActorId,\s*"restored",\s*cipher\)\)/);
+ assert.match(history,/await (?:uow|unitOfWork)\.SaveChangesAsync\(ct\)/);
  assert.match(controller,/history\/\{revision:int\}\/restore/);
  assert.match(controller,/realtime.PublishAsync\(workspaceId,"request.updated"/);
 });

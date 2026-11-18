@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using Pakpost.Api.Middlewares;
 using Pakpost.Application.Common.Exceptions;
 
@@ -56,6 +57,56 @@ public sealed class GlobalExceptionMiddlewareTests
         Assert.Equal(
             "Resource changed; refresh and retry",
             payload.RootElement.GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData("40001")]
+    [InlineData("40P01")]
+    [InlineData("23503")]
+    [InlineData("23505")]
+    public async Task PostgresMutationConflictsReturnSafeHttp409(string sqlState)
+    {
+        var postgres = new PostgresException(
+            "private database error detail",
+            "ERROR",
+            "ERROR",
+            sqlState);
+
+        var (status, json) = await InvokeAsync(_ => throw postgres);
+
+        Assert.Equal(409, status);
+        Assert.DoesNotContain("private database error detail", json);
+    }
+
+    [Fact]
+    public async Task UnrecognizedSqlStateStillReturnsSafeHttp500()
+    {
+        var postgres = new PostgresException(
+            "private SQL error",
+            "ERROR",
+            "ERROR",
+            "42601");
+
+        var (status, json) = await InvokeAsync(_ => throw postgres);
+
+        Assert.Equal(500, status);
+        Assert.DoesNotContain("private SQL error", json);
+    }
+
+    [Fact]
+    public async Task WrappedPostgresConflictReturnsHttp409()
+    {
+        var postgres = new PostgresException(
+            "private constraint detail",
+            "ERROR",
+            "ERROR",
+            "23505");
+
+        var (status, json) = await InvokeAsync(_ =>
+            throw new DbUpdateException("Save failed", postgres));
+
+        Assert.Equal(409, status);
+        Assert.DoesNotContain("private constraint detail", json);
     }
 
     [Fact]

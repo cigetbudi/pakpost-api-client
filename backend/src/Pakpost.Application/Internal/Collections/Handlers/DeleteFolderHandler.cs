@@ -6,16 +6,31 @@ using Pakpost.Application.Internal.Collections.DTOs;
 namespace Pakpost.Application.Internal.Collections.Handlers;
 
 public sealed class DeleteFolderHandler(
-    IWorkspaceRepository w,
-    ICollectionRepository c,
-    ICollectionFolderRepository f,
-    ISavedRequestRepository r,
-    IUnitOfWork uow)
+    IWorkspaceRepository workspaces,
+    ICollectionRepository collections,
+    ICollectionFolderRepository folders,
+    ISavedRequestRepository requests,
+    IUnitOfWork unitOfWork,
+    ITransactionManager transactions)
     : IRequestHandler<DeleteFolderCommand>
 {
-    public async ValueTask<Unit> Handle(DeleteFolderCommand q, CancellationToken ct)
-    => await new DeleteFolderItemsHandler(w, c, f, r, uow).Handle(new DeleteFolderItemsCommand(q.ActorId, q.WorkspaceId, q.CollectionId,
-        [new FolderDeleteTarget(q.FolderId, q.ExpectedVersion)], []), ct);
+    public ValueTask<Unit> Handle(DeleteFolderCommand command, CancellationToken ct)
+    {
+        var deletion = new DeleteFolderItemsCommand(
+            command.ActorId,
+            command.WorkspaceId,
+            command.CollectionId,
+            [new FolderDeleteTarget(command.FolderId, command.ExpectedVersion)],
+            []);
+
+        var handler = new DeleteFolderItemsHandler(
+            workspaces,
+            collections,
+            folders,
+            requests,
+            unitOfWork,
+            transactions);
+
+        return handler.Handle(deletion, ct);
+    }
 }
-// A single UnitOfWork removes all selected requests and folder descendants atomically.
-// Only explicit roots require a version; descendants are still protected by EF concurrency.

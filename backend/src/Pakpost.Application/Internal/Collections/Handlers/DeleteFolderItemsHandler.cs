@@ -11,20 +11,12 @@ public sealed class DeleteFolderItemsHandler(
     ICollectionRepository collections,
     ICollectionFolderRepository folders,
     ISavedRequestRepository requests,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ITransactionManager transactions)
     : IRequestHandler<DeleteFolderItemsCommand>
 {
     public async ValueTask<Unit> Handle(DeleteFolderItemsCommand cmd, CancellationToken ct)
     {
-        await CloudFolderRules.CheckAccess(
-            cmd.ActorId,
-            cmd.WorkspaceId,
-            cmd.CollectionId,
-            true,
-            workspaces,
-            collections,
-            ct);
-
         if (cmd.Folders is null ||
             cmd.RequestIds is null ||
             cmd.Folders.Count + cmd.RequestIds.Count is 0 or > 200)
@@ -37,6 +29,17 @@ public sealed class DeleteFolderItemsHandler(
         {
             throw AppException.BadRequest("Invalid deletion selection");
         }
+
+        await using var transaction = await transactions.BeginSerializableAsync(ct);
+
+        await CloudFolderRules.CheckAccess(
+            cmd.ActorId,
+            cmd.WorkspaceId,
+            cmd.CollectionId,
+            true,
+            workspaces,
+            collections,
+            ct);
 
         var allFolders = await folders.ListAsync(cmd.CollectionId, ct);
         var byId = allFolders.ToDictionary(folder => folder.Id);
@@ -75,6 +78,7 @@ public sealed class DeleteFolderItemsHandler(
         }
 
         await unitOfWork.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return Unit.Value;
     }

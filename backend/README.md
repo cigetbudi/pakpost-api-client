@@ -164,3 +164,18 @@ Pre-request and post-request JavaScript scripting, variables/environment manager
 ## Known verification limitation
 
 This ZIP has been checked for file structure and JSX syntax, but the packaging environment lacked the .NET SDK and could not complete npm dependency installation. Actual `dotnet build`, EF SQL generation, Neon migration, and `npm run build` must be run on your machine; please report compiler or migration messages if they appear.
+
+## PostgreSQL integration tests
+
+The integration tests are separate from `Pakpost.slnx` because they connect to a real PostgreSQL database and apply EF Core migrations. Use a fresh, disposable database whose name starts with `pakpost_integration_`. Never point these tests at the production database or an existing shared development database.
+
+```bash
+export PAKPOST_TEST_POSTGRES='Host=localhost;Port=5432;Database=pakpost_integration_local;Username=postgres;Password=...'
+export PAKPOST_ALLOW_TEST_MIGRATIONS=YES_DISPOSABLE_DB
+
+./backend/scripts/verify-postgres-integration.sh
+```
+
+The tests verify transactional rollback and optimistic concurrency for saved requests. They intentionally do not drop the database. Delete the disposable database yourself after validation.
+
+Collection folder mutations use PostgreSQL `Serializable` transactions. A concurrent mutation can fail with HTTP 409; the client should reload the Cloud collection and retry explicitly rather than silently replaying the operation. Atomic Cloud import still relies on one EF Core `SaveChangesAsync`, which already wraps the write batch in an implicit database transaction.

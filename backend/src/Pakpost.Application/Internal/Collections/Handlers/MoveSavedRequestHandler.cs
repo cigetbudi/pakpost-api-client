@@ -14,11 +14,14 @@ public sealed class MoveSavedRequestHandler(
     ISavedRequestRevisionRepository history,
     IEnvironmentValueCipher cipher,
     IUnitOfWork uow,
+    ITransactionManager transactions,
     ICollectionFolderRepository? folders = null)
     : IRequestHandler<MoveSavedRequestCommand, SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(MoveSavedRequestCommand cmd, CancellationToken ct)
     {
+        await using var transaction = await transactions.BeginSerializableAsync(ct);
+
         await SavedRequestsAccess.Check(
             cmd.ActorId,
             cmd.WorkspaceId,
@@ -58,6 +61,7 @@ public sealed class MoveSavedRequestHandler(
         history.Add(SavedRequestHistoryCodec.Capture(item, cmd.ActorId, "moved", cipher));
 
         await uow.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return SavedRequestsAccess.ToDto(item);
     }

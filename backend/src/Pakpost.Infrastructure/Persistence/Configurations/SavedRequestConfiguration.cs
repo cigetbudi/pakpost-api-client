@@ -1,26 +1,63 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Pakpost.Domain.Entities;
+
 namespace Pakpost.Infrastructure.Persistence.Configurations;
-public sealed class SavedRequestConfiguration:IEntityTypeConfiguration<SavedRequest>
+
+public sealed class SavedRequestConfiguration : IEntityTypeConfiguration<SavedRequest>
 {
-    public void Configure(EntityTypeBuilder<SavedRequest> b)
+    public void Configure(EntityTypeBuilder<SavedRequest> builder)
     {
-        b.ToTable("saved_requests","collection");b.HasKey(x=>x.Id);
-        b.Property(x=>x.Revision).HasColumnName("revision").HasDefaultValue(1).IsConcurrencyToken();
-        b.Property(x=>x.Name).HasMaxLength(120).IsRequired();
-        b.Property(x=>x.Method).HasMaxLength(10).IsRequired();
-        b.Property(x=>x.Url).HasMaxLength(2048).IsRequired();
-        b.Property(x=>x.HeadersJson).HasColumnType("jsonb").IsRequired();
-        b.Property(x=>x.Body).HasColumnType("text").IsRequired();
-        b.Property(x=>x.BodyMode).HasMaxLength(20).HasDefaultValue("raw").IsRequired();
-        b.Property(x=>x.ContentType).HasMaxLength(150).HasDefaultValue("application/json").IsRequired();
-        b.Property(x=>x.FormFieldsJson).HasColumnType("jsonb").HasDefaultValue("[]").IsRequired();
-        b.Property(x=>x.PreRequestScript).HasColumnType("text").HasDefaultValue("").IsRequired();
-        b.Property(x=>x.PostResponseScript).HasColumnType("text").HasDefaultValue("").IsRequired();
-        b.HasOne<Collection>().WithMany().HasForeignKey(x=>x.CollectionId).OnDelete(DeleteBehavior.Cascade);
-        b.HasOne<CollectionFolder>().WithMany().HasForeignKey(x=>x.FolderId).OnDelete(DeleteBehavior.NoAction);
-        b.HasIndex(x=>x.CollectionId);
-        b.HasIndex(x=>x.FolderId);
+        builder.ToTable("saved_requests", "collection");
+        builder.HasKey(request => request.Id);
+
+        builder.Property(request => request.Revision)
+            .HasColumnName("revision")
+            .HasDefaultValue(1)
+            .IsConcurrencyToken();
+
+        builder.Property(request => request.Name).HasMaxLength(120).IsRequired();
+        builder.Property(request => request.Method).HasMaxLength(10).IsRequired();
+        builder.Property(request => request.Url).HasMaxLength(2048).IsRequired();
+        builder.Property(request => request.HeadersJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(request => request.Body).HasColumnType("text").IsRequired();
+
+        builder.Property(request => request.BodyMode)
+            .HasMaxLength(20)
+            .HasDefaultValue("raw")
+            .IsRequired();
+
+        builder.Property(request => request.ContentType)
+            .HasMaxLength(150)
+            .HasDefaultValue("application/json")
+            .IsRequired();
+
+        builder.Property(request => request.FormFieldsJson)
+            .HasColumnType("jsonb")
+            .HasDefaultValue("[]")
+            .IsRequired();
+
+        builder.Property(request => request.PreRequestScript)
+            .HasColumnType("text")
+            .HasDefaultValue("")
+            .IsRequired();
+
+        builder.Property(request => request.PostResponseScript)
+            .HasColumnType("text")
+            .HasDefaultValue("")
+            .IsRequired();
+
+        builder.HasOne<Collection>()
+            .WithMany()
+            .HasForeignKey(request => request.CollectionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<CollectionFolder>()
+            .WithMany()
+            .HasForeignKey(request => request.FolderId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasIndex(request => request.CollectionId);
+        builder.HasIndex(request => request.FolderId);
     }
 }

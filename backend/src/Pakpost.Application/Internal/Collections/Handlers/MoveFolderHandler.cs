@@ -11,11 +11,14 @@ public sealed class MoveFolderHandler(
     IWorkspaceRepository workspaces,
     ICollectionRepository collections,
     ICollectionFolderRepository folders,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ITransactionManager transactions)
     : IRequestHandler<MoveFolderCommand, FolderDto>
 {
-    public async ValueTask<FolderDto> Handle(MoveFolderCommand command, CancellationToken cancellationToken)
+    public async ValueTask<FolderDto> Handle(MoveFolderCommand command, CancellationToken ct)
     {
+        await using var transaction = await transactions.BeginSerializableAsync(ct);
+
         await CloudFolderRules.CheckAccess(
             command.ActorId,
             command.WorkspaceId,
@@ -23,9 +26,9 @@ public sealed class MoveFolderHandler(
             true,
             workspaces,
             collections,
-            cancellationToken);
+            ct);
 
-        var folder = await folders.FindAsync(command.FolderId, cancellationToken);
+        var folder = await folders.FindAsync(command.FolderId, ct);
 
         if (folder is null || folder.CollectionId != command.CollectionId)
         {
@@ -37,7 +40,7 @@ public sealed class MoveFolderHandler(
             throw AppException.Conflict("Folder changed: reload first");
         }
 
-        var siblings = await folders.ListAsync(command.CollectionId, cancellationToken);
+        var siblings = await folders.ListAsync(command.CollectionId, ct);
 
         CloudFolderRules.ValidateMove(
             siblings,
@@ -47,7 +50,8 @@ public sealed class MoveFolderHandler(
 
         folder.Move(command.TargetParentId);
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return CloudFolderRules.ToDto(folder);
     }

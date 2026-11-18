@@ -26,7 +26,8 @@ public sealed class CloudFolderHandlerTests
             context.Workspaces,
             context.Collections,
             context.Folders,
-            context.UnitOfWork);
+            context.UnitOfWork,
+            context.Transactions);
 
         var command = new CreateFolderCommand(
             context.ActorId,
@@ -41,6 +42,7 @@ public sealed class CloudFolderHandlerTests
         Assert.Single(saved);
 
         await context.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await context.Transaction.Received(1).CommitAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -51,7 +53,8 @@ public sealed class CloudFolderHandlerTests
             context.Workspaces,
             context.Collections,
             context.Folders,
-            context.UnitOfWork);
+            context.UnitOfWork,
+            context.Transactions);
 
         var command = new CreateFolderCommand(
             context.ActorId,
@@ -68,6 +71,7 @@ public sealed class CloudFolderHandlerTests
         Assert.Equal(403, error.StatusCode);
         context.Folders.DidNotReceive().Add(Arg.Any<CollectionFolder>());
         await context.UnitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await context.Transaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -83,7 +87,8 @@ public sealed class CloudFolderHandlerTests
             context.Workspaces,
             context.Collections,
             context.Folders,
-            context.UnitOfWork);
+            context.UnitOfWork,
+            context.Transactions);
 
         var command = new MoveFolderCommand(
             context.ActorId,
@@ -100,6 +105,7 @@ public sealed class CloudFolderHandlerTests
 
         Assert.Equal(409, error.StatusCode);
         await context.UnitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await context.Transaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
     private static TestContext MakeContext(WorkspaceAccessRole role)
@@ -111,6 +117,14 @@ public sealed class CloudFolderHandlerTests
         var collections = Substitute.For<ICollectionRepository>();
         var folders = Substitute.For<ICollectionFolderRepository>();
         var unitOfWork = Substitute.For<IUnitOfWork>();
+        var transactions = Substitute.For<ITransactionManager>();
+        var transaction = Substitute.For<ITransactionScope>();
+
+        transactions.BeginSerializableAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(transaction));
+
+        transaction.CommitAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
 
         workspaces.FindMemberAsync(workspaceId, actorId, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<WorkspaceMember?>(
@@ -129,7 +143,9 @@ public sealed class CloudFolderHandlerTests
             workspaces,
             collections,
             folders,
-            unitOfWork);
+            unitOfWork,
+            transactions,
+            transaction);
     }
 
     private sealed record TestContext(
@@ -139,5 +155,7 @@ public sealed class CloudFolderHandlerTests
         IWorkspaceRepository Workspaces,
         ICollectionRepository Collections,
         ICollectionFolderRepository Folders,
-        IUnitOfWork UnitOfWork);
+        IUnitOfWork UnitOfWork,
+        ITransactionManager Transactions,
+        ITransactionScope Transaction);
 }

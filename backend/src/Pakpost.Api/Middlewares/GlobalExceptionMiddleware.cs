@@ -31,11 +31,11 @@ public sealed class GlobalExceptionMiddleware(
 
             if (ex is DbUpdateConcurrencyException)
             {
-                logger.LogWarning(ex, "Concurrent update conflict");
+                logger.LogWarning("Concurrent update conflict");
             }
-            else if (ex is DbUpdateException { InnerException: PostgresException { SqlState: "23505" } })
+            else if (IsDatabaseConflict(ex))
             {
-                logger.LogWarning(ex, "Unique constraint conflict");
+                logger.LogWarning("Database mutation conflict {SqlState}", GetSqlState(ex));
             }
             else if (ex is not ValidationException and not AppException)
             {
@@ -71,13 +71,23 @@ public sealed class GlobalExceptionMiddleware(
                 (int)HttpStatusCode.Conflict,
                 new { message = "Resource changed; refresh and retry" }),
 
-            DbUpdateException { InnerException: PostgresException { SqlState: "23505" } } => (
+            _ when IsDatabaseConflict(exception) => (
                 (int)HttpStatusCode.Conflict,
-                new { message = "Database conflict" }),
+                new { message = "Database conflict; refresh and retry" }),
 
             _ => (
                 (int)HttpStatusCode.InternalServerError,
                 new { message = "Internal server error" })
         };
     }
+
+    private static bool IsDatabaseConflict(Exception exception) =>
+        GetSqlState(exception) is "23503" or "23505" or "40001" or "40P01";
+
+    private static string? GetSqlState(Exception exception) => exception switch
+    {
+        PostgresException postgres => postgres.SqlState,
+        DbUpdateException { InnerException: PostgresException inner } => inner.SqlState,
+        _ => null
+    };
 }

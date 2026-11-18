@@ -1,9 +1,12 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
 
 namespace Pakpost.Infrastructure.Persistence;
-public sealed class PakpostDbContext(DbContextOptions<PakpostDbContext> options) : DbContext(options), IUnitOfWork
+
+public sealed class PakpostDbContext(DbContextOptions<PakpostDbContext> options)
+    : DbContext(options), IUnitOfWork, ITransactionManager
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<UserExternalIdentity> UserExternalIdentities => Set<UserExternalIdentity>();
@@ -19,6 +22,15 @@ public sealed class PakpostDbContext(DbContextOptions<PakpostDbContext> options)
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<RequestEnvironment> RequestEnvironments => Set<RequestEnvironment>();
     public DbSet<RequestEnvironmentVariable> RequestEnvironmentVariables => Set<RequestEnvironmentVariable>();
+
+    public async Task<ITransactionScope> BeginSerializableAsync(CancellationToken cancellationToken)
+    {
+        var transaction = await Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        return new EfTransactionScope(transaction);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -143,11 +143,11 @@ var cases=new (string Name,Func<Task> Test)[]
             .Handle(new CreateCollectionCommand(id,ws,"New"),CancellationToken.None);});
         await MustBeForbidden(async()=>{await new RenameCollectionHandler(collections,repo,uow)
             .Handle(new RenameCollectionCommand(id,ws,collection.Id,"Renamed"),CancellationToken.None);});
-        await MustBeForbidden(async()=>{await new SaveRequestHandler(repo,collections,requests,revisions,cipher,uow)
+        await MustBeForbidden(async()=>{await new SaveRequestHandler(repo,collections,requests,revisions,cipher,uow,new FakeTransactionManager())
             .Handle(new SaveRequestCommand(id,ws,collection.Id,"Testing","GET","https://example.com","{}",""),CancellationToken.None);});
         await MustBeForbidden(async()=>{await new UpdateSavedRequestHandler(repo,collections,requests,revisions,cipher,uow)
             .Handle(new UpdateSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid(),"Testing","GET","https://example.com","{}",""),CancellationToken.None);});
-        await MustBeForbidden(async()=>{await new MoveSavedRequestHandler(repo,collections,requests,revisions,cipher,uow)
+        await MustBeForbidden(async()=>{await new MoveSavedRequestHandler(repo,collections,requests,revisions,cipher,uow,new FakeTransactionManager())
             .Handle(new MoveSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid(),collection.Id),CancellationToken.None);});
         await MustBeForbidden(async()=>{await new DeleteSavedRequestHandler(repo,collections,requests,uow)
             .Handle(new DeleteSavedRequestCommand(id,ws,collection.Id,Guid.NewGuid()),CancellationToken.None);});
@@ -278,4 +278,17 @@ sealed class ForbiddenRevisionRepository:ISavedRequestRevisionRepository
 sealed class FakeUnitOfWork:IUnitOfWork
 {
     public Task<int> SaveChangesAsync(CancellationToken ct)=>Task.FromResult(0);
+}
+
+sealed class FakeTransactionManager : ITransactionManager
+{
+    public Task<ITransactionScope> BeginSerializableAsync(CancellationToken ct) =>
+        Task.FromResult<ITransactionScope>(new FakeTransactionScope());
+}
+
+sealed class FakeTransactionScope : ITransactionScope
+{
+    public Task CommitAsync(CancellationToken ct) => Task.CompletedTask;
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

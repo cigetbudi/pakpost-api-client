@@ -1,20 +1,35 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Pakpost.Domain.Entities;
+
 namespace Pakpost.Infrastructure.Persistence.Configurations;
-public sealed class WorkspaceInvitationConfiguration:IEntityTypeConfiguration<WorkspaceInvitation>
+
+public sealed class WorkspaceInvitationConfiguration : IEntityTypeConfiguration<WorkspaceInvitation>
 {
-    public void Configure(EntityTypeBuilder<WorkspaceInvitation> b)
+    public void Configure(EntityTypeBuilder<WorkspaceInvitation> builder)
     {
-        b.ToTable("workspace_invitations","organization");
-        b.HasKey(x=>x.Id);
-        b.Property(x=>x.Version).IsConcurrencyToken().HasDefaultValue(1);
-        b.Property(x=>x.Email).HasMaxLength(255).IsRequired();
-        b.Property(x=>x.RolesJson).HasColumnType("jsonb").IsRequired();
-        b.Property(x=>x.TokenHash).HasMaxLength(64).IsRequired();
-        b.HasIndex(x=>x.TokenHash).IsUnique();
-        b.HasIndex(x=>new{x.WorkspaceId,x.Email});
-        b.HasOne<Workspace>().WithMany().HasForeignKey(x=>x.WorkspaceId).OnDelete(DeleteBehavior.Cascade);
-        b.HasOne<User>().WithMany().HasForeignKey(x=>x.InvitedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.ToTable("workspace_invitations", "organization");
+        builder.HasKey(invitation => invitation.Id);
+
+        builder.Property(invitation => invitation.Version)
+            .IsConcurrencyToken()
+            .HasDefaultValue(1);
+
+        builder.Property(invitation => invitation.Email).HasMaxLength(255).IsRequired();
+        builder.Property(invitation => invitation.RolesJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(invitation => invitation.TokenHash).HasMaxLength(64).IsRequired();
+
+        builder.HasIndex(invitation => invitation.TokenHash).IsUnique();
+        builder.HasIndex(invitation => new { invitation.WorkspaceId, invitation.Email });
+
+        builder.HasOne<Workspace>()
+            .WithMany()
+            .HasForeignKey(invitation => invitation.WorkspaceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(invitation => invitation.InvitedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

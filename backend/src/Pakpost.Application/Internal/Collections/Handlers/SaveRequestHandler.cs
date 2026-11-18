@@ -16,11 +16,14 @@ public sealed class SaveRequestHandler(
     ISavedRequestRevisionRepository history,
     IEnvironmentValueCipher cipher,
     IUnitOfWork uow,
+    ITransactionManager transactions,
     ICollectionFolderRepository? folders = null)
     : IRequestHandler<SaveRequestCommand, SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(SaveRequestCommand c, CancellationToken ct)
     {
+        await using var transaction = await transactions.BeginSerializableAsync(ct);
+
         await SavedRequestsAccess.Check(
             c.ActorId,
             c.WorkspaceId,
@@ -60,6 +63,7 @@ public sealed class SaveRequestHandler(
         history.Add(SavedRequestHistoryCodec.Capture(item, c.ActorId, "created", cipher));
 
         await uow.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return SavedRequestsAccess.ToDto(item);
     }

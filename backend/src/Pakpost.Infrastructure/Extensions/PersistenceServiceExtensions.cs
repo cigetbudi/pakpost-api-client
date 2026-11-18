@@ -25,6 +25,9 @@ public static class PersistenceServiceExtensions
         services.AddScoped<IUnitOfWork>(provider =>
             provider.GetRequiredService<PakpostDbContext>());
 
+        services.AddScoped<ITransactionManager>(provider =>
+            provider.GetRequiredService<PakpostDbContext>());
+
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserExternalIdentityRepository, UserExternalIdentityRepository>();
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();

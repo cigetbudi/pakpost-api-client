@@ -7,20 +7,53 @@ using Pakpost.Application.Internal.Collections.Services;
 
 namespace Pakpost.Application.Internal.Collections.Handlers;
 
-public sealed class RenameFolderHandler(IWorkspaceRepository w, ICollectionRepository c, ICollectionFolderRepository folders, IUnitOfWork uow)
+public sealed class RenameFolderHandler(
+    IWorkspaceRepository workspaces,
+    ICollectionRepository collections,
+    ICollectionFolderRepository folders,
+    IUnitOfWork unitOfWork,
+    ITransactionManager transactions)
     : IRequestHandler<RenameFolderCommand, FolderDto>
 {
-    public async ValueTask<FolderDto> Handle(RenameFolderCommand q, CancellationToken ct)
+    public async ValueTask<FolderDto> Handle(RenameFolderCommand command, CancellationToken ct)
     {
-        await CloudFolderRules.CheckAccess(q.ActorId, q.WorkspaceId, q.CollectionId, true, w, c, ct);
-        var f = await folders.FindAsync(q.FolderId, ct);
-        if (f is null || f.CollectionId != q.CollectionId)
+        await using var transaction = await transactions.BeginSerializableAsync(ct);
+
+        await CloudFolderRules.CheckAccess(
+            command.ActorId,
+            command.WorkspaceId,
+            command.CollectionId,
+            true,
+            workspaces,
+            collections,
+            ct);
+
+        var folder = await folders.FindAsync(command.FolderId, ct);
+
+        if (folder is null || folder.CollectionId != command.CollectionId)
+        {
             throw AppException.NotFound("Folder not found");
-        if (q.ExpectedVersion <= 0 || f.Version != q.ExpectedVersion)
+        }
+
+        if (command.ExpectedVersion <= 0 || folder.Version != command.ExpectedVersion)
+        {
             throw AppException.Conflict("Folder changed: reload first");
-        CloudFolderRules.ValidatePlacement(await folders.ListAsync(q.CollectionId, ct), q.CollectionId, f.ParentFolderId, q.Name, f.Id);
-        f.Rename(q.Name);
-        await uow.SaveChangesAsync(ct);
-        return CloudFolderRules.ToDto(f);
+        }
+
+        var siblings = await folders.ListAsync(command.CollectionId, ct);
+
+        CloudFolderRules.ValidatePlacement(
+            siblings,
+            command.CollectionId,
+            folder.ParentFolderId,
+            command.Name,
+            folder.Id);
+
+        folder.Rename(command.Name);
+
+        await unitOfWork.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        return CloudFolderRules.ToDto(folder);
     }
 }
