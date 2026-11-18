@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
@@ -12,16 +11,30 @@ public sealed class DeleteSavedRequestHandler(
     ICollectionRepository collections,
     ISavedRequestRepository requests,
     IUnitOfWork uow)
-    : SavedRequestsAccess, IRequestHandler<DeleteSavedRequestCommand>
+    : IRequestHandler<DeleteSavedRequestCommand>
 {
     public async ValueTask<Unit> Handle(DeleteSavedRequestCommand c, CancellationToken ct)
     {
-        await Check(c.ActorId, c.WorkspaceId, c.CollectionId, workspaces, collections, ct, destructive:true);
+        await SavedRequestsAccess.Check(
+            c.ActorId,
+            c.WorkspaceId,
+            c.CollectionId,
+            workspaces,
+            collections,
+            ct,
+            destructive: true);
+
         var item = await requests.FindAsync(c.RequestId, ct);
+
         if (item is null || item.CollectionId != c.CollectionId)
+        {
             throw AppException.NotFound();
+        }
+
         requests.Remove(item);
+
         await uow.SaveChangesAsync(ct);
+
         return Unit.Value;
     }
 }

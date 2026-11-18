@@ -1,6 +1,6 @@
-using System.Text.Json;
 using Mediator;
 using Pakpost.Application.Internal.Collections.DTOs;
+using Pakpost.Application.Internal.Collections.Services;
 
 namespace Pakpost.Application.Internal.Collections.Commands;
 
@@ -18,5 +18,5 @@ public sealed record SaveRequestCommand(
     string FormFieldsJson = "[]",
     string PreRequestScript = "",
     string PostResponseScript = "",
-    Guid? FolderId = null
-) : IRequest<SavedRequestDto>;
+    Guid? FolderId = null)
+    : IRequest<SavedRequestDto>, ISavedRequestPayload;

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
@@ -7,24 +6,48 @@ using Pakpost.Domain.Entities;
 
 namespace Pakpost.Application.Internal.Collections.Services;
 
-public abstract class SavedRequestsAccess
+public static class SavedRequestsAccess
 {
-    protected static async Task Check(
+    public static async Task Check(
         Guid actorId,
         Guid workspaceId,
         Guid collectionId,
         IWorkspaceRepository workspaces,
         ICollectionRepository collections,
-        CancellationToken ct,
+        CancellationToken cancellationToken,
         bool destructive = false)
     {
-        await WorkspacePermissions.RequireAsync(workspaces, workspaceId, actorId,
-            destructive?WorkspacePermissions.CollectionWrite:WorkspacePermissions.CollectionRead, ct);
-        var c = await collections.FindAsync(collectionId, ct);
-        if (c is null || c.WorkspaceId != workspaceId)
+        await WorkspacePermissions.RequireAsync(
+            workspaces,
+            workspaceId,
+            actorId,
+            destructive ? WorkspacePermissions.CollectionWrite : WorkspacePermissions.CollectionRead,
+            cancellationToken);
+
+        var collection = await collections.FindAsync(collectionId, cancellationToken);
+
+        if (collection is null || collection.WorkspaceId != workspaceId)
+        {
             throw AppException.NotFound("Collection not found");
+        }
     }
-    // Legacy JSONB may contain literal credentials. Never return those values to the browser.
-    protected static SavedRequestDto ToDto(SavedRequest x) => new(x.Id, x.CollectionId, x.Name, x.Method, x.Url,
-        SavedHeaderPolicy.RedactLegacyCredentials(x.HeadersJson), x.Body, x.BodyMode, x.ContentType, x.FormFieldsJson, x.PreRequestScript, x.PostResponseScript, x.Revision, x.FolderId);
+
+    public static SavedRequestDto ToDto(SavedRequest request)
+    {
+        return new SavedRequestDto(
+            request.Id,
+            request.CollectionId,
+            request.Name,
+            request.Method,
+            request.Url,
+            SavedHeaderPolicy.RedactLegacyCredentials(request.HeadersJson),
+            request.Body,
+            request.BodyMode,
+            request.ContentType,
+            request.FormFieldsJson,
+            request.PreRequestScript,
+            request.PostResponseScript,
+            request.Revision,
+            request.FolderId);
+    }
 }
