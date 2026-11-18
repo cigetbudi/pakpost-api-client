@@ -26,10 +26,10 @@ test('delete never silently drops unknown selections',()=>{
   assert.throws(()=>buildCloudDeletePayload([],[],[]),/between 1 and 200/);
 });
 test('backend commits subtree deletes once, checks permission, and emits refresh events',()=>{
-  const handlers=read('../../../backend/src/Pakpost.Application/Internal/Collections/CollectionFolders.cs');
+  const handlers=read('../../../backend/src/Pakpost.Application/Internal/Collections/Handlers/DeleteFolderItemsHandler.cs');
   const controller=read('../../../backend/src/Pakpost.Api/Controllers/CollectionFoldersController.cs');
   const code=handlers.slice(handlers.indexOf('public sealed class DeleteFolderItemsHandler'));
-  assert.match(code,/CheckAccess\(cmd\.ActorId,cmd\.WorkspaceId,cmd\.CollectionId,true/);
+  assert.match(code,/CheckAccess\(cmd\.ActorId,\s*cmd\.WorkspaceId,\s*cmd\.CollectionId,\s*true/);
   assert.match(code,/deletedFolders\.Contains\(folder\)/);
   assert.match(code,/requests\.Remove\(request\)/);
   assert.match(code,/folders\.Remove\(folder\)/);

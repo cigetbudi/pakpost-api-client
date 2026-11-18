@@ -78,7 +78,11 @@ test('Cloud import writes collection variables and requests in one atomic batch'
 
 test('Cloud saved updates are permissioned, version checked and encrypted for secrets',()=>{
   const controller=read('../../../backend/src/Pakpost.Api/Controllers/CollectionsController.cs');
-  const handlers=read('../../../backend/src/Pakpost.Application/Internal/Collections/CollectionVariables.cs');
+  const handlers = [
+    '../../../backend/src/Pakpost.Application/Internal/Collections/Handlers/GetCollectionVariablesHandler.cs',
+    '../../../backend/src/Pakpost.Application/Internal/Collections/Handlers/SaveCollectionVariablesHandler.cs',
+    '../../../backend/src/Pakpost.Application/Internal/Collections/Services/CollectionVariableMapper.cs'
+  ].map(path => read(path)).join('\n');
   const migration=read('../../../backend/src/Pakpost.Infrastructure/Persistence/Migrations/20261117110000_CollectionVariables.cs');
   assert.match(controller,/HttpGet\("\{collectionId:guid\}\/variables"\)/);
   assert.match(controller,/HttpPut\("\{collectionId:guid\}\/variables"\)/);
@@ -86,7 +90,7 @@ test('Cloud saved updates are permissioned, version checked and encrypted for se
   assert.match(handlers,/WorkspacePermissions\.CollectionRead/);
   assert.match(handlers,/WorkspacePermissions\.EnvironmentSecretRead/);
   assert.match(handlers,/cipher\.Protect/);
-  assert.match(handlers,/VariablesVersion!=cmd\.Version/);
+  assert.match(handlers,/VariablesVersion\s*!=\s*cmd\.Version/);
   assert.match(migration,/variables_json/);
   assert.match(migration,/variables_version/);
 });

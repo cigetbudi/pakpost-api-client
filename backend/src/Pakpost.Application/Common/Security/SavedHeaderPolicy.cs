@@ -5,11 +5,6 @@ using Pakpost.Application.Common.Exceptions;
 
 namespace Pakpost.Application.Common.Security;
 
-/// <summary>
-/// Saved requests must reference secrets via environment variables, not persist their values.
-/// Covers both header map entries and the __pakpost_request_meta_v1__.headers array.
-/// Does NOT inspect arbitrary raw bodies/scripts: see SECURITY-HARDENING.md.
-/// </summary>
 public static partial class SavedHeaderPolicy
 {
     private const string MetadataKey="__pakpost_request_meta_v1__";

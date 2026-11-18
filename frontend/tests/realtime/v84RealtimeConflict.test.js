@@ -48,11 +48,11 @@ test('sidebar re-fetch only when relevant; hidden collection stays lazy',()=>{
 test('backend enforces revisions even if realtime connection is absent',()=>{
  const entity=source('backend/src/Pakpost.Domain/Entities/SavedRequest.cs');
  const config=source('backend/src/Pakpost.Infrastructure/Persistence/Configurations/SavedRequestConfiguration.cs');
- const app=source('backend/src/Pakpost.Application/Internal/Collections/SavedRequests.cs');
+ const app=source('backend/src/Pakpost.Application/Internal/Collections/Handlers/UpdateSavedRequestHandler.cs');
  assert.match(entity,/Revision\+\+/);
  assert.match(config,/\.IsConcurrencyToken\(\)/);
  assert.match(app,/ExpectedRevision is null/);
- assert.match(app,/item.Revision != cmd.ExpectedRevision.Value/);
+ assert.match(app,/item\.Revision\s*!=\s*cmd\.ExpectedRevision\.Value/);
  assert.match(source('backend/src/Pakpost.Infrastructure/Persistence/Migrations/20261117130000_RequestRevision.cs'),/20261117130000_RequestRevision/);
 });
 test('SignalR group requires membership and events contain identifiers only',()=>{

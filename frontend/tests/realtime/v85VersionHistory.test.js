@@ -36,21 +36,28 @@ test('auth merge is grouped and the unsafe fields have no value preview',()=>{
 });
 test('history model is immutable and encrypted, not plaintext in table',()=>{
  const entity=source('backend/src/Pakpost.Domain/Entities/SavedRequestRevision.cs');
- const codec=source('backend/src/Pakpost.Application/Internal/Collections/SavedRequestHistory.cs');
+ const codec = [
+  'Services/SavedRequestHistoryCodec.cs',
+  'Handlers/RestoreSavedRequestHistoryHandler.cs',
+  'Services/SavedRequestHistoryAccess.cs'
+ ].map(file => source(`backend/src/Pakpost.Application/Internal/Collections/${file}`)).join('\n');
  const model=source('backend/src/Pakpost.Infrastructure/Persistence/Configurations/SavedRequestRevisionConfiguration.cs');
  assert.match(codec,/cipher\.Protect\(JsonSerializer\.Serialize\(snapshot\)\)/);
  assert.match(codec,/cipher\.Unprotect\(entry\.EncryptedSnapshot\)/);
  assert.match(entity,/EncryptedSnapshot/);assert.match(model,/encrypted_snapshot/);
- assert.match(codec,/ExpectedRevision/);assert.match(codec,/item.Revision!=c.ExpectedRevision/);
+ assert.match(codec,/ExpectedRevision/);assert.match(codec,/item\.Revision\s*!=\s*c\.ExpectedRevision/);
  assert.match(codec,/WorkspacePermissions.CollectionWrite/);
 });
 test('create, update and restore append version snapshots in a database transaction',()=>{
- const handlers=source('backend/src/Pakpost.Application/Internal/Collections/SavedRequests.cs');
- const history=source('backend/src/Pakpost.Application/Internal/Collections/SavedRequestHistory.cs');
+ const handlers = [
+  'Handlers/SaveRequestHandler.cs',
+  'Handlers/UpdateSavedRequestHandler.cs'
+ ].map(file => source(`backend/src/Pakpost.Application/Internal/Collections/${file}`)).join('\n');
+ const history=source('backend/src/Pakpost.Application/Internal/Collections/Handlers/RestoreSavedRequestHistoryHandler.cs');
  const controller=source('backend/src/Pakpost.Api/Controllers/SavedRequestsController.cs');
- assert.match(handlers,/history.Add\(SavedRequestHistoryCodec.Capture\(item,c.ActorId,"created",cipher\)\)/);
- assert.match(handlers,/history.Add\(SavedRequestHistoryCodec.Capture\(item,cmd.ActorId,"updated",cipher\)\)/);
- assert.match(history,/history.Add\(SavedRequestHistoryCodec.Capture\(item,c.ActorId,"restored",cipher\)\)/);
+ assert.match(handlers,/history\.Add\(SavedRequestHistoryCodec\.Capture\(item,\s*c\.ActorId,\s*"created",\s*cipher\)\)/);
+ assert.match(handlers,/history\.Add\(SavedRequestHistoryCodec\.Capture\(item,\s*cmd\.ActorId,\s*"updated",\s*cipher\)\)/);
+ assert.match(history,/history\.Add\(SavedRequestHistoryCodec\.Capture\(item,\s*c\.ActorId,\s*"restored",\s*cipher\)\)/);
  assert.match(history,/await uow.SaveChangesAsync\(ct\)/);
  assert.match(controller,/history\/\{revision:int\}\/restore/);
  assert.match(controller,/realtime.PublishAsync\(workspaceId,"request.updated"/);

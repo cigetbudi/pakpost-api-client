@@ -24,10 +24,15 @@ test('workspace admin cannot resend/revoke privileged-role invitations',()=>{
  assert.equal(canManageInvitation(['TeamLead'],['WorkspaceAdmin']),true);
 });
 test('backend invitation flow is permission-checked and requires Google verification',()=>{
- const source=read('backend/src/Pakpost.Application/Internal/Workspaces/WorkspaceInvitations.cs');
+ const source = [
+   'Services/InvitationTokens.cs',
+   'Handlers/InviteWorkspaceMemberHandler.cs',
+   'Handlers/AcceptWorkspaceInvitationHandler.cs',
+   'Handlers/ResendWorkspaceInvitationHandler.cs'
+ ].map(file => read(`backend/src/Pakpost.Application/Internal/Workspaces/${file}`)).join('\n');
  assert.match(source,/WorkspacePermissions\.MemberManage/);
  assert.match(source,/RoleDelegation\.Check/);
- assert.match(source,/FindByUserProviderAsync\(user\.Id,"google",ct\)/);
+ assert.match(source,/FindByUserProviderAsync\(user\.Id,\s*"google",\s*ct\)/);
  assert.match(source,/FindByTokenHashAsync/);
  assert.match(source,/invitation\.Accept\(DateTimeOffset\.UtcNow\)/);
  assert.match(source,/RandomNumberGenerator\.GetBytes\(32\)/);

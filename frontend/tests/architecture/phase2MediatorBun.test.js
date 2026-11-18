@@ -23,9 +23,11 @@ test('Mediator source generator is registered only in executable and uses scoped
   assert.match(app, /Mediator\.Abstractions" Version="3\.0\.2"/)
   assert.doesNotMatch(app, /MediatR/)
   assert.doesNotMatch(app, /Mediator\.SourceGenerator/)
-  assert.match(program, /ServiceLifetime\.Scoped/)
-  assert.match(program, /options\.PipelineBehaviors = \[typeof\(ValidationBehavior<,>\)\]/)
-  assert.match(program, /options\.Assemblies = \[typeof\(RegisterCommand\)\]/)
+  const mediatorRegistration = read('backend/src/Pakpost.Api/Extensions/MediatorServiceExtensions.cs')
+  assert.match(program, /builder\.Services\.AddMediatorServices\(\)/)
+  assert.match(mediatorRegistration, /ServiceLifetime\.Scoped/)
+  assert.match(mediatorRegistration, /options\.PipelineBehaviors = \[typeof\(ValidationBehavior<,>\)\]/)
+  assert.match(mediatorRegistration, /options\.Assemblies = \[typeof\(RegisterCommand\)\]/)
 })
 
 test('all CQRS handlers use ValueTask without MediatR references', () => {

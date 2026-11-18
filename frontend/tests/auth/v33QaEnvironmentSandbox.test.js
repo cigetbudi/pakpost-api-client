@@ -84,6 +84,6 @@ test('Send does not call Cloud PUT for read-only QA, Writer or Developer',()=>{
 });
 
 test('backend authorizes environment selection with read, not write permission',()=>{
-  const env=read('backend/src/Pakpost.Application/Internal/Environments/Environments.cs');
-  assert.match(env,/write\?WorkspacePermissions\.EnvironmentWrite:WorkspacePermissions\.EnvironmentRead/);
+  const env=read('backend/src/Pakpost.Application/Internal/Environments/Services/EnvironmentAccess.cs');
+  assert.match(env,/write\s*\?\s*WorkspacePermissions\.EnvironmentWrite\s*:\s*WorkspacePermissions\.EnvironmentRead/);
 });

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const read = path => readFileSync(new URL(path,import.meta.url),'utf8');
 
 test('Cloud import backend checks permission and uses one SaveChanges transaction boundary',()=>{
-  const source=read('../../../backend/src/Pakpost.Application/Internal/Collections/ImportCollections.cs');
+  const source=read('../../../backend/src/Pakpost.Application/Internal/Collections/Handlers/ImportCollectionsHandler.cs');
   const controller=read('../../../backend/src/Pakpost.Api/Controllers/CollectionsController.cs');
   assert.match(controller,/HttpPost\("import"\)/);
   assert.match(source,/WorkspacePermissions\.CollectionWrite/);
