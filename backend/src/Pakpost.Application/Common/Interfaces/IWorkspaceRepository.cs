@@ -10,6 +10,7 @@ public interface IWorkspaceRepository
     Task<bool> AnyWorkspaceAsync(CancellationToken ct);
     Task<IReadOnlyList<Workspace>> ListForUserAsync(Guid userId, CancellationToken ct);
     Task<IReadOnlyList<WorkspaceMember>> ListMembersAsync(Guid workspaceId, CancellationToken ct);
+    Task<int> DeleteOwnedAsync(Guid workspaceId, Guid founderId, CancellationToken ct);
     void Add(Workspace workspace);
     void AddMember(WorkspaceMember member);
 }

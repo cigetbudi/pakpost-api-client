@@ -38,6 +38,30 @@ public sealed class WorkspaceRepository(PakpostDbContext db) : IWorkspaceReposit
             .OrderBy(member => member.JoinedAt)
             .ToListAsync(ct);
 
+    public async Task<int> DeleteOwnedAsync(
+        Guid workspaceId,
+        Guid founderId,
+        CancellationToken ct)
+    {
+        await db.SavedRequests
+            .Where(request => db.Collections.Any(collection =>
+                collection.Id == request.CollectionId &&
+                collection.WorkspaceId == workspaceId))
+            .ExecuteDeleteAsync(ct);
+
+        await db.CollectionFolders
+            .Where(folder => db.Collections.Any(collection =>
+                collection.Id == folder.CollectionId &&
+                collection.WorkspaceId == workspaceId))
+            .ExecuteDeleteAsync(ct);
+
+        return await db.Workspaces
+            .Where(workspace =>
+                workspace.Id == workspaceId &&
+                workspace.OwnerUserId == founderId)
+            .ExecuteDeleteAsync(ct);
+    }
+
     public void Add(Workspace workspace) => db.Workspaces.Add(workspace);
 
     public void AddMember(WorkspaceMember member) => db.WorkspaceMembers.Add(member);

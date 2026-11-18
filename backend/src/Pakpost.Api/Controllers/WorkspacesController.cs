@@ -31,6 +31,14 @@ public sealed class WorkspacesController(ISender sender,WorkspaceConnectionRegis
     public async Task<ActionResult<WorkspaceDto>> Create([FromBody] CreateWorkspaceRequest body, CancellationToken ct)
         => Ok(await sender.Send(new CreateWorkspaceCommand(User.GetUserId(), body.Name), ct));
 
+    [HttpDelete("{workspaceId:guid}")]
+    public async Task<IActionResult> Delete(Guid workspaceId, CancellationToken ct)
+    {
+        await sender.Send(new DeleteWorkspaceCommand(User.GetUserId(), workspaceId), ct);
+        await connections.RevokeWorkspaceAsync(hub, workspaceId);
+        return NoContent();
+    }
+
     [HttpGet("{workspaceId:guid}/members")]
     public async Task<ActionResult<IReadOnlyList<MemberDto>>> Members(Guid workspaceId, CancellationToken ct)
         => Ok(await sender.Send(new ListWorkspaceMembersQuery(User.GetUserId(), workspaceId), ct));

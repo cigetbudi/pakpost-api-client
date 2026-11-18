@@ -240,6 +240,13 @@ sealed class FakeWorkspaces(Guid workspaceId,Guid userId,WorkspaceRole role,Work
         =>Task.FromResult<IReadOnlyList<Workspace>>([]);
     public Task<IReadOnlyList<WorkspaceMember>> ListMembersAsync(Guid id,CancellationToken ct)
         =>Task.FromResult<IReadOnlyList<WorkspaceMember>>([]);
+    public Task<int> DeleteOwnedAsync(
+        Guid workspaceId,
+        Guid founderId,
+        CancellationToken ct)
+    {
+        throw new NotSupportedException("Security test fake does not support workspace deletion.");
+    }
     public void Add(Workspace value){}
     public void AddMember(WorkspaceMember value){}
 }

@@ -555,7 +555,12 @@ export function useWorkbenchController() {
     },
     onAccessChanged:(workspaceId,auth)=>api(`/api/workspaces/${workspaceId}/members`,'GET',undefined,auth)
       .then(data=>{if(auth===currentTokenRef.current&&workspaceId===selectedWorkspaceRef.current){setMembers(data);setMembersWorkspaceId(workspaceId)}})
-      .catch(()=>{if(auth===currentTokenRef.current&&workspaceId===selectedWorkspaceRef.current){setMembers([]);setMembersWorkspaceId('')}}),
+      .catch(error=>{
+        if(auth!==currentTokenRef.current||workspaceId!==selectedWorkspaceRef.current)return;
+        setMembers([]);
+        setMembersWorkspaceId('');
+        if(error.status===403||error.status===404)loadWorkspaces(auth);
+      }),
   });
 
   useEffect(()=>{let current=true;if(!token){setGoogleLinked(false);return;}

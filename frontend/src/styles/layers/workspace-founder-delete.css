@@ -1,0 +1,133 @@
+.pp-workspace-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+}
+
+.pp-manager-detail-title > .pp-workspace-title-actions {
+  flex: 0 0 auto;
+  flex-direction: row;
+}
+
+.pp-workspace-delete-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(230, 90, 105, .36);
+  border-radius: 6px;
+  color: var(--red);
+  font-size: 11px;
+}
+
+.pp-workspace-delete-trigger:hover:not(:disabled) {
+  background: rgba(230, 90, 105, .1);
+}
+
+.pp-workspace-delete-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, .65);
+}
+
+.pp-workspace-delete-dialog {
+  width: min(100%, 440px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .24);
+}
+
+.pp-workspace-delete-dialog h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.pp-workspace-delete-dialog p {
+  margin: 0 0 20px;
+  color: var(--text2);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.pp-workspace-delete-dialog form {
+  display: grid;
+  gap: 10px;
+}
+
+.pp-workspace-delete-dialog label {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.pp-workspace-delete-dialog input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--editor);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.pp-workspace-delete-dialog input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pp-workspace-delete-dialog .pp-workspace-delete-error {
+  margin: 0;
+  color: var(--red);
+}
+
+.pp-workspace-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.pp-workspace-delete-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.pp-workspace-delete-actions .danger {
+  border-color: rgba(230, 90, 105, .5);
+  color: var(--red);
+}
+
+.pp-workspace-delete-actions .danger:hover:not(:disabled) {
+  background: rgba(230, 90, 105, .1);
+}
+
+.pp-workspace-delete-actions button:disabled,
+.pp-workspace-delete-trigger:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .pp-workspace-title-actions {
+    gap: 8px;
+  }
+
+  .pp-workspace-delete-trigger {
+    padding: 7px;
+    font-size: 10px;
+  }
+}

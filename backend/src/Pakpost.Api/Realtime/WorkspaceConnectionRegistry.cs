@@ -12,6 +12,39 @@ public sealed class WorkspaceConnectionRegistry(ILogger<WorkspaceConnectionRegis
     public void Register(string connectionId,Guid userId,Guid workspaceId)
         => _connections[connectionId]=(userId,workspaceId);
     public void Remove(string connectionId)=>_connections.TryRemove(connectionId,out _);
+    public async Task RevokeWorkspaceAsync(
+        IHubContext<WorkspaceHub> hub,
+        Guid workspaceId)
+    {
+        foreach (var pair in _connections)
+        {
+            if (pair.Value.WorkspaceId != workspaceId)
+            {
+                continue;
+            }
+
+            if (!_connections.TryRemove(pair.Key, out _))
+            {
+                continue;
+            }
+
+            try
+            {
+                await hub.Groups.RemoveFromGroupAsync(
+                    pair.Key,
+                    WorkspaceHub.GroupName(workspaceId));
+
+                await hub.Clients.Client(pair.Key).SendAsync(
+                    "WorkspaceAccessChanged",
+                    new { workspaceId });
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to revoke a deleted workspace connection");
+            }
+        }
+    }
+
     public async Task ReauthorizeUserAsync(IHubContext<WorkspaceHub> hub,Guid workspaceId,Guid userId)
     {
         foreach(var pair in _connections)
