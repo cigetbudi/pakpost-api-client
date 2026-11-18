@@ -1,11 +1,6 @@
 /* v8.7.1 · Compact Cloud explorer, no permanent root-drop or new-folder rows. */
 .pp-cloud-folders { min-width:0; }
 .pp-cloud-folders .pp-tree-item-container { min-width:0; }
-.pp-cloud-folders .pp-cloud-folder-row { gap:9px; padding-right:34px; }
-.pp-cloud-folders .pp-cloud-folder-row>svg:first-child { flex:0 0 15px; margin-right:5px; }
-.pp-cloud-folders .pp-tree-item-container>.pp-cloud-request-row { gap:12px; padding-right:34px; }
-.pp-cloud-folders .pp-cloud-request-row>.pp-http-label { flex:0 0 auto; min-width:43px; text-align:center; }
-.pp-cloud-folders .pp-workspace-example-toggle + .pp-cloud-request-row { padding-left:33px!important; }
 /* Active request and bulk selection are different states. */
 .pp-cloud-folders .pp-cloud-tab-active {background:var(--selected)!important;color:var(--text)!important;box-shadow:inset 2px 0 var(--accent);}
 .pp-cloud-folders .pp-cloud-selected:not(.pp-cloud-tab-active) {background:var(--accent-soft)!important;color:var(--text)!important;outline:1px solid var(--accent);outline-offset:-1px;}

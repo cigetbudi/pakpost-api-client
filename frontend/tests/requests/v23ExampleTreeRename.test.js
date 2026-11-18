@@ -60,8 +60,8 @@ test('Local example tree has nested visual order and local/Neon menus include re
   const tree=readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8');
   const app=readWorkbenchSource();
   assert.match(tree,/example:\[\['renameExample','Rename example'\]/);
-  assert.match(tree,/pp-local-request" style=\{\{paddingLeft:12\+depth\*14\}\}/);
-  assert.match(tree,/pp-tree-example" style=\{\{paddingLeft:58\+depth\*14\}\}/);
+  assert.match(tree,/pp-local-request pp-explorer-tree-request/);
+  assert.match(tree,/pp-tree-example pp-explorer-tree-example/);
   assert.match(app,/\['renameExample','Rename example'\],\['deleteExample','Delete example'\]/);
   assert.match(app,/async function renameSavedExample\(/);
   assert.match(app,/synchronizeSavedExamples\(scope,workspaceId,collectionId,requestId,examples\)/);

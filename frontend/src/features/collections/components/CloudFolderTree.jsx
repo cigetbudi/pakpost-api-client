@@ -158,14 +158,13 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
       const isOpen=filter?true:expanded[folder.id]!==false;
       const key=folderKey(folder.id);
       return <React.Fragment key={folder.id}>
-        <div className="pp-tree-item-container" draggable={canEdit} onDragStart={e=>{
+        <div className="pp-tree-item-container" style={{'--pp-tree-depth':depth+1}} draggable={canEdit} onDragStart={e=>{
           e.stopPropagation();setDragging(true);e.dataTransfer.effectAllowed='move';
           e.dataTransfer.setData(FOLDER_DRAG,JSON.stringify({collectionId,folderId:folder.id}));}}
           onDragOver={e=>{if(canEdit&&(Array.from(e.dataTransfer.types||[]).includes(FOLDER_DRAG)||Array.from(e.dataTransfer.types||[]).includes(requestDrag)))e.preventDefault();}}
           onDrop={e=>folderMove(e,folder.id)}>
           <button type="button" data-cloud-select-key={key} aria-pressed={selection.includes(key)}
-            className={`pp-tree-row pp-local-folder pp-cloud-folder-row ${selection.includes(key)?'pp-cloud-selected':''}`}
-            style={{paddingLeft:17+depth*14}} aria-expanded={isOpen}
+            className={`pp-tree-row pp-local-folder pp-cloud-folder-row pp-explorer-tree-row ${selection.includes(key)?'pp-cloud-selected':''}`} aria-expanded={isOpen}
             onContextMenu={e=>openMenu(e,folder)}
             onClick={e=>{if(choose(e,key))setExpanded(x=>({...x,[folder.id]:!isOpen}));}}>
             {isOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}<FolderClosed className="pp-cloud-folder-icon" size={14}/><span>{folder.name}</span>

@@ -74,8 +74,8 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                 const endpointCount=cloudEndpointCount(c,workspaceRequestLists,requestKey);
                 const activeCloud=activeCloudTabForCollection(openTabs,activeTabId,selectedWs,c.id);
                 return <div key={c.id}>
-                <div className="pp-tree-item-container" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(WORKSPACE_DRAG))e.preventDefault()}} onDrop={e=>moveWorkspaceRequest(e,c.id)}>
-                  <button type="button" aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => toggleWorkspaceCollectionById(c.id)}>
+                <div className="pp-tree-item-container" style={{'--pp-tree-depth':0}} onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(WORKSPACE_DRAG))e.preventDefault()}} onDrop={e=>moveWorkspaceRequest(e,c.id)}>
+                  <button type="button" aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row pp-explorer-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => toggleWorkspaceCollectionById(c.id)}>
                     {opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
                     <FolderClosed className="pp-cloud-folder-icon" size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
                   </button>
@@ -93,23 +93,23 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                   onRenameRequest={r=>handleWorkspaceMenu('renameRequest',{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}
                   renderDraft={(folderId,depth)=>openTabs.filter(t=>t.source?.pending&&t.source.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.collectionId===c.id&&
                     (t.source.folderId||null)===(folderId||null)).filter(t=>t.name.toLowerCase().includes(explorerSearch.toLowerCase()))
-                    .map(t=><button key={t.id} type="button" className={`pp-tree-request pp-draft-request ${t.id===activeCloud.pendingTabId?'pp-cloud-tab-active':''}`} aria-current={t.id===activeCloud.pendingTabId?'page':undefined} style={{paddingLeft:24+depth*14}} onClick={()=>selectTab(t.id)}>
-                      <span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span>{t.name}</span><span className="pp-unsaved-dot"/>
+                    .map(t=><button key={t.id} type="button" className={`pp-tree-request pp-draft-request pp-explorer-tree-request ${t.id===activeCloud.pendingTabId?'pp-cloud-tab-active':''}`} aria-current={t.id===activeCloud.pendingTabId?'page':undefined} style={{'--pp-tree-depth':depth+1}} onClick={()=>selectTab(t.id)}>
+                      <span className="pp-tree-disclosure-slot" aria-hidden="true"/><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tree-name">{t.name}</span><span className="pp-unsaved-dot"/>
                     </button>)}
                   renderRequest={(r,depth,selectionProps={})=>{
                   const meta=decodeStoredHeaders(r.headersJson);
                   const examplesOpen=expandedWorkspaceExamples[`${selectedWs}:${c.id}:${r.id}`]??!!explorerSearch;
                   const tabActive=activeCloud.requestId===r.id;
-                  return <React.Fragment key={r.id}><div className="pp-tree-item-container" draggable={canEditCloud} onDragStart={e=>{if(!canEditCloud)return;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
+                  return <React.Fragment key={r.id}><div className="pp-tree-item-container" style={{'--pp-tree-depth':depth+1}} draggable={canEditCloud} onDragStart={e=>{if(!canEditCloud)return;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
                     {!!meta.responseExamples?.length&&<button type="button" className="pp-endpoint-example-toggle pp-workspace-example-toggle" aria-expanded={examplesOpen} title={`${examplesOpen?'Hide':'Show'} ${meta.responseExamples.length} response examples`} aria-label={`${examplesOpen?'Collapse':'Expand'} examples for ${r.name}`} onClick={e=>{e.stopPropagation();setExpandedWorkspaceExamples(old=>({...old,[`${selectedWs}:${c.id}:${r.id}`]:!examplesOpen}));}}>{examplesOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>}
-                    <button className={`pp-tree-request pp-cloud-request-row ${tabActive?'pp-cloud-tab-active':''} ${selectionProps.className||''}`} data-cloud-select-key={selectionProps['data-cloud-select-key']} aria-pressed={selectionProps['aria-pressed']} aria-current={tabActive?'page':undefined} style={{paddingLeft:25+depth*14}} title={r.url}
+                    <button className={`pp-tree-request pp-cloud-request-row pp-explorer-tree-request ${tabActive?'pp-cloud-tab-active':''} ${selectionProps.className||''}`} data-cloud-select-key={selectionProps['data-cloud-select-key']} aria-pressed={selectionProps['aria-pressed']} aria-current={tabActive?'page':undefined} title={r.url}
                       onContextMenu={e=>{selectionProps.onContextMenu?.(e);showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}}
-                      onClick={e=>{if(selectionProps.onClick?.(e)!==false)loadSavedRequest({...r,collectionId:c.id});}}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span>{r.name}</span></button>
+                      onClick={e=>{if(selectionProps.onClick?.(e)!==false)loadSavedRequest({...r,collectionId:c.id});}}><span className="pp-tree-disclosure-slot" aria-hidden="true"/><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span className="pp-tree-name">{r.name}</span></button>
                     <button className="pp-tree-action" title="Request actions" aria-label={`Actions for ${r.name}`} onClick={e=>showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}><Settings2 size={14}/></button>
                   </div>
-                  {!!meta.responseExamples?.length&&<div className={`pp-collection-motion pp-example-motion ${examplesOpen?'is-open':''}`} aria-hidden={!examplesOpen} inert={!examplesOpen}><div className="pp-collection-motion-inner">{(meta.responseExamples||[]).map(example=><div key={`${r.id}:${example.id}`} className="pp-tree-item-container">
-                    <button type="button" className="pp-tree-example" style={{paddingLeft:46}} title={example.description||example.name} onContextMenu={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})} onClick={()=>openWorkspaceExample(r,c.id,example)}>
-                      <span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span>{example.name}</span>
+                  {!!meta.responseExamples?.length&&<div className={`pp-collection-motion pp-example-motion ${examplesOpen?'is-open':''}`} aria-hidden={!examplesOpen} inert={!examplesOpen}><div className="pp-collection-motion-inner">{(meta.responseExamples||[]).map(example=><div key={`${r.id}:${example.id}`} className="pp-tree-item-container" style={{'--pp-tree-depth':depth+2}}>
+                    <button type="button" className="pp-tree-example pp-explorer-tree-example" title={example.description||example.name} onContextMenu={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})} onClick={()=>openWorkspaceExample(r,c.id,example)}>
+                      <span className="pp-tree-disclosure-slot" aria-hidden="true"/><span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span className="pp-tree-name">{example.name}</span>
                     </button>
                     <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})}><Settings2 size={14}/></button>
                   </div>)}</div></div>}

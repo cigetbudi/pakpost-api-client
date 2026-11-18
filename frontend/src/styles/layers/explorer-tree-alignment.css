@@ -1,0 +1,134 @@
+.pp-explorer {
+  --pp-tree-leading: 9px;
+  --pp-tree-indent: 10px;
+  --pp-tree-gap: 5px;
+  --pp-tree-disclosure: 14px;
+  --pp-tree-icon: 16px;
+  --pp-tree-type: 44px;
+  --pp-tree-row-height: 28px;
+  --pp-tree-badge-height: 18px;
+}
+
+.pp-explorer .pp-explorer-tree-row,
+.pp-explorer .pp-explorer-tree-request,
+.pp-explorer .pp-explorer-tree-example {
+  box-sizing: border-box;
+  display: grid;
+  align-items: center;
+  column-gap: var(--pp-tree-gap);
+  width: 100%;
+  min-width: 0;
+  height: var(--pp-tree-row-height);
+  min-height: var(--pp-tree-row-height);
+  padding: 0 29px 0 calc(var(--pp-tree-leading) + var(--pp-tree-depth, 0) * var(--pp-tree-indent));
+  border-radius: 4px;
+  text-align: left;
+}
+
+.pp-explorer .pp-explorer-tree-row {
+  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-type) minmax(0, 1fr) auto;
+}
+
+.pp-explorer .pp-explorer-tree-request,
+.pp-explorer .pp-explorer-tree-example {
+  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-type) minmax(0, 1fr);
+}
+
+.pp-explorer .pp-explorer-tree-request:has(> .pp-unsaved-dot) {
+  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-type) minmax(0, 1fr) 6px;
+}
+
+.pp-explorer .pp-explorer-tree-row > svg {
+  width: var(--pp-tree-icon);
+  height: var(--pp-tree-icon);
+  margin: 0;
+  justify-self: center;
+}
+
+.pp-explorer .pp-explorer-tree-row > svg:nth-of-type(2) {
+  color: var(--text2);
+}
+
+.pp-explorer .pp-explorer-tree-row > svg:first-child {
+  width: var(--pp-tree-disclosure);
+  height: var(--pp-tree-disclosure);
+}
+
+.pp-explorer .pp-explorer-tree-request .pp-http-label,
+.pp-explorer .pp-explorer-tree-example .pp-example-status {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: stretch;
+  width: var(--pp-tree-type);
+  min-width: 0;
+  height: var(--pp-tree-badge-height);
+  padding: 0 2px;
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 1;
+  text-align: center;
+}
+
+.pp-explorer .pp-explorer-tree-request .pp-http-label.options {
+  font-size: 8px;
+  letter-spacing: -0.35px;
+}
+
+.pp-explorer .pp-tree-disclosure-slot {
+  display: block;
+  width: var(--pp-tree-disclosure);
+  height: var(--pp-tree-disclosure);
+}
+
+.pp-explorer .pp-explorer-tree-row > span,
+.pp-explorer .pp-explorer-tree-request .pp-tree-name,
+.pp-explorer .pp-explorer-tree-example .pp-tree-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.pp-explorer .pp-explorer-tree-example .pp-tree-name {
+  font-size: 11px;
+}
+
+.pp-explorer .pp-tree-item-container > .pp-endpoint-example-toggle {
+  left: calc(var(--pp-tree-leading) + var(--pp-tree-depth, 0) * var(--pp-tree-indent));
+  width: var(--pp-tree-disclosure);
+  height: 26px;
+}
+
+.pp-explorer .pp-tree-item-container > .pp-tree-request,
+.pp-explorer .pp-tree-item-container > .pp-tree-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.pp-explorer .pp-explorer-tree-request .pp-unsaved-dot {
+  margin: 0;
+}
+
+.pp-explorer .pp-explorer-tree-row > small {
+  grid-column: 4;
+  margin-left: 0;
+  white-space: nowrap;
+}
+
+.pp-explorer .pp-tree-item-container > .pp-tree-action,
+.pp-explorer .pp-tree-actions > .pp-tree-action {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+}
+
+.pp-explorer .pp-explorer-tree-request:focus-visible,
+.pp-explorer .pp-explorer-tree-row:focus-visible,
+.pp-explorer .pp-explorer-tree-example:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}

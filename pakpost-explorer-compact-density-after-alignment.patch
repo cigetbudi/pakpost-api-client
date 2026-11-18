@@ -1,0 +1,164 @@
+diff --git a/frontend/src/styles/layers/explorer-tree-alignment.css b/frontend/src/styles/layers/explorer-tree-alignment.css
+index f1f736c..cb938d8 100644
+--- a/frontend/src/styles/layers/explorer-tree-alignment.css
++++ b/frontend/src/styles/layers/explorer-tree-alignment.css
+@@ -1,10 +1,12 @@
+ .pp-explorer {
+-  --pp-tree-leading: 16px;
+-  --pp-tree-indent: 14px;
+-  --pp-tree-gap: 8px;
+-  --pp-tree-disclosure: 16px;
+-  --pp-tree-icon: 18px;
+-  --pp-tree-method: 64px;
++  --pp-tree-leading: 9px;
++  --pp-tree-indent: 10px;
++  --pp-tree-gap: 5px;
++  --pp-tree-disclosure: 14px;
++  --pp-tree-icon: 16px;
++  --pp-tree-type: 44px;
++  --pp-tree-row-height: 28px;
++  --pp-tree-badge-height: 18px;
+ }
+ 
+ .pp-explorer .pp-explorer-tree-row,
+@@ -16,22 +18,24 @@
+   column-gap: var(--pp-tree-gap);
+   width: 100%;
+   min-width: 0;
+-  height: 36px;
+-  padding: 0 34px 0 calc(var(--pp-tree-leading) + var(--pp-tree-depth, 0) * var(--pp-tree-indent));
++  height: var(--pp-tree-row-height);
++  min-height: var(--pp-tree-row-height);
++  padding: 0 29px 0 calc(var(--pp-tree-leading) + var(--pp-tree-depth, 0) * var(--pp-tree-indent));
++  border-radius: 4px;
+   text-align: left;
+ }
+ 
+ .pp-explorer .pp-explorer-tree-row {
+-  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-icon) minmax(0, 1fr) auto;
++  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-type) minmax(0, 1fr) auto;
+ }
+ 
+ .pp-explorer .pp-explorer-tree-request,
+ .pp-explorer .pp-explorer-tree-example {
+-  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-method) minmax(0, 1fr);
++  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-type) minmax(0, 1fr);
+ }
+ 
+ .pp-explorer .pp-explorer-tree-request:has(> .pp-unsaved-dot) {
+-  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-method) minmax(0, 1fr) 6px;
++  grid-template-columns: var(--pp-tree-disclosure) var(--pp-tree-type) minmax(0, 1fr) 6px;
+ }
+ 
+ .pp-explorer .pp-explorer-tree-row > svg {
+@@ -50,26 +54,26 @@
+   height: var(--pp-tree-disclosure);
+ }
+ 
+-.pp-explorer .pp-explorer-tree-request .pp-http-label {
++.pp-explorer .pp-explorer-tree-request .pp-http-label,
++.pp-explorer .pp-explorer-tree-example .pp-example-status {
+   box-sizing: border-box;
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   justify-self: stretch;
+-  width: var(--pp-tree-method);
++  width: var(--pp-tree-type);
+   min-width: 0;
+-  height: 25px;
+-  padding: 0 5px;
++  height: var(--pp-tree-badge-height);
++  padding: 0 2px;
++  border-radius: 4px;
++  font-size: 9px;
++  line-height: 1;
+   text-align: center;
+ }
+ 
+-.pp-explorer .pp-explorer-tree-example .pp-example-status {
+-  box-sizing: border-box;
+-  justify-self: stretch;
+-  width: var(--pp-tree-method);
+-  min-width: 0;
+-  height: 22px;
+-  border-radius: 5px;
++.pp-explorer .pp-explorer-tree-request .pp-http-label.options {
++  font-size: 8px;
++  letter-spacing: -0.35px;
+ }
+ 
+ .pp-explorer .pp-tree-disclosure-slot {
+@@ -86,12 +90,17 @@
+   overflow: hidden;
+   white-space: nowrap;
+   text-overflow: ellipsis;
++  font-size: 12px;
++}
++
++.pp-explorer .pp-explorer-tree-example .pp-tree-name {
++  font-size: 11px;
+ }
+ 
+ .pp-explorer .pp-tree-item-container > .pp-endpoint-example-toggle {
+   left: calc(var(--pp-tree-leading) + var(--pp-tree-depth, 0) * var(--pp-tree-indent));
+   width: var(--pp-tree-disclosure);
+-  height: 28px;
++  height: 26px;
+ }
+ 
+ .pp-explorer .pp-tree-item-container > .pp-tree-request,
+@@ -110,6 +119,13 @@
+   white-space: nowrap;
+ }
+ 
++.pp-explorer .pp-tree-item-container > .pp-tree-action,
++.pp-explorer .pp-tree-actions > .pp-tree-action {
++  width: 22px;
++  min-width: 22px;
++  height: 22px;
++}
++
+ .pp-explorer .pp-explorer-tree-request:focus-visible,
+ .pp-explorer .pp-explorer-tree-row:focus-visible,
+ .pp-explorer .pp-explorer-tree-example:focus-visible {
+diff --git a/frontend/tests/collections/explorerTreeAlignment.test.js b/frontend/tests/collections/explorerTreeAlignment.test.js
+index 683abbe..26a2d85 100644
+--- a/frontend/tests/collections/explorerTreeAlignment.test.js
++++ b/frontend/tests/collections/explorerTreeAlignment.test.js
+@@ -15,7 +15,7 @@ test('Local and Cloud collection and folder rows use the same tree grid', () =>
+   assert.match(local, /pp-local-folder pp-explorer-tree-row/);
+   assert.match(cloud, /pp-cloud-folder-row pp-explorer-tree-row/);
+   assert.match(explorer, /pp-cloud-collection-row pp-explorer-tree-row/);
+-  assert.match(styles, /grid-template-columns: var\(--pp-tree-disclosure\) var\(--pp-tree-icon\) minmax\(0, 1fr\) auto/);
++  assert.match(styles, /grid-template-columns: var\(--pp-tree-disclosure\) var\(--pp-tree-type\) minmax\(0, 1fr\) auto/);
+ });
+ 
+ test('HTTP request rows reserve the disclosure slot even without examples', () => {
+@@ -24,7 +24,7 @@ test('HTTP request rows reserve the disclosure slot even without examples', () =
+     assert.match(source, /pp-tree-disclosure-slot/);
+     assert.match(source, /pp-tree-name/);
+   }
+-  assert.match(styles, /grid-template-columns: var\(--pp-tree-disclosure\) var\(--pp-tree-method\) minmax\(0, 1fr\)/);
++  assert.match(styles, /grid-template-columns: var\(--pp-tree-disclosure\) var\(--pp-tree-type\) minmax\(0, 1fr\)/);
+   assert.doesNotMatch(oldStyles, /pp-workspace-example-toggle \+ \.pp-cloud-request-row/);
+ });
+ 
+@@ -35,3 +35,17 @@ test('Examples and disclosure toggles align with their actual nesting depth', ()
+   assert.match(styles, /left: calc\(var\(--pp-tree-leading\) \+ var\(--pp-tree-depth, 0\) \* var\(--pp-tree-indent\)\)/);
+   assert.doesNotMatch(explorer, /paddingLeft:25\+depth\*14|paddingLeft:46/);
+ });
++
++
++test('Explorer density keeps rows compact and badges small at every nesting level', () => {
++  assert.match(styles, /--pp-tree-row-height: 28px/);
++  assert.match(styles, /--pp-tree-badge-height: 18px/);
++  assert.match(styles, /--pp-tree-type: 44px/);
++  assert.match(styles, /--pp-tree-indent: 10px/);
++  assert.doesNotMatch(styles, /--pp-tree-method: 64px|height: 36px|height: 25px/);
++});
++
++test('Folder icon and HTTP method share the same type column and text origin', () => {
++  assert.match(styles, /\.pp-explorer \.pp-explorer-tree-row \{\s*grid-template-columns: var\(--pp-tree-disclosure\) var\(--pp-tree-type\) minmax\(0, 1fr\) auto/);
++  assert.match(styles, /\.pp-explorer \.pp-explorer-tree-request,[\s\S]*?\.pp-explorer \.pp-explorer-tree-example \{\s*grid-template-columns: var\(--pp-tree-disclosure\) var\(--pp-tree-type\) minmax\(0, 1fr\)/);
++});
