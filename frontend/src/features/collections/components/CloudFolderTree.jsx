@@ -77,6 +77,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
     finally{setBusy(false);}
   };
   const folderNameError=editing?cloudFolderNameError(folders,editing):'';
+  const visibleFolderNameError=editing?.touched?folderNameError:'';
   const submit=()=>{
     if(!editing||cloudFolderNameError(folders,editing))return;
     if(editing.mode==='create')mutate(()=>api(`${base}/folders`,'POST',{name:editing.name.trim(),parentFolderId:editing.parentId},token));
@@ -187,12 +188,20 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
   return <div ref={rootRef} className="pp-cloud-folders" onKeyDown={onKeys}
     onDragOver={e=>{if(canEdit&&Array.from(e.dataTransfer.types||[]).some(t=>t===requestDrag||t===FOLDER_DRAG))setDragging(true);}}>
     {canEdit&&dragging&&<div className="pp-cloud-root-drop" onDragOver={e=>e.preventDefault()} onDrop={e=>{setDragging(false);folderMove(e,null);}}>Drop here to move to collection root</div>}
-    {editing&&<form className="pp-local-create" onSubmit={e=>{e.preventDefault();submit();}}
+    {editing&&<form className="pp-local-create pp-cloud-folder-editor" onSubmit={e=>{e.preventDefault();submit();}}
       onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setEditing(null);}}}>
-      <input autoFocus maxLength={120} aria-label="Folder name" aria-invalid={!!folderNameError} placeholder="Folder name" value={editing.name} onChange={e=>setEditing(x=>({...x,name:e.target.value}))}/>
+      <input
+        autoFocus
+        maxLength={120}
+        aria-label="Folder name"
+        aria-invalid={!!visibleFolderNameError}
+        placeholder="Folder name"
+        value={editing.name}
+        onChange={e=>setEditing(x=>({...x,name:e.target.value,touched:true}))}
+      />
       <button type="submit" disabled={busy||!!folderNameError} aria-label="Save folder"><Check size={14}/></button>
       <button type="button" onClick={()=>setEditing(null)} aria-label="Cancel folder edit"><X size={14}/></button>
-      {folderNameError&&<span className="pp-cloud-folder-validation" role="status">{folderNameError}</span>}
+      {visibleFolderNameError&&<span className="pp-cloud-folder-validation" role="status">{visibleFolderNameError}</span>}
     </form>}
     {selection.length>1&&canEdit&&<div className="pp-cloud-selection-toolbar">
       <span>{selection.length} selected</span><button type="button" onClick={()=>requestDelete(selection)}><Trash2 size={13}/> Delete</button>

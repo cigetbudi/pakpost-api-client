@@ -15,6 +15,39 @@
 .pp-cloud-delete-explainer { padding:14px 4px 0; font-size:12px; line-height:1.7; color:var(--text2); }
 @media(prefers-reduced-motion:reduce){.pp-cloud-folders .pp-cloud-selected,.pp-cloud-folders .pp-cloud-tab-active { transition:none!important; }}
 
-/* Keep inline validation legible without expanding the folder row. */
-.pp-cloud-folder-validation {flex-basis:100%;font-size:11px;color:var(--red);padding:2px 6px;}
+.pp-cloud-folders > .pp-cloud-folder-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px 28px;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.pp-cloud-folder-editor > input {
+  width: 100%;
+  min-width: 0;
+}
+
+.pp-cloud-folder-editor > button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.pp-cloud-folder-editor > button[type="button"] {
+  background: transparent;
+  color: var(--muted);
+}
+
+.pp-cloud-folder-editor > .pp-cloud-folder-validation {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 0 5px 2px;
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 .pp-rename-validation {display:block;font-size:11px;color:var(--red);margin-top:5px;}
