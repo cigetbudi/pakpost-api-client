@@ -6,15 +6,33 @@ namespace Pakpost.Infrastructure.Persistence.Repositories;
 
 public sealed class CollectionRepository(PakpostDbContext db) : ICollectionRepository
 {
-    public Task<Collection?> FindAsync(Guid id, CancellationToken ct) =>
-        db.Collections.FirstOrDefaultAsync(collection => collection.Id == id, ct);
+    public async Task<Collection?> FindAsync(Guid id, CancellationToken ct)
+    {
+        var collection = await db.Collections.FirstOrDefaultAsync(item => item.Id == id, ct);
 
-    public async Task<IReadOnlyList<Collection>> ListAsync(Guid workspaceId, CancellationToken ct) =>
-        await db.Collections
+        if (collection is not null)
+        {
+            await db.DecryptCollectionAsync(collection, ct);
+        }
+
+        return collection;
+    }
+
+    public async Task<IReadOnlyList<Collection>> ListAsync(Guid workspaceId, CancellationToken ct)
+    {
+        var collections = await db.Collections
             .AsNoTracking()
-            .Where(collection => collection.WorkspaceId == workspaceId)
-            .OrderBy(collection => collection.Name)
+            .Where(item => item.WorkspaceId == workspaceId)
+            .OrderBy(item => item.Name)
             .ToListAsync(ct);
+
+        foreach (var collection in collections)
+        {
+            await db.DecryptCollectionAsync(collection, ct);
+        }
+
+        return collections;
+    }
 
     public async Task<IReadOnlyDictionary<Guid, int>> CountRequestsAsync(Guid workspaceId, CancellationToken ct) =>
         await db.SavedRequests

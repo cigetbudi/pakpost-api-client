@@ -3,6 +3,7 @@ using Pakpost.Api.Middlewares;
 using Pakpost.Api.Realtime;
 using Pakpost.Application;
 using Pakpost.Infrastructure;
+using Pakpost.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,8 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddWorkbenchWebServices(builder.Configuration);
 
 var app = builder.Build();
+
+_ = app.Services.GetRequiredService<WorkspaceCryptography>();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseRouting();

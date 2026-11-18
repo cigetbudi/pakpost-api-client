@@ -18,7 +18,7 @@ public sealed class SavedRequestConfiguration : IEntityTypeConfiguration<SavedRe
 
         builder.Property(request => request.Name).HasMaxLength(120).IsRequired();
         builder.Property(request => request.Method).HasMaxLength(10).IsRequired();
-        builder.Property(request => request.Url).HasMaxLength(2048).IsRequired();
+        builder.Property(request => request.Url).HasColumnType("text").IsRequired();
         builder.Property(request => request.HeadersJson).HasColumnType("jsonb").IsRequired();
         builder.Property(request => request.Body).HasColumnType("text").IsRequired();
 

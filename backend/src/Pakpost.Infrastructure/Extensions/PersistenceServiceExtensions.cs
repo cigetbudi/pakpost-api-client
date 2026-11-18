@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Infrastructure.Persistence;
 using Pakpost.Infrastructure.Persistence.Repositories;
+using Pakpost.Infrastructure.Services;
 
 namespace Pakpost.Infrastructure.Extensions;
 
@@ -19,6 +20,8 @@ public static class PersistenceServiceExtensions
         {
             throw new InvalidOperationException("ConnectionStrings__Postgres missing");
         }
+
+        services.AddSingleton<WorkspaceCryptography>();
 
         services.AddDbContext<PakpostDbContext>(options => options.UseNpgsql(connection));
 

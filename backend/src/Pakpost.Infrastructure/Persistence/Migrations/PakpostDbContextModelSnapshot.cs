@@ -225,8 +225,7 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Url")
                         .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -344,6 +343,30 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("users", "auth");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceEncryptionKey", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("KeyVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MasterKeyId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("WrappedKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("WorkspaceId");
+                    b.ToTable("workspace_encryption_keys", "organization");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceInvitation", b =>
                 {
                     b.Property<Guid>("Id").HasColumnType("uuid");
@@ -404,6 +427,15 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
 
                     b.HasKey("WorkspaceId", "UserId", "Role");
                     b.ToTable("workspace_member_roles", "organization");
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceEncryptionKey", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.Workspace", null)
+                        .WithOne()
+                        .HasForeignKey("Pakpost.Domain.Entities.WorkspaceEncryptionKey", "WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Pakpost.Domain.Entities.WorkspaceInvitation", b =>

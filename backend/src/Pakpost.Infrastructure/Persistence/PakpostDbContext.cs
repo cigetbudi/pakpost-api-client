@@ -2,15 +2,21 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
+using Pakpost.Infrastructure.Services;
 
 namespace Pakpost.Infrastructure.Persistence;
 
-public sealed class PakpostDbContext(DbContextOptions<PakpostDbContext> options)
+public sealed partial class PakpostDbContext(
+    DbContextOptions<PakpostDbContext> options,
+    WorkspaceCryptography? cryptography = null)
     : DbContext(options), IUnitOfWork, ITransactionManager
 {
+    private readonly WorkspaceCryptography? _cryptography = cryptography;
+
     public DbSet<User> Users => Set<User>();
     public DbSet<UserExternalIdentity> UserExternalIdentities => Set<UserExternalIdentity>();
     public DbSet<Workspace> Workspaces => Set<Workspace>();
+    public DbSet<WorkspaceEncryptionKey> WorkspaceEncryptionKeys => Set<WorkspaceEncryptionKey>();
     public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
     public DbSet<WorkspaceMemberRole> WorkspaceMemberRoles => Set<WorkspaceMemberRole>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
