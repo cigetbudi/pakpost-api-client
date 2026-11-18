@@ -13,10 +13,25 @@ public sealed class ListEnvironmentsHandler(
     IEnvironmentValueCipher cipher)
     : IRequestHandler<ListEnvironmentsQuery, IReadOnlyList<RequestEnvironmentDto>>
 {
-    public async ValueTask<IReadOnlyList<RequestEnvironmentDto>> Handle(ListEnvironmentsQuery q, CancellationToken ct)
+    public async ValueTask<IReadOnlyList<RequestEnvironmentDto>> Handle(
+        ListEnvironmentsQuery query,
+        CancellationToken ct)
     {
-        var member = await EnvironmentAccess.Verify(workspaces, q.WorkspaceId, q.ActorId, false, ct);
-        bool canReadSecrets = WorkspacePermissions.Can(member, WorkspacePermissions.EnvironmentSecretRead);
-        return (await environments.ListAsync(q.WorkspaceId, ct)).Select(e => EnvironmentAccess.ToDto(e, cipher, canReadSecrets)).ToArray();
+        var member = await EnvironmentAccess.Verify(
+            workspaces,
+            query.WorkspaceId,
+            query.ActorId,
+            false,
+            ct);
+
+        var canReadSecrets = WorkspacePermissions.Can(
+            member,
+            WorkspacePermissions.EnvironmentSecretRead);
+
+        var items = await environments.ListAsync(query.WorkspaceId, ct);
+
+        return items
+            .Select(environment => EnvironmentAccess.ToDto(environment, cipher, canReadSecrets))
+            .ToArray();
     }
 }

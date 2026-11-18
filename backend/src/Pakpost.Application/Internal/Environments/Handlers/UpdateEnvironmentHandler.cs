@@ -12,40 +12,70 @@ public sealed class UpdateEnvironmentHandler(
     IWorkspaceRepository workspaces,
     IRequestEnvironmentRepository environments,
     IEnvironmentValueCipher cipher,
-    IUnitOfWork uow)
+    IUnitOfWork unitOfWork)
     : IRequestHandler<UpdateEnvironmentCommand, RequestEnvironmentDto>
 {
-    public async ValueTask<RequestEnvironmentDto> Handle(UpdateEnvironmentCommand c, CancellationToken ct)
+    public async ValueTask<RequestEnvironmentDto> Handle(
+        UpdateEnvironmentCommand command,
+        CancellationToken ct)
     {
-        await EnvironmentAccess.Verify(workspaces, c.WorkspaceId, c.ActorId, true, ct);
-        var environment = await environments.FindAsync(c.EnvironmentId, ct);
-        if (environment is null || environment.WorkspaceId != c.WorkspaceId)
+        await EnvironmentAccess.Verify(
+            workspaces,
+            command.WorkspaceId,
+            command.ActorId,
+            true,
+            ct);
+
+        var environment = await environments.FindAsync(command.EnvironmentId, ct);
+
+        if (environment is null || environment.WorkspaceId != command.WorkspaceId)
+        {
             throw AppException.NotFound();
-        environment.Update(c.Name);
-        // Keep tracked children for matching keys, explicitly insert new keys and delete removed keys.
-        // Replacing the entire navigation with entities with pre-assigned GUID keys can cause EF
-        // to issue UPDATEs for rows that have never existed (DbUpdateConcurrencyException).
-        var existing = environment.Variables.ToDictionary(v => v.Key, StringComparer.OrdinalIgnoreCase);
+        }
+
+        environment.Update(command.Name);
+
+        var existing = environment.Variables.ToDictionary(
+            variable => variable.Key,
+            StringComparer.OrdinalIgnoreCase);
+
         var retained = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var variable in c.Variables)
+
+        foreach (var variable in command.Variables)
         {
             var key = variable.Key.Trim();
-            var storedValue = variable.IsSecret?cipher.Protect(variable.Value):variable.Value;
+            var storedValue = variable.IsSecret
+                ? cipher.Protect(variable.Value)
+                : variable.Value;
+
             retained.Add(key);
-            if (existing.TryGetValue(key, out var tracked))tracked.Update(key, storedValue, variable.IsSecret);
-            else
+
+            if (existing.TryGetValue(key, out var tracked))
             {
-                var added = new RequestEnvironmentVariable(environment.Id, key, storedValue, variable.IsSecret);
-                environment.Variables.Add(added);
-                environments.AddVariable(added);
+                tracked.Update(key, storedValue, variable.IsSecret);
+                continue;
             }
+
+            var added = new RequestEnvironmentVariable(
+                environment.Id,
+                key,
+                storedValue,
+                variable.IsSecret);
+
+            environment.Variables.Add(added);
+            environments.AddVariable(added);
         }
-        foreach (var removed in environment.Variables.Where(v => !retained.Contains(v.Key)).ToArray())
+
+        foreach (var removed in environment.Variables
+            .Where(variable => !retained.Contains(variable.Key))
+            .ToArray())
         {
             environments.RemoveVariable(removed);
             environment.Variables.Remove(removed);
         }
-        await uow.SaveChangesAsync(ct);
-        return EnvironmentAccess.ToDto(environment, cipher, canReadSecrets:true);
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return EnvironmentAccess.ToDto(environment, cipher, canReadSecrets: true);
     }
 }
