@@ -1,7 +1,7 @@
 using FluentValidation;
-using Mediator;
+using Pakpost.Application.Internal.Requests.Commands;
 
-namespace Pakpost.Application.Internal.Requests;
+namespace Pakpost.Application.Internal.Requests.Validators;
 
 public sealed class SendHttpRequestValidator : AbstractValidator<SendHttpRequestCommand>
 {

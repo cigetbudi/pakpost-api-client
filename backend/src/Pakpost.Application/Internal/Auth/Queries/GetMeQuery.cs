@@ -1,9 +1,6 @@
-using FluentValidation;
 using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Auth.DTOs;
 
-namespace Pakpost.Application.Internal.Auth;
+namespace Pakpost.Application.Internal.Auth.Queries;
 
 public sealed record GetMeQuery(Guid UserId) : IRequest<UserProfile>;

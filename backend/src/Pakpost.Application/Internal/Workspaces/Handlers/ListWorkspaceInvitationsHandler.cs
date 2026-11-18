@@ -1,16 +1,15 @@
 using System.Security.Cryptography;
 using System.Text;
-using FluentValidation;
-using Mediator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Pakpost.Application.Common.Exceptions;
+using Mediator;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
+using Pakpost.Application.Internal.Workspaces.DTOs;
+using Pakpost.Application.Internal.Workspaces.Queries;
+using Pakpost.Application.Internal.Workspaces.Services;
 
-namespace Pakpost.Application.Internal.Workspaces;
+namespace Pakpost.Application.Internal.Workspaces.Handlers;
 
 public sealed class ListWorkspaceInvitationsHandler(IWorkspaceRepository workspaces, IWorkspaceInvitationRepository invitations)
     : IRequestHandler<ListWorkspaceInvitationsQuery, IReadOnlyList<InvitationDto>>

@@ -1,10 +1,11 @@
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
-using Pakpost.Application.Common.Security;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Collections.Commands;
+using Pakpost.Application.Internal.Collections.DTOs;
+using Pakpost.Application.Internal.Collections.Services;
 
-namespace Pakpost.Application.Internal.Collections;
+namespace Pakpost.Application.Internal.Collections.Handlers;
 
 public sealed class MoveFolderHandler(IWorkspaceRepository w, ICollectionRepository c, ICollectionFolderRepository folders, IUnitOfWork uow)
     : IRequestHandler<MoveFolderCommand, FolderDto>

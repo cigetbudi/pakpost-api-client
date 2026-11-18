@@ -4,9 +4,13 @@ using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Collections.Commands;
+using Pakpost.Application.Internal.Collections.DTOs;
+using Pakpost.Application.Internal.Collections.Services;
+using Pakpost.Application.Internal.Collections.Validators;
 using Pakpost.Domain.Entities;
 
-namespace Pakpost.Application.Internal.Collections;
+namespace Pakpost.Application.Internal.Collections.Handlers;
 
 public sealed class ImportCollectionsHandler(IWorkspaceRepository workspaces,
     ICollectionRepository collections, ISavedRequestRepository requests,

@@ -1,8 +1,9 @@
+using Pakpost.Application.Internal.Teams.Commands;
+using Pakpost.Application.Internal.Teams.Queries;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Pakpost.Api.Extensions;
-using Pakpost.Application.Internal.Teams;
 namespace Pakpost.Api.Controllers;
 [ApiController,Authorize,Route("api/workspaces/{workspaceId:guid}/teams")]
 public sealed class TeamsController(ISender sender):ControllerBase

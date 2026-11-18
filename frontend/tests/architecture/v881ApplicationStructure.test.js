@@ -15,7 +15,7 @@ function walk(directory) {
   });
 }
 
-test('Application CQRS types have dedicated files without changing public namespaces', () => {
+test('Application CQRS types have dedicated files with folder-aligned namespaces', () => {
   for (const feature of features) {
     const directory = path.join(featureRoot, feature);
     const files = walk(directory).filter(file => file.endsWith('.cs'));
@@ -23,7 +23,9 @@ test('Application CQRS types have dedicated files without changing public namesp
     assert.ok(files.some(file => file.includes('/Handlers/')), `${feature} handlers`);
     for (const file of files) {
       const source = readFileSync(file, 'utf8');
-      assert.match(source, new RegExp(`namespace Pakpost\\.Application\\.Internal\\.${feature};`));
+      const relativeFolder = path.relative(root, path.dirname(file));
+      const expectedNamespace = ['Pakpost.Application', ...relativeFolder.split(path.sep)].join('.');
+      assert.ok(source.includes(`namespace ${expectedNamespace};`), `namespace mismatch: ${file}`);
       const declarations = source.match(/^(?:public|internal) (?:sealed |static |abstract )*(?:class|record|interface) /gm) ?? [];
       assert.equal(declarations.length, 1, `one type per file: ${file}`);
       assert.doesNotMatch(source, /<summary>|<\/summary>/);
@@ -42,7 +44,12 @@ test('Repository contracts have dedicated files and keep same interface names', 
 });
 
 test('Infrastructure registrations continue resolving existing contracts', () => {
-  const source = readFileSync(new URL('../../../backend/src/Pakpost.Infrastructure/DependencyInjection.cs', import.meta.url), 'utf8');
+  const paths = [
+    '../../../backend/src/Pakpost.Infrastructure/DependencyInjection.cs',
+    '../../../backend/src/Pakpost.Infrastructure/Extensions/PersistenceServiceExtensions.cs',
+    '../../../backend/src/Pakpost.Infrastructure/Extensions/ExternalServiceExtensions.cs'
+  ];
+  const source = paths.map(relative => readFileSync(new URL(relative, import.meta.url), 'utf8')).join('\n');
   for (const contract of ['IUnitOfWork', 'IWorkspaceRepository', 'ISavedRequestRevisionRepository', 'ICollectionFolderRepository', 'IEnvironmentValueCipher']) {
     assert.ok(source.includes(contract));
   }

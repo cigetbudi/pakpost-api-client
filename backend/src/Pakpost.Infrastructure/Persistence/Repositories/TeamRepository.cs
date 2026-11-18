@@ -1,15 +1,32 @@
 using Microsoft.EntityFrameworkCore;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
+
 namespace Pakpost.Infrastructure.Persistence.Repositories;
-public sealed class TeamRepository(PakpostDbContext db):ITeamRepository
+
+public sealed class TeamRepository(PakpostDbContext db) : ITeamRepository
 {
-    public Task<Team?> FindAsync(Guid id,CancellationToken ct)=>db.Teams.FirstOrDefaultAsync(x=>x.Id==id,ct);
-    public async Task<IReadOnlyList<Team>> ListAsync(Guid wid,CancellationToken ct)=>
-        await db.Teams.AsNoTracking().Where(x=>x.WorkspaceId==wid).OrderBy(x=>x.Name).ToListAsync(ct);
-    public async Task<IReadOnlyList<TeamMember>> ListMembersAsync(Guid id,CancellationToken ct)=>
-        await db.TeamMembers.AsNoTracking().Where(x=>x.TeamId==id).OrderBy(x=>x.JoinedAt).ToListAsync(ct);
-    public Task<bool> HasMemberAsync(Guid id,Guid uid,CancellationToken ct)=>db.TeamMembers.AnyAsync(x=>x.TeamId==id && x.UserId==uid,ct);
-    public void Add(Team t)=>db.Teams.Add(t);
-    public void AddMember(TeamMember t)=>db.TeamMembers.Add(t);
+    public Task<Team?> FindAsync(Guid id, CancellationToken ct) =>
+        db.Teams.FirstOrDefaultAsync(team => team.Id == id, ct);
+
+    public async Task<IReadOnlyList<Team>> ListAsync(Guid workspaceId, CancellationToken ct) =>
+        await db.Teams
+            .AsNoTracking()
+            .Where(team => team.WorkspaceId == workspaceId)
+            .OrderBy(team => team.Name)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<TeamMember>> ListMembersAsync(Guid id, CancellationToken ct) =>
+        await db.TeamMembers
+            .AsNoTracking()
+            .Where(member => member.TeamId == id)
+            .OrderBy(member => member.JoinedAt)
+            .ToListAsync(ct);
+
+    public Task<bool> HasMemberAsync(Guid id, Guid userId, CancellationToken ct) =>
+        db.TeamMembers.AnyAsync(member => member.TeamId == id && member.UserId == userId, ct);
+
+    public void Add(Team team) => db.Teams.Add(team);
+
+    public void AddMember(TeamMember member) => db.TeamMembers.Add(member);
 }

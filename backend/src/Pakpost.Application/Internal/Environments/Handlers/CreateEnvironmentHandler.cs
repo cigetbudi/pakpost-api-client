@@ -1,12 +1,11 @@
-using FluentValidation;
 using Mediator;
-using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
+using Pakpost.Application.Internal.Environments.Commands;
+using Pakpost.Application.Internal.Environments.DTOs;
+using Pakpost.Application.Internal.Environments.Services;
 using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
-using Pakpost.Application.Common.Security;
 
-namespace Pakpost.Application.Internal.Environments;
+namespace Pakpost.Application.Internal.Environments.Handlers;
 
 public sealed class CreateEnvironmentHandler(IWorkspaceRepository workspaces, IRequestEnvironmentRepository environments, IUnitOfWork uow)
     : IRequestHandler<CreateEnvironmentCommand, RequestEnvironmentDto>
