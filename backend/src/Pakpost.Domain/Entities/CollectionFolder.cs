@@ -1,10 +1,11 @@
 namespace Pakpost.Domain.Entities;
 
-// A folder belongs to exactly one collection. Parent changes are checked by the
-// application against the full tree before persistence (including cycle checks).
 public sealed class CollectionFolder
 {
-    private CollectionFolder() { }
+    private CollectionFolder()
+    {
+    }
+
     public Guid Id { get; private set; }
     public Guid CollectionId { get; private set; }
     public Guid? ParentFolderId { get; private set; }
@@ -14,15 +15,32 @@ public sealed class CollectionFolder
 
     public CollectionFolder(Guid collectionId, Guid? parentFolderId, string name)
     {
-        Id = Guid.NewGuid(); CollectionId = collectionId; ParentFolderId = parentFolderId;
-        Name = ValidateName(name); CreatedAt = DateTimeOffset.UtcNow;
+        Id = Guid.NewGuid();
+        CollectionId = collectionId;
+        ParentFolderId = parentFolderId;
+        Name = ValidateName(name);
+        CreatedAt = DateTimeOffset.UtcNow;
     }
-    public void Rename(string name) { Name = ValidateName(name); Version++; }
-    public void Move(Guid? parentFolderId) { ParentFolderId = parentFolderId; Version++; }
+
+    public void Rename(string name)
+    {
+        Name = ValidateName(name);
+        Version++;
+    }
+
+    public void Move(Guid? parentFolderId)
+    {
+        ParentFolderId = parentFolderId;
+        Version++;
+    }
+
     private static string ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 120)
+        {
             throw new ArgumentException("Folder name must be 1-120 characters");
+        }
+
         return name.Trim();
     }
 }

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
@@ -6,19 +5,40 @@ using Pakpost.Domain.Entities;
 
 namespace Pakpost.Application.Internal.Collections.Services;
 
-public abstract class SavedRequestHistoryAccess
+public static class SavedRequestHistoryAccess
 {
-    protected static async Task<SavedRequest> Check(Guid actor, Guid workspace, Guid collection, Guid id, bool write,
-        IWorkspaceRepository workspaces, ICollectionRepository collections, ISavedRequestRepository requests, CancellationToken ct)
+    public static async Task<SavedRequest> Check(
+        Guid actorId,
+        Guid workspaceId,
+        Guid collectionId,
+        Guid requestId,
+        bool write,
+        IWorkspaceRepository workspaces,
+        ICollectionRepository collections,
+        ISavedRequestRepository requests,
+        CancellationToken cancellationToken)
     {
-        await WorkspacePermissions.RequireAsync(workspaces, workspace, actor,
-            write?WorkspacePermissions.CollectionWrite:WorkspacePermissions.CollectionRead, ct);
-        var parent = await collections.FindAsync(collection, ct);
-        if (parent is null || parent.WorkspaceId != workspace)
+        await WorkspacePermissions.RequireAsync(
+            workspaces,
+            workspaceId,
+            actorId,
+            write ? WorkspacePermissions.CollectionWrite : WorkspacePermissions.CollectionRead,
+            cancellationToken);
+
+        var collection = await collections.FindAsync(collectionId, cancellationToken);
+
+        if (collection is null || collection.WorkspaceId != workspaceId)
+        {
             throw AppException.NotFound("Collection not found");
-        var item = await requests.FindAsync(id, ct);
-        if (item is null || item.CollectionId != collection)
+        }
+
+        var request = await requests.FindAsync(requestId, cancellationToken);
+
+        if (request is null || request.CollectionId != collectionId)
+        {
             throw AppException.NotFound("Saved request not found");
-        return item;
+        }
+
+        return request;
     }
 }

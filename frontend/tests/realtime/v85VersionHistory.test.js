@@ -43,7 +43,7 @@ test('history model is immutable and encrypted, not plaintext in table',()=>{
  ].map(file => source(`backend/src/Pakpost.Application/Internal/Collections/${file}`)).join('\n');
  const model=source('backend/src/Pakpost.Infrastructure/Persistence/Configurations/SavedRequestRevisionConfiguration.cs');
  assert.match(codec,/cipher\.Protect\(JsonSerializer\.Serialize\(snapshot\)\)/);
- assert.match(codec,/cipher\.Unprotect\(entry\.EncryptedSnapshot\)/);
+ assert.match(codec,/cipher\.Unprotect\(revision\.EncryptedSnapshot\)/);
  assert.match(entity,/EncryptedSnapshot/);assert.match(model,/encrypted_snapshot/);
  assert.match(codec,/ExpectedRevision/);assert.match(codec,/item\.Revision\s*!=\s*c\.ExpectedRevision/);
  assert.match(codec,/WorkspacePermissions.CollectionWrite/);

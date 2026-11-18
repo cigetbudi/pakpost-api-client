@@ -11,11 +11,11 @@ namespace Pakpost.Application.Internal.Collections.Handlers;
 
 public sealed class RestoreSavedRequestHistoryHandler(IWorkspaceRepository workspaces, ICollectionRepository collections,
     ISavedRequestRepository requests, ISavedRequestRevisionRepository history, IEnvironmentValueCipher cipher, IUnitOfWork uow)
-    : SavedRequestHistoryAccess, IRequestHandler<RestoreSavedRequestHistoryCommand, SavedRequestDto>
+    : IRequestHandler<RestoreSavedRequestHistoryCommand, SavedRequestDto>
 {
     public async ValueTask<SavedRequestDto> Handle(RestoreSavedRequestHistoryCommand c, CancellationToken ct)
     {
-        var item = await Check(c.ActorId, c.WorkspaceId, c.CollectionId, c.RequestId, true, workspaces, collections, requests, ct);
+        var item = await SavedRequestHistoryAccess.Check(c.ActorId, c.WorkspaceId, c.CollectionId, c.RequestId, true, workspaces, collections, requests, ct);
         if (c.ExpectedRevision <= 0)
             throw new AppException(428, "Current revision is required");
         if (item.Revision != c.ExpectedRevision)

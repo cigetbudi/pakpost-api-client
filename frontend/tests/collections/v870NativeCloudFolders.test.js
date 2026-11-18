@@ -32,10 +32,10 @@ test('backend enforces folder IDs, RBAC, recursive atomic deletion and atomic im
   assert.match(controller,/HttpPatch\("\{folderId:guid\}\/move"\)/);
   assert.match(handlers,/WorkspacePermissions\.CollectionWrite/);
   assert.match(handlers,/DeleteFolderItemsCommand/);
-  assert.match(handlers,/foreach\s*\(var request in requestsToDelete\)\s*requests\.Remove/);
+  assert.match(handlers,/foreach\s*\(var request in requestsToDelete\)[\s\S]*?requests\.Remove/);
   assert.match(controller,/HttpPost\("delete-items"\)/);
   assert.match(importer,/pathFolders\[currentPath\]\s*=\s*folder/);
-  assert.equal((importer.match(/uow\.SaveChangesAsync\(ct\)/g)||[]).length,1);
+  assert.equal((importer.match(/unitOfWork\.SaveChangesAsync\(cancellationToken\)/g)||[]).length,1);
   assert.match(migration,/AddColumn<Guid>\(name:"FolderId"/);
 });
 

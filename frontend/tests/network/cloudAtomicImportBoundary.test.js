@@ -13,7 +13,7 @@ test('Cloud import backend checks permission and uses one SaveChanges transactio
   assert.match(source,/new SaveCollectionVariablesValidator\(\)/);
   assert.match(source,/SavedRequestHistoryCodec\.Capture/);
   assert.match(source,/cipher/);
-  assert.equal((source.match(/uow\.SaveChangesAsync\(ct\)/g)||[]).length,1);
+  assert.equal((source.match(/unitOfWork\.SaveChangesAsync\(cancellationToken\)/g)||[]).length,1);
 });
 
 test('Cloud import enforces collection limits and never falls back to per-item API writes',()=>{
