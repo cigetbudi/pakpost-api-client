@@ -7,12 +7,34 @@ namespace Pakpost.Application.Internal.Environments.Services;
 
 public static class EnvironmentAccess
 {
-    public static async Task<WorkspaceMember> Verify(IWorkspaceRepository workspaces, Guid ws, Guid actor, bool write, CancellationToken ct)
-    => await WorkspacePermissions.RequireAsync(workspaces, ws, actor,
-        write?WorkspacePermissions.EnvironmentWrite:WorkspacePermissions.EnvironmentRead, ct);
-    // A read-only member cannot decrypt a shared secret. A masked value is not an empty secret.
-    public static RequestEnvironmentDto ToDto(RequestEnvironment env, IEnvironmentValueCipher cipher, bool canReadSecrets)
-    => new(env.Id, env.Name, env.Variables.Select(v => new EnvironmentVariableDto(
-        v.Key, v.IsSecret?(canReadSecrets?cipher.Unprotect(v.StoredValue):string.Empty):v.StoredValue,
-        v.IsSecret, v.IsSecret && !canReadSecrets)).ToArray());
+    public static Task<WorkspaceMember> Verify(
+        IWorkspaceRepository workspaces,
+        Guid workspaceId,
+        Guid actorId,
+        bool write,
+        CancellationToken ct)
+    {
+        var permission = write
+            ? WorkspacePermissions.EnvironmentWrite
+            : WorkspacePermissions.EnvironmentRead;
+
+        return WorkspacePermissions.RequireAsync(workspaces, workspaceId, actorId, permission, ct);
+    }
+
+    public static RequestEnvironmentDto ToDto(
+        RequestEnvironment environment,
+        IEnvironmentValueCipher cipher,
+        bool canReadSecrets)
+    {
+        return new RequestEnvironmentDto(
+            environment.Id,
+            environment.Name,
+            environment.Variables.Select(variable => new EnvironmentVariableDto(
+                variable.Key,
+                variable.IsSecret
+                    ? canReadSecrets ? cipher.Unprotect(variable.StoredValue) : string.Empty
+                    : variable.StoredValue,
+                variable.IsSecret,
+                variable.IsSecret && !canReadSecrets)).ToArray());
+    }
 }

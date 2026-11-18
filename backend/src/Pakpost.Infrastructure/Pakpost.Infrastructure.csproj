@@ -2,6 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="../Pakpost.Domain/Pakpost.Domain.csproj" />
     <ProjectReference Include="../Pakpost.Application/Pakpost.Application.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

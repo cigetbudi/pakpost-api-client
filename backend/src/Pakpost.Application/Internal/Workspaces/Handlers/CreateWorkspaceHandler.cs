@@ -9,18 +9,30 @@ using Pakpost.Domain.Enums;
 
 namespace Pakpost.Application.Internal.Workspaces.Handlers;
 
-public sealed class CreateWorkspaceHandler(IWorkspaceRepository workspaces, IUnitOfWork uow)
+public sealed class CreateWorkspaceHandler(
+    IWorkspaceRepository workspaces,
+    IUnitOfWork unitOfWork)
     : IRequestHandler<CreateWorkspaceCommand, WorkspaceDto>
 {
-    public async ValueTask<WorkspaceDto> Handle(CreateWorkspaceCommand request, CancellationToken ct)
+    public async ValueTask<WorkspaceDto> Handle(
+        CreateWorkspaceCommand command,
+        CancellationToken ct)
     {
-        // First installation bootstrap. Every subsequent workspace needs TeamLead capability.
-        if (!await WorkspacePermissions.CanCreateWorkspaceAsync(workspaces, request.ActorId, ct))
+        if (!await WorkspacePermissions.CanCreateWorkspaceAsync(workspaces, command.ActorId, ct))
+        {
             throw AppException.Forbidden("Only Team Lead can create another workspace");
-        var ws = new Workspace(request.Name, request.ActorId);
-        workspaces.Add(ws);
-        workspaces.AddMember(new WorkspaceMember(ws.Id, request.ActorId, WorkspaceRole.Owner));
-        await uow.SaveChangesAsync(ct);
-        return new(ws.Id, ws.Name, ws.OwnerUserId);
+        }
+
+        var workspace = new Workspace(command.Name, command.ActorId);
+
+        workspaces.Add(workspace);
+        workspaces.AddMember(new WorkspaceMember(
+            workspace.Id,
+            command.ActorId,
+            WorkspaceRole.Owner));
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return new WorkspaceDto(workspace.Id, workspace.Name, workspace.OwnerUserId);
     }
 }

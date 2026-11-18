@@ -9,26 +9,47 @@ using Pakpost.Domain.Entities;
 namespace Pakpost.Application.Internal.Teams.Handlers;
 
 public sealed class AddTeamMemberHandler(
-    IWorkspaceRepository w,
-    ITeamRepository t,
+    IWorkspaceRepository workspaces,
+    ITeamRepository teams,
     IUserRepository users,
-    IUnitOfWork uow
-) : IRequestHandler<AddTeamMemberCommand, TeamMemberDto>
+    IUnitOfWork unitOfWork)
+    : IRequestHandler<AddTeamMemberCommand, TeamMemberDto>
 {
-    public async ValueTask<TeamMemberDto> Handle(AddTeamMemberCommand q, CancellationToken ct)
+    public async ValueTask<TeamMemberDto> Handle(
+        AddTeamMemberCommand command,
+        CancellationToken ct)
     {
-        await WorkspacePermissions.RequireAsync(w, q.WorkspaceId, q.ActorId, WorkspacePermissions.TeamManage, ct);
-        var team = await t.FindAsync(q.TeamId, ct);
-        if (team is null || team.WorkspaceId != q.WorkspaceId)
+        await WorkspacePermissions.RequireAsync(
+            workspaces,
+            command.WorkspaceId,
+            command.ActorId,
+            WorkspacePermissions.TeamManage,
+            ct);
+
+        var team = await teams.FindAsync(command.TeamId, ct);
+
+        if (team is null || team.WorkspaceId != command.WorkspaceId)
+        {
             throw AppException.NotFound();
-        var user = await users.FindByEmailAsync(q.Email.Trim().ToLowerInvariant(), ct)
-        ?? throw AppException.NotFound("User must register first");
-        if (await w.FindMemberAsync(q.WorkspaceId, user.Id, ct) is null)
+        }
+
+        var email = command.Email.Trim().ToLowerInvariant();
+        var user = await users.FindByEmailAsync(email, ct)
+            ?? throw AppException.NotFound("User must register first");
+
+        if (await workspaces.FindMemberAsync(command.WorkspaceId, user.Id, ct) is null)
+        {
             throw AppException.BadRequest("User must join workspace first");
-        if (await t.HasMemberAsync(team.Id, user.Id, ct))
+        }
+
+        if (await teams.HasMemberAsync(team.Id, user.Id, ct))
+        {
             throw AppException.Conflict("Already a team member");
-        t.AddMember(new TeamMember(team.Id, user.Id));
-        await uow.SaveChangesAsync(ct);
-        return new(user.Id, user.Email, user.DisplayName);
+        }
+
+        teams.AddMember(new TeamMember(team.Id, user.Id));
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return new TeamMemberDto(user.Id, user.Email, user.DisplayName);
     }
 }

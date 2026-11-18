@@ -8,6 +8,7 @@ public sealed class RequestEnvironmentRepository(PakpostDbContext db) : IRequest
 {
     public async Task<IReadOnlyList<RequestEnvironment>> ListAsync(Guid workspaceId, CancellationToken ct) =>
         await db.RequestEnvironments
+            .AsNoTracking()
             .Include(environment => environment.Variables)
             .Where(environment => environment.WorkspaceId == workspaceId)
             .OrderBy(environment => environment.Name)

@@ -105,6 +105,6 @@ test('V6 React wiring scopes requests, active IDs, and editor instances to works
   assert.doesNotMatch(app,/useEffect\(\(\)=>\{if\(envScope===STORAGE_WORKSPACE\)setActiveEnvId\(''\)/);
   assert.match(cache,/activeEnvId:envScope==='local'\?activeEnvId:''/);
   assert.match(backend,/\.Where\(environment\s*=>\s*environment\.WorkspaceId\s*==\s*workspaceId\)/);
-  assert.match(handler,/EnvironmentAccess\.Verify\(workspaces,\s*q\.WorkspaceId,\s*q\.ActorId,\s*false,\s*ct\)/);
-  assert.match(handler,/environment\.WorkspaceId\s*!=\s*c\.WorkspaceId/);
+  assert.match(handler,/EnvironmentAccess\.Verify\(\s*workspaces,\s*(?:q|query)\.WorkspaceId,\s*(?:q|query)\.ActorId,\s*false,\s*ct\)/);
+  assert.match(handler,/environment\.WorkspaceId\s*!=\s*(?:c|command)\.WorkspaceId/);
 });

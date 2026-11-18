@@ -5,41 +5,79 @@ using Npgsql;
 using Pakpost.Application.Common.Exceptions;
 
 namespace Pakpost.Api.Middlewares;
-public sealed class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
+
+public sealed class GlobalExceptionMiddleware(
+    RequestDelegate next,
+    ILogger<GlobalExceptionMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
-        try { await next(context); }
-        catch (ValidationException ex)
+        try
         {
-            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-            await context.Response.WriteAsJsonAsync(new {
-                message = "Validation failed",
-                errors = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
-            });
+            await next(context);
         }
-        catch (AppException ex)
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
-            context.Response.StatusCode = ex.StatusCode;
-            await context.Response.WriteAsJsonAsync(new { message = ex.Message });
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            logger.LogWarning(ex,"Concurrent update conflict");
-            context.Response.StatusCode=(int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsJsonAsync(new { message="Resource changed; refresh and retry" });
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
-        {
-            logger.LogWarning(ex, "Unique constraint conflict");
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsJsonAsync(new { message = "Database conflict" });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unhandled request error");
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsJsonAsync(new { message = "Internal server error" });
+            if (context.Response.HasStarted)
+            {
+                logger.LogError(ex, "Request failed after the response started");
+                throw;
+            }
+
+            var (statusCode, response) = MapException(ex);
+
+            if (ex is DbUpdateConcurrencyException)
+            {
+                logger.LogWarning(ex, "Concurrent update conflict");
+            }
+            else if (ex is DbUpdateException { InnerException: PostgresException { SqlState: "23505" } })
+            {
+                logger.LogWarning(ex, "Unique constraint conflict");
+            }
+            else if (ex is not ValidationException and not AppException)
+            {
+                logger.LogError(ex, "Unhandled request error");
+            }
+
+            context.Response.StatusCode = statusCode;
+            await context.Response.WriteAsJsonAsync(response);
         }
+    }
+
+    private static (int StatusCode, object Response) MapException(Exception exception)
+    {
+        return exception switch
+        {
+            ValidationException validation => (
+                (int)HttpStatusCode.BadRequest,
+                new
+                {
+                    message = "Validation failed",
+                    errors = validation.Errors.Select(error => new
+                    {
+                        field = error.PropertyName,
+                        message = error.ErrorMessage
+                    })
+                }),
+
+            AppException application => (
+                application.StatusCode,
+                new { message = application.Message }),
+
+            DbUpdateConcurrencyException => (
+                (int)HttpStatusCode.Conflict,
+                new { message = "Resource changed; refresh and retry" }),
+
+            DbUpdateException { InnerException: PostgresException { SqlState: "23505" } } => (
+                (int)HttpStatusCode.Conflict,
+                new { message = "Database conflict" }),
+
+            _ => (
+                (int)HttpStatusCode.InternalServerError,
+                new { message = "Internal server error" })
+        };
     }
 }
