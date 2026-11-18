@@ -21,14 +21,18 @@ test('workspace permission checks are based on effective permissions, not legacy
   assert.deepEqual(normalizeRoles(['QA','QA','Wrong']),['QA']);
 });
 test('Cloud mutations are secured in handlers, not just client buttons',()=>{
-  const collections=read('backend/src/Pakpost.Application/Internal/Collections/Collections.cs');
-  const saved=read('backend/src/Pakpost.Application/Internal/Collections/SavedRequests.cs');
-  const env=read('backend/src/Pakpost.Application/Internal/Environments/Environments.cs');
+  const collections=read('backend/src/Pakpost.Application/Internal/Collections/Handlers/CreateCollectionHandler.cs');
+  const saved = read('backend/src/Pakpost.Application/Internal/Collections/Services/SavedRequestsAccess.cs');
+  const savedDelete = read('backend/src/Pakpost.Application/Internal/Collections/Handlers/DeleteSavedRequestHandler.cs');
+  const env=read('backend/src/Pakpost.Application/Internal/Environments/Services/EnvironmentAccess.cs');
   assert.match(collections,/WorkspacePermissions.CollectionWrite/);
-  assert.match(saved,/destructive:true/);
+  assert.match(savedDelete,/destructive:\s*true/);
   assert.match(saved,/WorkspacePermissions.CollectionWrite/);
   assert.match(env,/WorkspacePermissions.EnvironmentWrite/);
-  const ws=read('backend/src/Pakpost.Application/Internal/Workspaces/Workspaces.cs');
+  const ws=[
+    read('backend/src/Pakpost.Application/Internal/Workspaces/Handlers/UpdateWorkspaceMemberRolesHandler.cs'),
+    read('backend/src/Pakpost.Application/Internal/Workspaces/Services/RoleDelegation.cs')
+  ].join('\n');
   assert.match(ws,/Cannot modify the founder/);
   assert.match(ws,/Only Team Lead may grant/);
 });

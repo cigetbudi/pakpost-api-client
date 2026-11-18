@@ -22,15 +22,19 @@ test('nested and root identities cannot be moved into cyclic parent paths',()=>{
 });
 test('backend enforces folder IDs, RBAC, recursive atomic deletion and atomic import',()=>{
   const controller=read('../../../backend/src/Pakpost.Api/Controllers/CollectionFoldersController.cs');
-  const handlers=read('../../../backend/src/Pakpost.Application/Internal/Collections/CollectionFolders.cs');
-  const importer=read('../../../backend/src/Pakpost.Application/Internal/Collections/ImportCollections.cs');
+  const handlers = [
+    '../../../backend/src/Pakpost.Application/Internal/Collections/Services/CloudFolderRules.cs',
+    '../../../backend/src/Pakpost.Application/Internal/Collections/Commands/DeleteFolderItemsCommand.cs',
+    '../../../backend/src/Pakpost.Application/Internal/Collections/Handlers/DeleteFolderItemsHandler.cs'
+  ].map(path => read(path)).join('\n');
+  const importer=read('../../../backend/src/Pakpost.Application/Internal/Collections/Handlers/ImportCollectionsHandler.cs');
   const migration=read('../../../backend/src/Pakpost.Infrastructure/Persistence/Migrations/20261117200000_NativeCloudFolders.cs');
   assert.match(controller,/HttpPatch\("\{folderId:guid\}\/move"\)/);
   assert.match(handlers,/WorkspacePermissions\.CollectionWrite/);
   assert.match(handlers,/DeleteFolderItemsCommand/);
-  assert.match(handlers,/foreach\(var request in requestsToDelete\)requests\.Remove/);
+  assert.match(handlers,/foreach\s*\(var request in requestsToDelete\)\s*requests\.Remove/);
   assert.match(controller,/HttpPost\("delete-items"\)/);
-  assert.match(importer,/pathFolders\[currentPath\]=folder/);
+  assert.match(importer,/pathFolders\[currentPath\]\s*=\s*folder/);
   assert.equal((importer.match(/uow\.SaveChangesAsync\(ct\)/g)||[]).length,1);
   assert.match(migration,/AddColumn<Guid>\(name:"FolderId"/);
 });

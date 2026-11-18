@@ -1,12 +1,7 @@
-using Mediator;
-using Pakpost.Application.Common.Behaviors;
-using Pakpost.Application.Internal.Auth;
-using System.Text;
+using Pakpost.Api.Extensions;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.IdentityModel.Tokens;
 using Pakpost.Api.Middlewares;
 using Pakpost.Api.Realtime;
 using Pakpost.Application;
@@ -16,40 +11,9 @@ builder.Services.AddControllers().AddJsonOptions(o=>o.JsonSerializerOptions.Conv
 builder.Services.AddApplication();
 // Generated at build time; scan Application for requests/handlers and register
 // the existing FluentValidation pipeline. Scoped handlers keep DbContext safe.
-builder.Services.AddMediator((MediatorOptions options) =>
-{
-    options.Assemblies = [typeof(RegisterCommand)];
-    options.ServiceLifetime = Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped;
-    options.PipelineBehaviors = [typeof(ValidationBehavior<,>)];
-});
+builder.Services.AddMediatorServices();
 builder.Services.AddInfrastructure(builder.Configuration);
-var signingKey=builder.Configuration["Jwt:SigningKey"];
-if(string.IsNullOrWhiteSpace(signingKey) || Encoding.UTF8.GetByteCount(signingKey)<32)
-    throw new InvalidOperationException("Jwt__SigningKey must be at least 32 UTF-8 bytes");
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o=>
-{
-    o.MapInboundClaims=false;
-    o.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
-        {
-            // Browser WebSocket/EventSource cannot attach Authorization headers.
-            // This query-token exception is ONLY valid on the SignalR hub path.
-            var token=context.Request.Query["access_token"];
-            if(!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/workspace"))
-                context.Token=token;
-            return Task.CompletedTask;
-        }
-    };
-    o.TokenValidationParameters=new TokenValidationParameters
-    {
-        ValidateIssuer=true,ValidIssuer=builder.Configuration["Jwt:Issuer"]??"pakpost",
-        ValidateAudience=true,ValidAudience=builder.Configuration["Jwt:Audience"]??"pakpost-client",
-        ValidateLifetime=true,ValidateIssuerSigningKey=true,
-        IssuerSigningKey=new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-        ClockSkew=TimeSpan.FromSeconds(30)
-    };
-});
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<WorkspaceConnectionRegistry>();

@@ -88,7 +88,10 @@ test('V6 React wiring scopes requests, active IDs, and editor instances to works
   const environmentView=readFileSync(new URL('../../src/features/environments/hooks/useScopedEnvironmentView.js',import.meta.url),'utf8');
   const cache=readFileSync(new URL('../../src/features/workspace/services/workspaceCache.js',import.meta.url),'utf8');
   const backend=readFileSync(new URL('../../../backend/src/Pakpost.Infrastructure/Persistence/Repositories/RequestEnvironmentRepository.cs',import.meta.url),'utf8');
-  const handler=readFileSync(new URL('../../../backend/src/Pakpost.Application/Internal/Environments/Environments.cs',import.meta.url),'utf8');
+  const handler=[
+    '../../../backend/src/Pakpost.Application/Internal/Environments/Handlers/ListEnvironmentsHandler.cs',
+    '../../../backend/src/Pakpost.Application/Internal/Environments/Handlers/UpdateEnvironmentHandler.cs'
+  ].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   assert.match(environmentView,/environmentContextKey\(STORAGE_WORKSPACE, selectedWs, userId\)/);
   assert.match(environmentView,/environmentsForContext\(workspaceEnvironmentResult, cloudEnvironmentContext\)/);
   assert.match(environmentView,/selectionForContext\(environmentSelections, environmentContext\)/);
@@ -102,6 +105,6 @@ test('V6 React wiring scopes requests, active IDs, and editor instances to works
   assert.doesNotMatch(app,/useEffect\(\(\)=>\{if\(envScope===STORAGE_WORKSPACE\)setActiveEnvId\(''\)/);
   assert.match(cache,/activeEnvId:envScope==='local'\?activeEnvId:''/);
   assert.match(backend,/\.Where\(x=>x.WorkspaceId==workspaceId\)/);
-  assert.match(handler,/EnvironmentAccess.Verify\(workspaces,q.WorkspaceId,q.ActorId,false,ct\)/);
-  assert.match(handler,/environment.WorkspaceId!=c.WorkspaceId/);
+  assert.match(handler,/EnvironmentAccess\.Verify\(workspaces,\s*q\.WorkspaceId,\s*q\.ActorId,\s*false,\s*ct\)/);
+  assert.match(handler,/environment\.WorkspaceId\s*!=\s*c\.WorkspaceId/);
 });
