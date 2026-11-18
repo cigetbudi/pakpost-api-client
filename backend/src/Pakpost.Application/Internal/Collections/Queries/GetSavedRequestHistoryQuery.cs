@@ -1,11 +1,8 @@
 using System.Text.Json;
 using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Application.Common.Security;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Collections.DTOs;
 
-namespace Pakpost.Application.Internal.Collections;
+namespace Pakpost.Application.Internal.Collections.Queries;
 
 public sealed record GetSavedRequestHistoryQuery(
     Guid ActorId,

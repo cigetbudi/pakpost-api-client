@@ -1,12 +1,7 @@
 using FluentValidation;
-using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
-using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Teams.Commands;
 
-namespace Pakpost.Application.Internal.Teams;
+namespace Pakpost.Application.Internal.Teams.Validators;
 
 public sealed class CreateTeamValidator : AbstractValidator<CreateTeamCommand>
 {

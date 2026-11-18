@@ -6,7 +6,7 @@ using Pakpost.Application.Common.Security;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
 
-namespace Pakpost.Application.Internal.Workspaces;
+namespace Pakpost.Application.Internal.Workspaces.Services;
 
 public static class RoleDelegation
 {

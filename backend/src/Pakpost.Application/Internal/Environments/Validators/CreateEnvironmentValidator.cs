@@ -1,12 +1,7 @@
 using FluentValidation;
-using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
-using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Environments.Commands;
 
-namespace Pakpost.Application.Internal.Environments;
+namespace Pakpost.Application.Internal.Environments.Validators;
 
 public sealed class CreateEnvironmentValidator : AbstractValidator<CreateEnvironmentCommand>
 {

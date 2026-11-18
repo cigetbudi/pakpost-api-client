@@ -1,12 +1,13 @@
 using System.Text.Json;
-using FluentValidation;
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Collections.Commands;
+using Pakpost.Application.Internal.Collections.DTOs;
+using Pakpost.Application.Internal.Collections.Services;
 
-namespace Pakpost.Application.Internal.Collections;
+namespace Pakpost.Application.Internal.Collections.Handlers;
 
 public sealed class UpdateSavedRequestHandler(
     IWorkspaceRepository workspaces,

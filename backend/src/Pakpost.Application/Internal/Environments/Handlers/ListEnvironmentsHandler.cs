@@ -1,12 +1,11 @@
-using FluentValidation;
 using Mediator;
-using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
 using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Environments.DTOs;
+using Pakpost.Application.Internal.Environments.Queries;
+using Pakpost.Application.Internal.Environments.Services;
 
-namespace Pakpost.Application.Internal.Environments;
+namespace Pakpost.Application.Internal.Environments.Handlers;
 
 public sealed class ListEnvironmentsHandler(
     IWorkspaceRepository workspaces,

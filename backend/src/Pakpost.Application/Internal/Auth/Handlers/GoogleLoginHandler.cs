@@ -1,11 +1,12 @@
 using System.Security.Cryptography;
-using FluentValidation;
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
+using Pakpost.Application.Internal.Auth.Commands;
+using Pakpost.Application.Internal.Auth.DTOs;
 using Pakpost.Domain.Entities;
 
-namespace Pakpost.Application.Internal.Auth;
+namespace Pakpost.Application.Internal.Auth.Handlers;
 
 public sealed class GoogleLoginHandler(
     IUserRepository users, IUserExternalIdentityRepository identities,

@@ -1,16 +1,17 @@
 using System.Security.Cryptography;
 using System.Text;
-using FluentValidation;
-using Mediator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
-using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Workspaces.Commands;
+using Pakpost.Application.Internal.Workspaces.DTOs;
+using Pakpost.Application.Internal.Workspaces.Services;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
 
-namespace Pakpost.Application.Internal.Workspaces;
+namespace Pakpost.Application.Internal.Workspaces.Handlers;
 
 public sealed class AcceptWorkspaceInvitationHandler(
     IWorkspaceInvitationRepository invitations, IWorkspaceRepository workspaces, IUserRepository users,

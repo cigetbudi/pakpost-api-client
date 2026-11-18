@@ -1,10 +1,10 @@
-using FluentValidation;
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Auth.DTOs;
+using Pakpost.Application.Internal.Auth.Queries;
 
-namespace Pakpost.Application.Internal.Auth;
+namespace Pakpost.Application.Internal.Auth.Handlers;
 
 public sealed class GetMeHandler(IUserRepository users) : IRequestHandler<GetMeQuery, UserProfile>
 {

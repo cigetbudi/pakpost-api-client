@@ -1,10 +1,7 @@
 using FluentValidation;
-using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Auth.Commands;
 
-namespace Pakpost.Application.Internal.Auth;
+namespace Pakpost.Application.Internal.Auth.Validators;
 
 public sealed class RegisterValidator : AbstractValidator<RegisterCommand>
 {

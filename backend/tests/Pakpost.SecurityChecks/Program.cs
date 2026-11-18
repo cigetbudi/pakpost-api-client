@@ -1,10 +1,18 @@
+using Pakpost.Application.Internal.Collections.Commands;
+using Pakpost.Application.Internal.Collections.Handlers;
+using Pakpost.Application.Internal.Collections.Queries;
+using Pakpost.Application.Internal.Collections.Validators;
+using Pakpost.Application.Internal.Environments.Commands;
+using Pakpost.Application.Internal.Environments.DTOs;
+using Pakpost.Application.Internal.Environments.Handlers;
+using Pakpost.Application.Internal.Environments.Queries;
+using Pakpost.Application.Internal.Environments.Services;
+using Pakpost.Application.Internal.Workspaces.Services;
+using WorkspaceRoleDelegation = Pakpost.Application.Internal.Workspaces.Services.RoleDelegation;
 using System.Text.Json;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
-using Pakpost.Application.Internal.Collections;
-using Pakpost.Application.Internal.Environments;
-using Pakpost.Application.Internal.Workspaces;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
 
@@ -163,9 +171,9 @@ var cases=new (string Name,Func<Task> Test)[]
     ("Workspace Admin cannot elevate to Team Lead or Workspace Admin",async()=>{
         var ws=Guid.NewGuid();var user=Guid.NewGuid();
         var admin=new WorkspaceMember(ws,user,WorkspaceRole.Admin,[WorkspaceAccessRole.WorkspaceAdmin,WorkspaceAccessRole.Developer]);
-        await MustBeForbidden(()=>Task.Run(()=>RoleDelegation.Check(admin,[WorkspaceAccessRole.TeamLead])));
-        await MustBeForbidden(()=>Task.Run(()=>RoleDelegation.Check(admin,[WorkspaceAccessRole.WorkspaceAdmin])));
-        RoleDelegation.Check(admin,[WorkspaceAccessRole.Developer,WorkspaceAccessRole.QA]);
+        await MustBeForbidden(()=>Task.Run(()=>WorkspaceRoleDelegation.Check(admin,[WorkspaceAccessRole.TeamLead])));
+        await MustBeForbidden(()=>Task.Run(()=>WorkspaceRoleDelegation.Check(admin,[WorkspaceAccessRole.WorkspaceAdmin])));
+        WorkspaceRoleDelegation.Check(admin,[WorkspaceAccessRole.Developer,WorkspaceAccessRole.QA]);
     }),
     ("Missing role rows do not restore legacy Member write permission",()=>{
         var m=new WorkspaceMember(Guid.NewGuid(),Guid.NewGuid(),WorkspaceRole.Member);

@@ -1,11 +1,6 @@
-using FluentValidation;
 using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Application.Common.Security;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
+using Pakpost.Application.Internal.Workspaces.DTOs;
 
-namespace Pakpost.Application.Internal.Workspaces;
+namespace Pakpost.Application.Internal.Workspaces.Commands;
 
 public sealed record CreateWorkspaceCommand(Guid ActorId, string Name) : IRequest<WorkspaceDto>;

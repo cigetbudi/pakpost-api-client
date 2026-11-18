@@ -1,7 +1,7 @@
-using FluentValidation;
 using Mediator;
+using Pakpost.Application.Internal.Requests.DTOs;
 
-namespace Pakpost.Application.Internal.Requests;
+namespace Pakpost.Application.Internal.Requests.Commands;
 
 public sealed record SendHttpRequestCommand(
     string Method, string Url, Dictionary<string, string>? Headers, string? Body,

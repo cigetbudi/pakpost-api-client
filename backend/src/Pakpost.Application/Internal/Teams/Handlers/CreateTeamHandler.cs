@@ -1,12 +1,11 @@
-using FluentValidation;
 using Mediator;
-using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
 using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Teams.Commands;
+using Pakpost.Application.Internal.Teams.DTOs;
+using Pakpost.Domain.Entities;
 
-namespace Pakpost.Application.Internal.Teams;
+namespace Pakpost.Application.Internal.Teams.Handlers;
 
 public sealed class CreateTeamHandler(IWorkspaceRepository w, ITeamRepository t, IUnitOfWork uow) : IRequestHandler<CreateTeamCommand, TeamDto>
 {

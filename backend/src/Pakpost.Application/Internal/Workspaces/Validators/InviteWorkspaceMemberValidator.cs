@@ -1,16 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
-using FluentValidation;
-using Mediator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Application.Common.Security;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
+using FluentValidation;
+using Pakpost.Application.Internal.Workspaces.Commands;
 
-namespace Pakpost.Application.Internal.Workspaces;
+namespace Pakpost.Application.Internal.Workspaces.Validators;
 
 public sealed class InviteWorkspaceMemberValidator : AbstractValidator<InviteWorkspaceMemberCommand>
 {

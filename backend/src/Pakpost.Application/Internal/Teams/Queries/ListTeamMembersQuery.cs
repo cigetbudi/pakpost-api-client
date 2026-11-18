@@ -1,11 +1,6 @@
-using FluentValidation;
 using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
-using Pakpost.Domain.Enums;
-using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Teams.DTOs;
 
-namespace Pakpost.Application.Internal.Teams;
+namespace Pakpost.Application.Internal.Teams.Queries;
 
 public sealed record ListTeamMembersQuery(Guid ActorId, Guid WorkspaceId, Guid TeamId) : IRequest<IReadOnlyList<TeamMemberDto>>;

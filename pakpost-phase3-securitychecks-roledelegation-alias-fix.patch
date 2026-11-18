@@ -1,0 +1,24 @@
+diff --git a/backend/tests/Pakpost.SecurityChecks/Program.cs b/backend/tests/Pakpost.SecurityChecks/Program.cs
+--- a/backend/tests/Pakpost.SecurityChecks/Program.cs
++++ b/backend/tests/Pakpost.SecurityChecks/Program.cs
+@@ -8,6 +8,7 @@
+ using Pakpost.Application.Internal.Environments.Queries;
+ using Pakpost.Application.Internal.Environments.Services;
+ using Pakpost.Application.Internal.Workspaces.Services;
++using WorkspaceRoleDelegation = Pakpost.Application.Internal.Workspaces.Services.RoleDelegation;
+ using System.Text.Json;
+ using Pakpost.Application.Common.Exceptions;
+ using Pakpost.Application.Common.Interfaces;
+@@ -170,9 +171,9 @@
+     ("Workspace Admin cannot elevate to Team Lead or Workspace Admin",async()=>{
+         var ws=Guid.NewGuid();var user=Guid.NewGuid();
+         var admin=new WorkspaceMember(ws,user,WorkspaceRole.Admin,[WorkspaceAccessRole.WorkspaceAdmin,WorkspaceAccessRole.Developer]);
+-        await MustBeForbidden(()=>Task.Run(()=>RoleDelegation.Check(admin,[WorkspaceAccessRole.TeamLead])));
+-        await MustBeForbidden(()=>Task.Run(()=>RoleDelegation.Check(admin,[WorkspaceAccessRole.WorkspaceAdmin])));
+-        RoleDelegation.Check(admin,[WorkspaceAccessRole.Developer,WorkspaceAccessRole.QA]);
++        await MustBeForbidden(()=>Task.Run(()=>WorkspaceRoleDelegation.Check(admin,[WorkspaceAccessRole.TeamLead])));
++        await MustBeForbidden(()=>Task.Run(()=>WorkspaceRoleDelegation.Check(admin,[WorkspaceAccessRole.WorkspaceAdmin])));
++        WorkspaceRoleDelegation.Check(admin,[WorkspaceAccessRole.Developer,WorkspaceAccessRole.QA]);
+     }),
+     ("Missing role rows do not restore legacy Member write permission",()=>{
+         var m=new WorkspaceMember(Guid.NewGuid(),Guid.NewGuid(),WorkspaceRole.Member);

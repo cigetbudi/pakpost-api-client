@@ -1,10 +1,10 @@
-using FluentValidation;
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Auth.Commands;
+using Pakpost.Application.Internal.Auth.DTOs;
 
-namespace Pakpost.Application.Internal.Auth;
+namespace Pakpost.Application.Internal.Auth.Handlers;
 
 public sealed class LoginHandler(IUserRepository users, IPasswordHasher passwords, IJwtTokenService tokens)
     : IRequestHandler<LoginCommand, LoginResult>

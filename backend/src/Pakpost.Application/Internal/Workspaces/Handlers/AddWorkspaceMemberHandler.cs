@@ -1,12 +1,14 @@
-using FluentValidation;
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
+using Pakpost.Application.Internal.Workspaces.Commands;
+using Pakpost.Application.Internal.Workspaces.DTOs;
+using Pakpost.Application.Internal.Workspaces.Services;
 using Pakpost.Domain.Entities;
 using Pakpost.Domain.Enums;
 
-namespace Pakpost.Application.Internal.Workspaces;
+namespace Pakpost.Application.Internal.Workspaces.Handlers;
 
 public sealed class AddWorkspaceMemberHandler(IWorkspaceRepository workspaces, IUserRepository users, IUnitOfWork uow)
     : IRequestHandler<AddWorkspaceMemberCommand, MemberDto>

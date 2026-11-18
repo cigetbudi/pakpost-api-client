@@ -1,11 +1,7 @@
 using FluentValidation;
-using Mediator;
-using Pakpost.Application.Common.Exceptions;
-using Pakpost.Application.Common.Interfaces;
-using Pakpost.Application.Common.Security;
-using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Collections.Commands;
 
-namespace Pakpost.Application.Internal.Collections;
+namespace Pakpost.Application.Internal.Collections.Validators;
 
 public sealed class CreateCollectionValidator : AbstractValidator<CreateCollectionCommand>
 {

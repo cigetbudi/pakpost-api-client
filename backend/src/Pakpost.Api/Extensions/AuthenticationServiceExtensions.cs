@@ -4,10 +4,6 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Pakpost.Api.Extensions;
 
-/// <summary>
-/// PakPost JWT configuration, including the SignalR-only query-token exception.
-/// Preserve these settings when changing authentication behavior.
-/// </summary>
 public static class AuthenticationServiceExtensions
 {
     public static IServiceCollection AddJwtAuthentication(
@@ -25,8 +21,6 @@ public static class AuthenticationServiceExtensions
             {
                 OnMessageReceived = context =>
                 {
-                    // Browser WebSocket/EventSource cannot attach Authorization headers.
-                    // This query-token exception is ONLY valid on the SignalR hub path.
                     var token = context.Request.Query["access_token"];
                     if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/workspace"))
                         context.Token = token;
