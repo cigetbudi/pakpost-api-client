@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {ChevronDown,ChevronRight,FolderClosed,Ellipsis,Plus} from 'lucide-react';
 import {filterCollectionTree,makeCollectionTree} from '../services/localCollections';
@@ -65,6 +65,17 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
 }
 export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample,onAction,onMove,expandAllSignal,revealDraft,pendingTabs=[],onOpenPending=()=>{}}){
   const [expanded,setExpanded]=useState({}),[menu,setMenu]=useState(null);
+  // Only opened collections build trees. Reuse each immutable Local request
+  // array's tree until it changes, instead of rebuilding on every UI keystroke.
+  const treeCache = useRef(new WeakMap());
+  const cachedTree = requests => {
+    let tree = treeCache.current.get(requests);
+    if (!tree) {
+      tree = makeCollectionTree(requests);
+      treeCache.current.set(requests,tree);
+    }
+    return tree;
+  };
   const toggle=(key,defaultOpen=true)=>setExpanded(old=>({...old,[key]:!(old[key]??defaultOpen)}));
   useEffect(()=>{
     if(!revealDraft)return;
@@ -89,7 +100,7 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
     {collections.map(col=>{
       const key=`collection:${col.id}`;const opened=!!search||expanded[key]!==false;
       // Closed Local collections keep their expansion state, not a hidden DOM subtree.
-      const rawTree=opened?makeCollectionTree(col.requests):null;
+      const rawTree=opened?cachedTree(col.requests):null;
       const tree=rawTree&&(col.name.toLowerCase().includes(search.toLowerCase())?rawTree:filterCollectionTree(rawTree,search));
       if(search&&!tree.requests.length&&!tree.folders.length&&!col.name.toLowerCase().includes(search.toLowerCase())
         &&!pendingTabs.some(t=>t.source?.collectionId===col.id && t.name.toLowerCase().includes(search.toLowerCase())))return null;

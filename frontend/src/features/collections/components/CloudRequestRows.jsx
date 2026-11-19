@@ -11,6 +11,7 @@ import {
 // preserving Ctrl/Shift selection, browser focus, drag/drop and example disclosure.
 export function CloudRequestRows({requests, search, sortByName, depth, renderRequest, selection, choose, onContextMenu}) {
   const rows = useMemo(() => filterCloudRequests(requests, search, sortByName), [requests, search, sortByName]);
+  const selectedKeys = useMemo(() => new Set(selection), [selection]);
   const [requested, setRequested] = useState(CLOUD_REQUEST_INITIAL_ROWS);
   const sentinelRef = useRef(null);
   const count = visibleCloudRequestCount(rows.length, requested);
@@ -31,7 +32,7 @@ export function CloudRequestRows({requests, search, sortByName, depth, renderReq
   return <>
     {rows.slice(0, count).map(request => {
       const key = requestKey(request.id);
-      const selected = selection.includes(key);
+      const selected = selectedKeys.has(key);
       return <React.Fragment key={request.id}>{renderRequest(request, depth, {
         'data-cloud-select-key': key,
         'aria-pressed': selected,

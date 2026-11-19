@@ -1,3 +1,4 @@
+import {folderPathForId} from '../../collections/services/cloudFolderTree.js';
 // Feature controller. Actions execute with the current Workbench context supplied
 // by App; no global state, persistence middleware or extra network requests.
 export function createEnvironmentActions(dependencies) {
@@ -58,7 +59,6 @@ export function createEnvironmentActions(dependencies) {
           drafts=localCollection.requests||[];
         }else{
           const list=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
-          const {folderPathForId}=await import('../../collections/services/cloudFolderTree.js');
           const folders=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/folders`,'GET',undefined,token);
           drafts=list.map(r=>({...workspaceDraft(r),requestName:r.name,folderPath:folderPathForId(folders,r.folderId)}));
           localCollection={name,documentation:workspaceCollectionDocs[workspaceDocKey(selectedWs,collectionId)]||'',

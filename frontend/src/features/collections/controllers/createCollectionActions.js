@@ -1,4 +1,5 @@
 import {renameActionError} from '../services/renameValidation.js';
+import {folderPathForId} from '../services/cloudFolderTree.js';
 // Collections workbench actions. Stateless factory: shared logic remains scoped to the mounted App.
 // Dependencies are passed from the current render; no singleton store or persist middleware.
 export function createCollectionActions(dependencies) {
@@ -373,7 +374,6 @@ export function createCollectionActions(dependencies) {
           if(list.length>100)throw Error('Duplicate limit: 100 saved requests');
           const source=collections.find(c=>c.id===item.collectionId);
           const folders=await api(`${base}/${item.collectionId}/folders`,'GET',undefined,token);
-          const {folderPathForId}=await import('../services/cloudFolderTree.js');
           const variables=await readSavedCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId});
           // The same atomic import endpoint handles copies; unlike the previous
           // POST loop, failures never leave a half-created Cloud collection.

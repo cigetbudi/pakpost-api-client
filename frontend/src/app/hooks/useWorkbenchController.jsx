@@ -747,7 +747,7 @@ export function useWorkbenchController() {
   });
   // Realtime operations use the same Workbench state as the old inline handlers.
   const realtimeActions = createRealtimeActions({
-    activeTabRef, currentTokenRef, draftsRef, expandedCollections, getWorkspaceCollections, getWorkspaceRequests,
+    api, activeTabRef, currentTokenRef, draftsRef, expandedCollections, getWorkspaceCollections, getWorkspaceRequests,
     openTabsRef, realtimeHandlerRef, realtimeQueueRef, realtimeTimerRef, reconcileRequestTabs, restoreDraft,
     selectedColRef, selectedWorkspaceRef, setCollections, setOpenTabs, setRemoteAlerts, setSavedRequests,
     setSelectedCol, setWorkspaceRequestLists, snapshotRef, synchronizeWorkspaceChanges, workspaceDraft, workspaceRequestLists,

@@ -77,6 +77,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
     catch(e){setError(e.message||'Folder update failed');onNotice?.(e.message||'Folder update failed');}
     finally{setBusy(false);}
   };
+  const selectedKeys=useMemo(() => new Set(selection), [selection]);
   const folderNameError=editing?cloudFolderNameError(folders,editing):'';
   const visibleFolderNameError=editing?.touched?folderNameError:'';
   const submit=()=>{
@@ -153,9 +154,9 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
   };
   const node=useMemo(() => open ? makeCloudFolderTree(folders,requests) : null, [open,folders,requests]);
   const filter=String(search||'').trim().toLowerCase();
-  const renderNode=(branch,depth=0,visited=new Set())=>{
-    if(branch.id&&visited.has(branch.id))return null;
-    const seen=new Set(visited);if(branch.id)seen.add(branch.id);
+  // makeCloudFolderTree already disconnects corrupt cycles; no ancestry Set
+  // allocation per recursive branch is needed while rendering.
+  const renderNode=(branch,depth=0)=>{
     const children=branch.folders.map(folder=>{
       const isOpen=filter?true:expanded[folder.id]!==false;
       const key=folderKey(folder.id);
@@ -165,15 +166,15 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
           e.dataTransfer.setData(FOLDER_DRAG,JSON.stringify({collectionId,folderId:folder.id}));}}
           onDragOver={e=>{if(canEdit&&(Array.from(e.dataTransfer.types||[]).includes(FOLDER_DRAG)||Array.from(e.dataTransfer.types||[]).includes(requestDrag)))e.preventDefault();}}
           onDrop={e=>folderMove(e,folder.id)}>
-          <button type="button" data-cloud-select-key={key} aria-pressed={selection.includes(key)}
-            className={`pp-tree-row pp-local-folder pp-cloud-folder-row pp-explorer-tree-row ${selection.includes(key)?'pp-cloud-selected':''}`} aria-expanded={isOpen}
+          <button type="button" data-cloud-select-key={key} aria-pressed={selectedKeys.has(key)}
+            className={`pp-tree-row pp-local-folder pp-cloud-folder-row pp-explorer-tree-row ${selectedKeys.has(key)?'pp-cloud-selected':''}`} aria-expanded={isOpen}
             onContextMenu={e=>openMenu(e,folder)}
             onClick={e=>{if(choose(e,key))setExpanded(x=>({...x,[folder.id]:!isOpen}));}}>
             {isOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}<FolderClosed className="pp-cloud-folder-icon" size={14}/><span>{folder.name}</span>
           </button>
           {canEdit&&<button type="button" className="pp-tree-action" title="Folder settings" aria-label={`Actions for folder ${folder.name}`} onClick={e=>openMenu(e,folder)}><Settings2 size={14}/></button>}
         </div>
-        {isOpen&&renderNode(folder,depth+1,seen)}
+        {isOpen&&renderNode(folder,depth+1)}
       </React.Fragment>;
     });
     return <>{children}
@@ -213,7 +214,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
       <MenuActionItem action="newFolder" onClick={()=>{setEditing({mode:'create',parentId:menu.folder.id,name:''});setMenu(null);}}>New subfolder</MenuActionItem>
       <MenuActionItem action="newRequest" onClick={()=>{onCreateDraft(menu.folder.id);setMenu(null);}}>New request</MenuActionItem>
       <MenuActionItem action="renameFolder" onClick={()=>{rename(folderKey(menu.folder.id));setMenu(null);}}>Rename (F2)</MenuActionItem>
-      <MenuActionItem action="deleteFolder" danger onClick={()=>requestDelete(selection.includes(folderKey(menu.folder.id))?selection:[folderKey(menu.folder.id)])}>Delete folder and contents</MenuActionItem>
+      <MenuActionItem action="deleteFolder" danger onClick={()=>requestDelete(selectedKeys.has(folderKey(menu.folder.id))?selection:[folderKey(menu.folder.id)])}>Delete folder and contents</MenuActionItem>
     </div>,document.body)}
     {confirmDelete&&createPortal(<Dialog title="Delete Cloud items?" subtitle="This action permanently deletes selected requests, all nested folder contents, and request revision history." onClose={()=>!busy&&setConfirmDelete(null)}>
       <p className="pp-cloud-delete-explainer">Delete {confirmDelete.filter(x=>x.startsWith('folder:')).length} selected folder(s) and {confirmDelete.filter(x=>x.startsWith('request:')).length} selected request(s)? Any requests and subfolders inside selected folders will also be removed. This cannot be undone.</p>

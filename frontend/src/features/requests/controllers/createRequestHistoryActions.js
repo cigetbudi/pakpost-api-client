@@ -140,7 +140,7 @@ export function createRequestHistoryActions(dependencies) {
           if(dialog.source.workspaceId!==selectedWorkspaceRef.current)return;
           setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(dialog.source.workspaceId,dialog.source.collectionId)]:updated}));
           if(selectedColRef.current===dialog.source.collectionId)setSavedRequests(updated);
-          reconcileCloudRequests(dialog.source.workspaceId,dialog.source.collectionId,updated);
+          await reconcileCloudRequests(dialog.source.workspaceId,dialog.source.collectionId,updated);
         }catch{setNotice('Restore succeeded. Reload the Collection to see the latest revision.');}
       }catch(err){setVersionDialog(old=>old?{...old,busy:false,error:getMessage(err)}:old);}
     }

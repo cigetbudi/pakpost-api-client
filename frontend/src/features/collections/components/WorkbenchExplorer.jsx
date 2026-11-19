@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useRef} from 'react';
 import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History, Users, Plus, Search, ChevronsUpDown, ChevronsDownUp, FileUp, X, ChevronDown, FolderClosed, ArrowRight } from 'lucide-react';
 import { RetroSelect } from '../../../components/ui/RetroSelect.jsx';
 import { EnvironmentExplorer } from '../../environments/components/EnvironmentExplorer.jsx';
@@ -31,6 +31,17 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   const { setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample } = actions;
   const { draftsRef } = refs;
   const { CodeSidebar, ImportExportSidebar } = deferred;
+  // Request index records are immutable in React. Cache parsed response-example
+  // metadata per record, not per entire Collection (which would defeat paging).
+  // Weak keys are garbage-collected when a Workspace or Collection is replaced.
+  const requestMetadata = useRef(new WeakMap());
+  const readRequestMetadata = request => {
+    const cached = requestMetadata.current.get(request);
+    if (cached?.raw === request.headersJson) return cached.value;
+    const value = decodeStoredHeaders(request.headersJson);
+    requestMetadata.current.set(request,{raw:request.headersJson,value});
+    return value;
+  };
 
   return (
 <aside className="pp-explorer">
@@ -97,7 +108,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                       <span className="pp-tree-disclosure-slot" aria-hidden="true"/><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tree-name">{t.name}</span><span className="pp-unsaved-dot"/>
                     </button>)}
                   renderRequest={(r,depth,selectionProps={})=>{
-                  const meta=decodeStoredHeaders(r.headersJson);
+                  const meta=readRequestMetadata(r);
                   const examplesOpen=expandedWorkspaceExamples[`${selectedWs}:${c.id}:${r.id}`]??!!explorerSearch;
                   const tabActive=activeCloud.requestId===r.id;
                   return <React.Fragment key={r.id}><div className="pp-tree-item-container" style={{'--pp-tree-depth':depth+1}} draggable={canEditCloud} onDragStart={e=>{if(!canEditCloud)return;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>

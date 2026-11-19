@@ -1,8 +1,12 @@
+import {hydrateOpenCloudDetails} from '../services/workspaceSync.js';
+import {scheduleWorkspaceBatch} from '../services/workspaceBatch.js';
+
 // Realtime workbench actions. Stateless factory: shared logic remains scoped to the mounted App.
 // Dependencies are passed from the current render; no singleton store or persist middleware.
 export function createRealtimeActions(dependencies) {
   const {
     activeTabRef,
+    api,
     currentTokenRef,
     draftsRef,
     expandedCollections,
@@ -34,8 +38,17 @@ export function createRealtimeActions(dependencies) {
         ? {...tab,source:{...tab.source,revision:saved.revision}}:tab));
     }
 
-  function reconcileCloudRequests(workspaceId,collectionId,items){
-      reconcileRequestTabs({workspaceId,collectionId,requests:items,tabs:openTabsRef.current,
+  async function reconcileCloudRequests(workspaceId,collectionId,items){
+      const auth = currentTokenRef.current;
+      const isCurrent = () => auth === currentTokenRef.current
+        && workspaceId === selectedWorkspaceRef.current;
+      const ready = await hydrateOpenCloudDetails({workspaceId,collectionId,requests:items,
+        tabs:openTabsRef.current,
+        readDraft:id=>id===activeTabRef.current?snapshotRef.current():draftsRef.current[id],
+        fetchDetail:id=>api(`/api/workspaces/${workspaceId}/collections/${collectionId}/requests/${id}`,'GET',undefined,auth),
+        isCurrent});
+      if (!ready || !isCurrent()) return;
+      reconcileRequestTabs({workspaceId,collectionId,requests:ready,tabs:openTabsRef.current,
         activeTabId:activeTabRef.current,
         readDraft:id=>id===activeTabRef.current?snapshotRef.current():draftsRef.current[id],
         transformRemote:workspaceDraft,
@@ -59,17 +72,13 @@ export function createRealtimeActions(dependencies) {
         reconcile:reconcileCloudRequests,
         fetchCollections:getWorkspaceCollections,
         fetchRequests:getWorkspaceRequests,
+        isSelectedCollection:id=>id===selectedColRef.current,
       });
     }
 
   function enqueueWorkspaceChange(event){
       realtimeQueueRef.current.push(event);
-      if(realtimeTimerRef.current)return;
-      realtimeTimerRef.current=setTimeout(()=>{
-        realtimeTimerRef.current=null;
-        const batch=realtimeQueueRef.current.splice(0,100);
-        realtimeHandlerRef.current?.(batch);
-      },180);
+      scheduleWorkspaceBatch(realtimeQueueRef, realtimeTimerRef, realtimeHandlerRef);
     }
   return { adoptSavedRevision, reconcileCloudRequests, refreshRealtimeChanges, enqueueWorkspaceChange };
 }
