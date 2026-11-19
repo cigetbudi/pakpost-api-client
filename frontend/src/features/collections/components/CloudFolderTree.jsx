@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {ChevronRight,ChevronDown,FolderClosed,FolderPlus,Plus,Settings2,X,Check,RefreshCw,Trash2} from 'lucide-react';
 import {api} from '../../../services/httpClient.js';
@@ -8,6 +8,7 @@ import {makeCloudFolderTree,canMoveCloudFolder} from '../services/cloudFolderTre
 import {folderKey,requestKey,selectCloudItem,buildCloudDeletePayload} from '../services/cloudSelection.js';
 import {cloudFolderNameError} from '../services/renameValidation.js';
 import {restoreCloudFolderFocus} from '../services/cloudFocus.js';
+import {CloudRequestRows} from './CloudRequestRows.jsx';
 
 const FOLDER_DRAG='application/x-pakpost-cloud-folder';
 /** The Cloud tree owns keyboard selection. No new global key handler affects the request editor. */
@@ -150,7 +151,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
       onNotice?.(`Deleted ${payload.folders.length} folder(s) and ${payload.requestIds.length} directly selected request(s), including folder contents`);
     });
   };
-  const node=makeCloudFolderTree(folders,requests);
+  const node=useMemo(() => open ? makeCloudFolderTree(folders,requests) : null, [open,folders,requests]);
   const filter=String(search||'').trim().toLowerCase();
   const renderNode=(branch,depth=0,visited=new Set())=>{
     if(branch.id&&visited.has(branch.id))return null;
@@ -175,15 +176,13 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
         {isOpen&&renderNode(folder,depth+1,seen)}
       </React.Fragment>;
     });
-    const sorted=sortByName?[...branch.requests].sort((a,b)=>a.name.localeCompare(b.name)):branch.requests;
-    const items=sorted.filter(r=>!filter||`${r.name} ${r.url}`.toLowerCase().includes(filter))
-      .map(r=>renderRequest(r,depth,{
-        'data-cloud-select-key':requestKey(r.id),'aria-pressed':selection.includes(requestKey(r.id)),
-        className:selection.includes(requestKey(r.id))?'pp-cloud-selected':'',
-        onClick:e=>choose(e,requestKey(r.id)),
-        onContextMenu:e=>{setSelection([requestKey(r.id)]);anchorRef.current=requestKey(r.id);}
-      }));
-    return <>{children}{items}{renderDraft?.(branch.id,depth)}</>;
+    return <>{children}
+      <CloudRequestRows key={`${branch.id||'root'}:${filter}:${sortByName}`}
+        requests={branch.requests} search={filter} sortByName={sortByName} depth={depth}
+        renderRequest={renderRequest} selection={selection} choose={choose}
+        onContextMenu={(event,key)=>{setSelection([key]);anchorRef.current=key;}} />
+      {renderDraft?.(branch.id,depth)}
+    </>;
   };
   return <div ref={rootRef} className="pp-cloud-folders" onKeyDown={onKeys}
     onDragOver={e=>{if(canEdit&&Array.from(e.dataTransfer.types||[]).some(t=>t===requestDrag||t===FOLDER_DRAG))setDragging(true);}}>
@@ -209,7 +208,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
     </div>}
     {!!error&&<div className="pp-tree-hint" role="alert">{error} <button type="button" onClick={refresh}><RefreshCw size={13}/></button></div>}
     {loading&&<div className="pp-tree-hint">Loading Cloud folders…</div>}
-    {renderNode(node)}
+    {open && node && renderNode(node)}
     {menu&&createPortal(<div className="pp-collection-popup" role="menu" style={{left:Math.max(8,menu.x),top:Math.max(8,menu.y)}}>
       <MenuActionItem action="newFolder" onClick={()=>{setEditing({mode:'create',parentId:menu.folder.id,name:''});setMenu(null);}}>New subfolder</MenuActionItem>
       <MenuActionItem action="newRequest" onClick={()=>{onCreateDraft(menu.folder.id);setMenu(null);}}>New request</MenuActionItem>

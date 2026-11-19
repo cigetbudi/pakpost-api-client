@@ -30,7 +30,8 @@ test('Cloud row selection remains separate from active-tab state and modifiers d
   const explorer=read('../../src/features/collections/components/WorkbenchExplorer.jsx');
   const style=read('../../src/styles/layers/cloud-folder-polish.css');
   assert.match(tree,/activeRequestId\?requestKey\(activeRequestId\)/);
-  assert.match(tree,/onClick:e=>choose\(e,requestKey\(r\.id\)\)/);
+  const rows=read('../../src/features/collections/components/CloudRequestRows.jsx');
+  assert.match(rows,/onClick: event => choose\(event, key\)/);
   assert.match(explorer,/selectionProps\.onClick\?\.\(e\)!==false/);
   assert.match(explorer,/aria-current=\{tabActive\?'page':undefined\}/);
   assert.match(explorer,/pp-cloud-tab-active/);

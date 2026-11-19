@@ -31,7 +31,7 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
           <button type="button" className="pp-tree-action" aria-label={`Actions for folder ${folder.name}`} onClick={e=>onMenu(e,{type:'folder',collectionId,folderPath,name:folder.name})}><Ellipsis size={15}/></button>
         </div>
         <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}>
-          <div className="pp-collection-motion-inner"><Branch node={folder} collectionId={collectionId} path={folderPath} depth={depth+1} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={onMenu} expanded={expanded} toggle={toggle} onMove={onMove} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/></div>
+          <div className="pp-collection-motion-inner">{opened&&<Branch node={folder} collectionId={collectionId} path={folderPath} depth={depth+1} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={onMenu} expanded={expanded} toggle={toggle} onMove={onMove} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/>}</div>
         </div>
       </React.Fragment>;
     })}
@@ -53,7 +53,7 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
           </button>
           <button type="button" className="pp-tree-action" aria-label={`Actions for request ${r.requestName||r.name}`} onClick={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}><Ellipsis size={15}/></button>
         </div>
-        {!!examples.length&&<div className={`pp-collection-motion pp-example-motion ${examplesOpen?'is-open':''}`} aria-hidden={!examplesOpen} inert={!examplesOpen}><div className="pp-collection-motion-inner">{examples.map(example=><div className="pp-tree-item-container" key={`${r.id}:${example.id}`} style={{'--pp-tree-depth':depth+2}}>
+        {!!examples.length&&<div className={`pp-collection-motion pp-example-motion ${examplesOpen?'is-open':''}`} aria-hidden={!examplesOpen} inert={!examplesOpen}><div className="pp-collection-motion-inner">{examplesOpen&&examples.map(example=><div className="pp-tree-item-container" key={`${r.id}:${example.id}`} style={{'--pp-tree-depth':depth+2}}>
           <button type="button" className="pp-tree-example pp-explorer-tree-example" onClick={()=>onOpenExample(r,collectionId,example)} onContextMenu={e=>onMenu(e,{type:'example',collectionId,requestId:r.id,exampleId:example.id,name:example.name})} title={example.description||example.name}>
             <span className="pp-tree-disclosure-slot" aria-hidden="true"/><span className={`pp-example-status ${statusTone(example.statusCode)}`}>{example.statusCode}</span><span className="pp-tree-name">{example.name}</span>
           </button>
@@ -87,10 +87,12 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
   };
   return <div className="pp-local-collections" aria-label="Local collections">
     {collections.map(col=>{
-      const tree=col.name.toLowerCase().includes(search.toLowerCase())?makeCollectionTree(col.requests):filterCollectionTree(makeCollectionTree(col.requests),search);
+      const key=`collection:${col.id}`;const opened=!!search||expanded[key]!==false;
+      // Closed Local collections keep their expansion state, not a hidden DOM subtree.
+      const rawTree=opened?makeCollectionTree(col.requests):null;
+      const tree=rawTree&&(col.name.toLowerCase().includes(search.toLowerCase())?rawTree:filterCollectionTree(rawTree,search));
       if(search&&!tree.requests.length&&!tree.folders.length&&!col.name.toLowerCase().includes(search.toLowerCase())
         &&!pendingTabs.some(t=>t.source?.collectionId===col.id && t.name.toLowerCase().includes(search.toLowerCase())))return null;
-      const key=`collection:${col.id}`;const opened=!!search||expanded[key]!==false;
       return <div key={col.id} className="pp-local-collection" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(DRAG_MIME))e.preventDefault()}} onDrop={e=>{e.preventDefault();e.stopPropagation();drop(e,col.id,[])}}>
         <div className="pp-local-collection-head pp-tree-item-container" style={{'--pp-tree-depth':0}}>
           <button type="button" className="pp-tree-row pp-explorer-tree-row" onClick={()=>toggle(key)} title={col.name} aria-expanded={opened} onContextMenu={e=>openMenu(e,{type:'collection',collectionId:col.id,name:col.name})}>
@@ -102,7 +104,7 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
           </div>
         </div>
         <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}>
-          <div className="pp-collection-motion-inner"><Branch node={tree} collectionId={col.id} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={openMenu} expanded={expanded} toggle={toggle} onMove={drop} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/></div>
+          <div className="pp-collection-motion-inner">{opened&&tree&&<Branch node={tree} collectionId={col.id} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={openMenu} expanded={expanded} toggle={toggle} onMove={drop} pendingTabs={pendingTabs} onOpenPending={onOpenPending}/>}</div>
         </div>
       </div>;
     })}

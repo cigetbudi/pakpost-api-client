@@ -38,7 +38,7 @@ import { executeWorkbenchRequest } from '../../features/requests/services/execut
 import { buildRequestCommand, buildRedactedCodeRequest, buildRequestPreview } from '../../features/requests/services/requestCommand.js';
 import { invalidateBrowserSession, planSignedOutWorkbench } from '../../features/auth/services/logoutWorkbench.js';
 import { useWorkspaceRealtimeLifecycle } from '../../features/realtime/hooks/useWorkspaceRealtimeLifecycle.js';
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import { api } from '../../services/httpClient.js';
 import { prettyJson, initialLocalEnvs } from '../../utils/workbenchHelpers.js';
@@ -826,10 +826,20 @@ export function useWorkbenchController() {
     setResponsePretty, setResult, setScriptDiagnostic, setScriptError, setScriptJump, setScriptLog,
     setScriptTests, stashActive, url, varsFromEnv, writeCollectionVariables,
   });
-  const visibleCollections = sortCollectionRoots(collections.filter(c => c.name.toLowerCase().includes(explorerSearch.toLowerCase()) || (workspaceRequestLists[workspaceCollectionKey(selectedWs,c.id)]||[]).some(r => `${r.name} ${r.url}`.toLowerCase().includes(explorerSearch.toLowerCase()))),collectionSort);
-  const visibleLocalCollections = sortCollectionRoots(localCollections,collectionSort);
+  // The request editor rerenders on each keystroke. Explorer filtering and sorting
+  // are derived only when collection data or the search/sort inputs change.
+  const visibleCollections = useMemo(() => {
+    const term = explorerSearch.trim().toLowerCase();
+    const matching = !term ? collections : collections.filter(collection =>
+      collection.name.toLowerCase().includes(term) ||
+      (workspaceRequestLists[workspaceCollectionKey(selectedWs, collection.id)] || []).some(request =>
+        `${request.name || ''} ${request.url || ''}`.toLowerCase().includes(term)));
+    return sortCollectionRoots(matching, collectionSort);
+  }, [collections, workspaceRequestLists, explorerSearch, collectionSort, selectedWs]);
+  const visibleLocalCollections = useMemo(
+    () => sortCollectionRoots(localCollections, collectionSort), [localCollections, collectionSort]);
   const responseType = result && !result.error ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain') : 'text/plain';
-  const commandItems = [
+  const commandItems = commandOpen ? [
     {key:'new-request', title:'New HTTP request', subtitle:'Open an empty request tab', icon:'action', run:()=>addTab()},
     {key:'open-collections',title:'Show collections',subtitle:'Browse saved API requests',icon:'action',run:()=>{setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester')}},
     {key:'open-history',title:'Open request history',subtitle:'Previously sent requests',icon:'action',run:()=>{setExplorerTab('history');setSidebarCollapsed(false);setPage('tester')}},
@@ -838,7 +848,7 @@ export function useWorkbenchController() {
     ...openTabs.map(t=>({key:`tab-${t.id}`,title:t.name,subtitle:`${t.method} · Open tab`,method:t.method,run:()=>selectTab(t.id)})),
     ...localCollections.flatMap(col => (col.requests || []).map(req => ({key:`local-${col.id}-${req.id}`,title:req.requestName||req.name||'Untitled Request',subtitle:`${col.name} · ${req.url || ''}`,method:req.method||'GET',run:()=>openLocalRequest(req,col.id)}))),
     ...(token?savedRequests.map(req=>({key:`neon-${req.id}`,title:req.name,subtitle:`Workspace · ${req.url||''}`,method:req.method||'GET',run:()=>loadSavedRequest(req)})):[])
-  ];
+  ] : [];
   const visibleCommandItems = commandItems.filter(item => `${item.title} ${item.subtitle}`.toLowerCase().includes(commandQuery.trim().toLowerCase())).slice(0,30);
   const responseText = result && !result.error ? (resTab === 'body' ? (responsePretty ? (prettyResponse||prettyJson(result.body||'')) : (result.body||'')) : JSON.stringify(result.headers || {}, null, 2)) : '';
   // Explicit UI contract. Runtime-only secret/session refs stay inside this hook.

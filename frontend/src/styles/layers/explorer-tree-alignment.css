@@ -132,3 +132,23 @@
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
+
+.pp-explorer .pp-cloud-more-requests {
+  display: flex;
+  justify-content: center;
+  min-height: 30px;
+  align-items: center;
+  padding: 3px 8px;
+}
+.pp-explorer .pp-cloud-more-requests button {
+  font-size: 11px;
+  color: var(--text2);
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--pp-radius-sm, 5px);
+}
+.pp-explorer .pp-cloud-more-requests button:hover,
+.pp-explorer .pp-cloud-more-requests button:focus-visible {
+  color: var(--text);
+  background: var(--hover);
+}
