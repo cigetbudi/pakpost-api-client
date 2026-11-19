@@ -42,6 +42,8 @@ export async function api(path, method = 'GET', body, token = '') {
       data?.message || data?.detail || messages.join(', ') || data?.title || `HTTP ${response.status}`,
     );
     error.status = response.status;
+    error.requestId = response.headers?.get?.('X-Request-ID') || null;
+    error.retryAfter = response.headers?.get?.('Retry-After') || null;
     throw error;
   }
 

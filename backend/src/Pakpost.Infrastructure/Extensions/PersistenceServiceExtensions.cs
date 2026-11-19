@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Pakpost.Application.Common.Interfaces;
@@ -21,9 +22,17 @@ public static class PersistenceServiceExtensions
             throw new InvalidOperationException("ConnectionStrings__Postgres missing");
         }
 
+        // Preserve caller-specific SSL settings while bounding stalled database connections.
+        var connectionOptions = new NpgsqlConnectionStringBuilder(connection)
+        {
+            Timeout = Math.Clamp(configuration.GetValue("Database:ConnectTimeoutSeconds", 15), 2, 60),
+            CommandTimeout = Math.Clamp(configuration.GetValue("Database:CommandTimeoutSeconds", 30), 5, 180),
+            MaxPoolSize = Math.Clamp(configuration.GetValue("Database:MaxPoolSize", 30), 1, 200)
+        };
+
         services.AddSingleton<WorkspaceCryptography>();
 
-        services.AddDbContext<PakpostDbContext>(options => options.UseNpgsql(connection));
+        services.AddDbContext<PakpostDbContext>(options => options.UseNpgsql(connectionOptions.ConnectionString));
 
         services.AddScoped<IUnitOfWork>(provider =>
             provider.GetRequiredService<PakpostDbContext>());

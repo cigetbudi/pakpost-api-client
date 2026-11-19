@@ -29,7 +29,16 @@ public sealed class GlobalExceptionMiddleware(
 
             var (statusCode, response) = MapException(ex);
 
-            if (ex is DbUpdateConcurrencyException)
+            if (IsTemporaryDatabaseFailure(ex))
+            {
+                if (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method))
+                    context.Response.Headers["Retry-After"] = "3";
+                logger.LogWarning(
+                    "PostgreSQL temporarily unavailable; {ExceptionType} {SqlState}",
+                    ex.GetType().Name,
+                    GetSqlState(ex));
+            }
+            else if (ex is DbUpdateConcurrencyException)
             {
                 logger.LogWarning("Concurrent update conflict");
             }
@@ -75,9 +84,33 @@ public sealed class GlobalExceptionMiddleware(
                 (int)HttpStatusCode.Conflict,
                 new { message = "Database conflict; refresh and retry" }),
 
+            _ when IsTemporaryDatabaseFailure(exception) => (
+                (int)HttpStatusCode.ServiceUnavailable,
+                new { message = "Database temporarily unavailable; retry shortly" }),
+
+            _ when exception is TimeoutException || GetSqlState(exception) == "57014" => (
+                (int)HttpStatusCode.GatewayTimeout,
+                new { message = "Request timed out" }),
+
             _ => (
                 (int)HttpStatusCode.InternalServerError,
                 new { message = "Internal server error" })
+        };
+    }
+
+    private static bool IsTemporaryDatabaseFailure(Exception exception)
+    {
+        if (IsDatabaseConflict(exception))
+            return false;
+
+        return exception switch
+        {
+            DbUpdateException { InnerException: { } inner } => IsTemporaryDatabaseFailure(inner),
+            PostgresException postgres =>
+                postgres.SqlState.StartsWith("08", StringComparison.Ordinal) ||
+                postgres.SqlState is "53300" or "53400" or "57P01" or "57P02" or "57P03",
+            NpgsqlException => true,
+            _ => false
         };
     }
 

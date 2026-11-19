@@ -19,5 +19,6 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <ProjectReference Include="../../src/Pakpost.Infrastructure/Pakpost.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/Pakpost.Api/Pakpost.Api.csproj" />
   </ItemGroup>
 </Project>

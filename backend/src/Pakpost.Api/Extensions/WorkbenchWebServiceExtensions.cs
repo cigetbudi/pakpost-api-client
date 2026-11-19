@@ -36,6 +36,17 @@ public static class WorkbenchWebServiceExtensions
                         AutoReplenishment = true
                     }));
 
+            options.AddPolicy("health-readiness", context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    "health:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
+
             options.AddPolicy("auth", context =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     "auth:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
@@ -55,7 +66,8 @@ public static class WorkbenchWebServiceExtensions
             options.AddPolicy("Frontend", policy =>
                 policy.WithOrigins(origins)
                     .AllowAnyHeader()
-                    .AllowAnyMethod()));
+                    .AllowAnyMethod()
+                    .WithExposedHeaders("X-Request-ID", "Retry-After")));
 
         return services;
     }

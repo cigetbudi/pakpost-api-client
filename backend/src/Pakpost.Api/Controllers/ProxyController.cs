@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.Timeouts;
 using Pakpost.Application.Internal.Requests.Commands;
 using Pakpost.Application.Internal.Requests.DTOs;
 using Mediator;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 namespace Pakpost.Api.Controllers;
 [ApiController,Route("api/proxy")]
+[RequestTimeout("proxy")]
 public sealed class ProxyController(ISender sender):ControllerBase
 {
     // Public by design: no login needed to try an HTTP request.

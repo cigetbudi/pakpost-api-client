@@ -93,6 +93,41 @@ public sealed class GlobalExceptionMiddlewareTests
         Assert.DoesNotContain("private SQL error", json);
     }
 
+    [Theory]
+    [InlineData("08006")]
+    [InlineData("53300")]
+    [InlineData("57P03")]
+    public async Task TemporaryPostgresFailuresReturnSafeHttp503(string sqlState)
+    {
+        var postgres = new PostgresException(
+            "private database connection detail", "ERROR", "ERROR", sqlState);
+        var (status, json) = await InvokeAsync(_ => throw postgres);
+
+        Assert.Equal(503, status);
+        Assert.Contains("temporarily unavailable", json);
+        Assert.DoesNotContain("private database connection detail", json);
+    }
+
+    [Fact]
+    public async Task NpgsqlTransportFailureReturnsHttp503()
+    {
+        var (status, json) = await InvokeAsync(
+            _ => throw new NpgsqlException("private network detail"));
+
+        Assert.Equal(503, status);
+        Assert.DoesNotContain("private network detail", json);
+    }
+
+    [Fact]
+    public async Task RequestTimeoutReturnsSafeHttp504()
+    {
+        var (status, json) = await InvokeAsync(
+            _ => throw new TimeoutException("private request detail"));
+
+        Assert.Equal(504, status);
+        Assert.DoesNotContain("private request detail", json);
+    }
+
     [Fact]
     public async Task WrappedPostgresConflictReturnsHttp409()
     {

@@ -131,3 +131,28 @@
   .pp-settings-heading p{display:none}
 }
 @media(prefers-reduced-motion:reduce){.pp-context-rail>button,.pp-context-rail,.pp-explorer,.pp-module-rail{transition:none!important}}
+
+.pp-system-health{max-width:690px}
+.pp-system-health-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.pp-system-health-heading p{font-size:12px;color:var(--muted);max-width:520px;margin-top:6px;line-height:1.65}
+.pp-system-health-refresh{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--text2);white-space:nowrap}
+.pp-system-health-refresh:hover{background:var(--hover)}
+.pp-system-health-refresh:disabled{opacity:.55;cursor:wait}
+.pp-system-health-spinning{animation:pp-health-spin 1.2s linear infinite}
+@keyframes pp-health-spin{to{transform:rotate(360deg)}}
+.pp-system-health-items{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-top:24px;overflow:hidden}
+.pp-system-health-item{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:17px 19px;min-height:74px}
+.pp-system-health-item+.pp-system-health-item{border-top:1px solid var(--border)}
+.pp-system-health-label{display:flex;align-items:center;gap:12px;color:var(--text2)}
+.pp-system-health-label>svg{flex:none;color:var(--muted)}
+.pp-system-health-label span{display:flex;flex-direction:column;gap:5px}
+.pp-system-health-label strong{color:var(--text);font-size:12px}
+.pp-system-health-label small{color:var(--muted);font-size:11px;font-family:monospace}
+.pp-system-health-state{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:650;white-space:nowrap}
+.pp-system-health-state.healthy{color:var(--success,var(--accent))}
+.pp-system-health-state.unavailable{color:var(--danger,#dc6b6b)}
+.pp-system-health-state.unknown{color:var(--muted)}
+.pp-system-health-foot{display:flex;gap:12px;justify-content:space-between;align-items:center;margin-top:15px;font-size:11px;color:var(--muted)}
+.pp-system-health-foot strong{color:var(--text2)}
+.pp-system-health-help{font-size:11px;color:var(--muted);margin-top:19px;line-height:1.7}
+@media(max-width:640px){.pp-system-health-heading{flex-direction:column}.pp-system-health-foot{flex-direction:column;align-items:flex-start}}

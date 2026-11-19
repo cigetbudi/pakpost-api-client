@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.Timeouts;
 using Pakpost.Application.Internal.Auth.Commands;
 using Pakpost.Application.Internal.Auth.DTOs;
 using Pakpost.Application.Internal.Auth.Queries;
@@ -10,6 +11,7 @@ namespace Pakpost.Api.Controllers;
 public sealed record GoogleLinkRequest(string Credential, string Password);
 [ApiController]
 [Route("api/auth")]
+[RequestTimeout("auth")]
 public sealed class AuthController(ISender sender) : ControllerBase
 {
     [HttpPost("register"), AllowAnonymous, EnableRateLimiting("auth")]
