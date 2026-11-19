@@ -63,7 +63,7 @@ import {canWorkspace,currentWorkspaceMember} from '../../features/workspace/serv
 import { KeyValueEditor } from '../../features/requests/components/KeyValueEditor';
 import { DocumentationEditor } from '../../features/collections/components/DocumentationEditor';
 import { isEnabled, encodeStoredHeaders, decodeStoredHeaders } from '../../features/requests/services/requestMetadata';
-import {readWorkspaceCollectionDocs,writeWorkspaceCollectionDocs,workspaceDocKey} from '../../features/collections/services/documentationStore';
+import {readWorkspaceCollectionDocs,writeWorkspaceCollectionDocs,clearWorkspaceCollectionDocs,workspaceDocKey} from '../../features/collections/services/documentationStore';
 import { RetroSelect } from '../../components/ui/RetroSelect';
 import { ImportDestinationPicker } from '../../components/ui/ImportDestinationPicker';
 import { VariableUrlInput } from '../../features/requests/components/VariableUrlInput';
@@ -317,7 +317,7 @@ export function useWorkbenchController() {
   useEffect(()=>{
     const persist=()=>writeWorkbenchCache({openTabs,activeTabId:activeTabRef.current,
       drafts:draftsRef.current,active:snapshot(),recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,
-      // QA/Writer Cloud drafts are RAM-only and must never enter browser recovery.
+      // Cloud requests are RAM-only for ALL roles, not only QA/Writer.
       sandboxTabIds:sandboxCacheTabIds(openTabs,selectedWs,membersWorkspaceId===selectedWs&&canWorkspace(currentWorkspaceMember(members,me),'collection.write'))});
     const timer=setTimeout(persist,600);
     window.addEventListener('beforeunload',persist);
@@ -513,6 +513,8 @@ export function useWorkbenchController() {
     // Local snapshots previously threw inside restoreDraft and aborted logout.
     currentTokenRef.current='';
     invalidateBrowserSession(sessionStorage, clearWorkbenchCache);
+    clearWorkspaceCollectionDocs(localStorage);
+    setWorkspaceCollectionDocs({});
     setToken('');setMe(null);setStorageScope(STORAGE_LOCAL);setPage('tester');
     setAuthOpen(false);setGoogleLinkOpen(false);setGoogleLinked(false);
     setGoogleLinkPassword('');setAuthForm({displayName:'',email:'',password:''});

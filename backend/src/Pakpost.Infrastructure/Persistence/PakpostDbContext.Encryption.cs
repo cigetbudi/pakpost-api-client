@@ -62,7 +62,8 @@ public sealed partial class PakpostDbContext
                 _workspaceKeys.Add(workspace.Id, key);
                 WorkspaceEncryptionKeys.Add(new WorkspaceEncryptionKey(
                     workspace.Id,
-                    _cryptography.Wrap(workspace.Id, key)));
+                    _cryptography.Wrap(workspace.Id, key),
+                    _cryptography.MasterKeyId));
             }
 
             await StageSensitiveFieldsAsync(staged, cancellationToken);

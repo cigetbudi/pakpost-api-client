@@ -111,3 +111,6 @@ pakpost-migrations.sql
 # - package-lock.json / pnpm-lock.yaml / yarn.lock / bun.lock
 # - apps/desktop/src-tauri/Cargo.lock
 # - .env.example and non-secret configuration templates
+
+# Generated unsigned extension release archives
+extension/releases/

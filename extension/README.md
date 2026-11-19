@@ -1,4 +1,4 @@
-# Pakpost Interceptor Extension (v0.2.0)
+# Pakpost Interceptor Extension (v0.3.0)
 
 Native browser extension for Pakpost, using Manifest V3 and no external dependencies. Chrome/Edge and Firefox builds use the same core code with separate manifests.
 
@@ -9,6 +9,38 @@ bash extension/build.sh
 ```
 
 The build outputs are `extension/dist/chrome/` and `extension/dist/firefox/`.
+
+## Versioned release packages (v0.3.0)
+
+Run this from the repository root to produce **reproducible, unsigned** artifacts
+using only Bash and Python 3:
+
+```bash
+bash extension/release.sh
+```
+
+The output is:
+
+- `extension/releases/pakpost-interceptor-chrome-v0.3.0.zip` — unpack for a
+  developer install, or upload the archive to a Chrome Web Store publisher account.
+- `extension/releases/pakpost-interceptor-firefox-v0.3.0.xpi` — **unsigned** AMO
+  upload artifact, **not** a permanent-install XPI until Mozilla signs it.
+- `extension/releases/SHA256SUMS` — verification for both archives.
+
+The packager verifies that versions in both manifests match, the built manifests
+match their source, and the bundle contains exactly the expected assets. CI
+(`.github/workflows/interceptor-release.yml`) runs extension security tests,
+packages on manual dispatch or an `interceptor-v*` tag, and uploads artifacts;
+matching tags publish a GitHub Release. Example tag: `interceptor-v0.3.0`.
+
+**Auto-update boundaries:** Chrome `Load unpacked` and Firefox temporary
+add-ons are **development installs**; neither auto-updates from these archives.
+For team-wide unattended updates, publish/sideload via an organization-approved
+Chrome Web Store or enterprise-managed extension mechanism and publish a
+**signed** Firefox extension to AMO or managed enterprise distribution. Do not
+advertise GitHub ZIP/XPI downloads as browser-native automatic updates.
+Never embed API secrets or signing credentials in the extension archive.
+
 
 ## Chrome / Edge (unpacked development install)
 

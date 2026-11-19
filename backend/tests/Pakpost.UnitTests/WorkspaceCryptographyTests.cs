@@ -70,6 +70,79 @@ public sealed class WorkspaceCryptographyTests
                 .Build()));
     }
 
+    [Fact]
+    public void RewrapPreservesDekAndExistingFieldCiphertext()
+    {
+        using var oldCrypto = new WorkspaceCryptography(
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)), "master-v1");
+        using var newCrypto = new WorkspaceCryptography(
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)), "master-v2");
+        var workspaceId = Guid.NewGuid();
+        var recordId = Guid.NewGuid();
+        var dek = RandomNumberGenerator.GetBytes(32);
+        var wrapped = oldCrypto.Wrap(workspaceId, dek);
+        var fieldCiphertext = oldCrypto.Protect(dek, workspaceId, "request", recordId,
+            "Body", "secret before rotation");
+
+        var rotated = WorkspaceKeyRewrap.Rewrap(workspaceId, "master-v1", wrapped,
+            oldCrypto, newCrypto);
+        var recovered = newCrypto.Unwrap(workspaceId, rotated);
+
+        Assert.NotEqual(wrapped, rotated);
+        Assert.Equal(dek, recovered);
+        Assert.Equal("secret before rotation", newCrypto.Unprotect(recovered,
+            workspaceId, "request", recordId, "Body", fieldCiphertext));
+        Assert.ThrowsAny<CryptographicException>(() => oldCrypto.Unwrap(workspaceId, rotated));
+        CryptographicOperations.ZeroMemory(dek);
+        CryptographicOperations.ZeroMemory(recovered);
+    }
+
+    [Fact]
+    public void RewrapRejectsWrongOldKeyIdOrAnotherWorkspace()
+    {
+        using var oldCrypto = new WorkspaceCryptography(
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)), "master-v1");
+        using var newCrypto = new WorkspaceCryptography(
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)), "master-v2");
+        var workspaceId = Guid.NewGuid();
+        var wrapped = oldCrypto.Wrap(workspaceId, RandomNumberGenerator.GetBytes(32));
+
+        Assert.ThrowsAny<CryptographicException>(() =>
+            WorkspaceKeyRewrap.Rewrap(workspaceId, "unexpected", wrapped, oldCrypto, newCrypto));
+        Assert.ThrowsAny<CryptographicException>(() =>
+            WorkspaceKeyRewrap.Rewrap(Guid.NewGuid(), "master-v1", wrapped, oldCrypto, newCrypto));
+    }
+
+    [Fact]
+    public void ExplicitMasterKeyIdentifierIsLoadedForNewWorkspaceKeys()
+    {
+        var crypto = new WorkspaceCryptography(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["WorkspaceEncryption:MasterKey"] =
+                    Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                ["WorkspaceEncryption:MasterKeyId"] = "master-v2"
+            }).Build());
+
+        Assert.Equal("master-v2", crypto.MasterKeyId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("../bad")]
+    [InlineData("spaces are not allowed")]
+    public void InvalidMasterKeyIdentifiersFailClosed(string masterKeyId)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            new WorkspaceCryptography(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["WorkspaceEncryption:MasterKey"] =
+                        Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                    ["WorkspaceEncryption:MasterKeyId"] = masterKeyId
+                }).Build()));
+    }
+
     private static WorkspaceCryptography CreateCryptography() =>
         new(new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

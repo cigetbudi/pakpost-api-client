@@ -4,15 +4,30 @@ using Microsoft.Extensions.Configuration;
 
 namespace Pakpost.Infrastructure.Services;
 
-public sealed class WorkspaceCryptography
+public sealed class WorkspaceCryptography : IDisposable
 {
     public const string ContentPrefix = "w1:";
 
     private readonly byte[] _masterKey;
+    public string MasterKeyId { get; }
 
     public WorkspaceCryptography(IConfiguration configuration)
+        : this(configuration["WorkspaceEncryption:MasterKey"],
+            configuration["WorkspaceEncryption:MasterKeyId"] ?? "master-v1")
     {
-        var encoded = configuration["WorkspaceEncryption:MasterKey"];
+    }
+
+    public WorkspaceCryptography(string? encoded, string masterKeyId)
+    {
+        MasterKeyId = masterKeyId;
+
+        if (MasterKeyId.Length is < 1 or > 100 ||
+            !System.Text.RegularExpressions.Regex.IsMatch(
+                MasterKeyId, @"\A[a-zA-Z0-9][a-zA-Z0-9._-]*\z"))
+        {
+            throw new InvalidOperationException(
+                "WorkspaceEncryption__MasterKeyId must be a safe nonempty identifier (up to 100 chars)");
+        }
 
         if (string.IsNullOrWhiteSpace(encoded))
         {
@@ -82,6 +97,8 @@ public sealed class WorkspaceCryptography
             CryptographicOperations.ZeroMemory(bytes);
         }
     }
+
+    public void Dispose() => CryptographicOperations.ZeroMemory(_masterKey);
 
     private static byte[] KeyContext(Guid workspaceId) =>
         Encoding.UTF8.GetBytes($"pakpost|workspace-dek|{workspaceId:D}|v1");

@@ -73,7 +73,7 @@ public sealed partial class PakpostDbContext
         var stored = await WorkspaceEncryptionKeys.AsNoTracking()
             .SingleOrDefaultAsync(key => key.WorkspaceId == workspaceId, ct);
 
-        if (stored is null || stored.KeyVersion != 1 || stored.MasterKeyId != "master-v1")
+        if (stored is null || stored.KeyVersion != 1 || stored.MasterKeyId != _cryptography!.MasterKeyId)
         {
             throw new CryptographicException(
                 "Workspace encryption key missing or incompatible; refusing plaintext fallback");

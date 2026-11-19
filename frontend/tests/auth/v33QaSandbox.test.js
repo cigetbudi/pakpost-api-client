@@ -58,10 +58,14 @@ test('When all tabs are sandbox-only, recovery starts with a harmless fresh test
   } finally {cleanup();}
 });
 
-test('Normal Developer Cloud tab remains recoverable',()=>{
+test('Developer Cloud tab is RAM-only after encryption hardening',()=>{
   const cleanup=restoreGlobalStorage();try{
     writeWorkbenchCache({...saveConfig,openTabs:[cloudA],sandboxTabIds:[]});
-    assert.equal(readWorkbenchCache().drafts.t1.body,'QA PRIVATE TOKEN');
+    const cache=readWorkbenchCache();
+    assert.equal(cache.openTabs[0].source,null);
+    assert.equal(cache.drafts.t1,undefined);
+    assert.doesNotMatch(sessionStorage.getItem('pakpost_workbench_v4_live'),/QA PRIVATE TOKEN/);
+    assert.doesNotMatch(localStorage.getItem('pakpost_workbench_v4_recovery'),/QA PRIVATE TOKEN/);
   } finally {cleanup();}
 });
 

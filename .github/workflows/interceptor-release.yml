@@ -1,0 +1,41 @@
+name: PakPost Interceptor package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'interceptor-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate extension security behavior
+        run: node --test frontend/tests/network/v272InterceptorAccessModes.test.js
+      - name: Build and package Chrome/Firefox
+        run: bash extension/release.sh
+      - name: Upload versioned release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pakpost-interceptor
+          path: |
+            extension/releases/*.zip
+            extension/releases/*.xpi
+            extension/releases/SHA256SUMS
+          if-no-files-found: error
+      - name: Publish release on matching Git tag
+        if: startsWith(github.ref, 'refs/tags/interceptor-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" extension/releases/* \
+            --verify-tag \
+            --title "PakPost Interceptor $GITHUB_REF_NAME" \
+            --notes "Unsigned packages: Chrome upload ZIP and Firefox AMO upload XPI. Store signing / enterprise deployment is required for managed automatic updates."

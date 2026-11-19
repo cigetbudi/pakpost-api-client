@@ -5,6 +5,9 @@
     <Project Path="src/Pakpost.Domain/Pakpost.Domain.csproj" />
     <Project Path="src/Pakpost.Infrastructure/Pakpost.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Pakpost.KeyRotation/Pakpost.KeyRotation.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Pakpost.SecurityChecks/Pakpost.SecurityChecks.csproj" />
     <Project Path="tests/Pakpost.UnitTests/Pakpost.UnitTests.csproj" />
