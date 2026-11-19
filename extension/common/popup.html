@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="popup.css"><title>Pakpost Interceptor</title></head>
 <body>
-  <header><div class="logo">◇</div><div><h1>Pakpost Interceptor <small>v0.1.1</small></h1><p>Local network / VPN request bridge</p></div></header>
+  <header><div class="logo"><img src="icons/icon-48.png" width="27" height="27" alt=""></div><div><h1>Pakpost Interceptor <small>v0.2.0</small></h1><p>Local network / VPN request bridge</p></div></header>
   <main>
     <section>
       <h2>Allowed Pakpost Origins <span id="originCount">0</span></h2>
@@ -10,9 +10,27 @@
       <form id="originForm"><input id="originInput" type="text" placeholder="http://localhost:5173" autocomplete="off" spellcheck="false" required><button type="submit">+ Add</button></form>
       <div id="originList" class="entries"></div>
     </section>
-    <section>
+    <section class="destination-access">
+      <h2>API Destination Access</h2>
+      <p>Choose how Pakpost can send requests from this browser. Only websites in Allowed Pakpost Origins can control the extension.</p>
+      <div class="mode-choices" role="group" aria-label="API destination access mode">
+        <button type="button" class="mode-choice" id="allowAllButton" aria-pressed="false">
+          <span class="mode-symbol" aria-hidden="true">◎</span>
+          <span class="mode-copy"><strong>Allow All</strong><small>Any HTTP/HTTPS destination, one browser approval</small></span>
+          <span class="mode-check" aria-hidden="true">✓</span>
+        </button>
+        <button type="button" class="mode-choice active" id="specifiedButton" aria-pressed="true">
+          <span class="mode-symbol" aria-hidden="true">▤</span>
+          <span class="mode-copy"><strong>Specified Destinations</strong><small>Scan, review, and approve hosts in bulk</small></span>
+          <span class="mode-check" aria-hidden="true">✓</span>
+        </button>
+      </div>
+      <div id="destinationModeStatus" class="mode-hint" role="status"></div>
+      <button type="button" id="revokeBroadButton" class="revoke-broad hidden">Revoke broad browser permission</button>
+    </section>
+    <section id="specifiedDestinations">
       <h2>Allowed API Destinations <span id="destCount">0</span></h2>
-      <p>API hosts the extension can contact. Select multiple hosts and grant permissions together.</p>
+      <p>Approved API hosts for Specified mode. Scan a Pakpost tab, review hosts, and grant access together.</p>
       <form id="destForm"><input id="destInput" type="text" placeholder="https://api.internal.example.com" autocomplete="off" spellcheck="false" required><button type="submit">+ Add</button></form>
       <div class="batch-panel">
         <div class="batch-title"><strong>Fast setup</strong><span>No need to add hosts individually</span></div>
@@ -30,7 +48,7 @@
       </div>
       <div id="destList" class="entries"></div>
     </section>
-    <p class="foot">Reload the Pakpost tab after adding its origin. Chrome and Firefox use your own network/VPN. Redirects are blocked; credentials and cookies aren't sent automatically.</p>
+    <p class="foot">Reload Pakpost after approving its origin. Network/VPN access is required. Redirects are blocked; credentials and cookies are never sent automatically. Allow All does not authorize unknown websites to control this extension.</p>
     <div id="status" role="status" aria-live="polite"></div>
   </main>
   <script src="popup.js"></script>

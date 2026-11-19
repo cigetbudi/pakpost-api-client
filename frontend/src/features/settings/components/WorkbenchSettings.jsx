@@ -24,7 +24,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
           {[
             ['proxy','Secure Proxy',Server,'Pakpost backend. Private addresses are blocked.'],
             ['browser','Browser',Globe2,'Direct browser fetch, subject to CORS.'],
-            ['extension','Browser Extension',Puzzle,'From your browser/VPN with manually approved hosts.']
+            ['extension','Browser Extension',Puzzle,'Use your network/VPN with Allow All or Specified destinations.']
           ].map(([mode,label,Icon,description])=><button type="button" key={mode} role="radio" aria-checked={interceptorMode===mode} className={interceptorMode===mode?'active':''} onClick={()=>onInterceptorChange(mode)}>
             <span className="pp-extension-option-radio"/><Icon size={18}/><span><strong>{label}</strong><small>{description}</small></span>
           </button>)}
@@ -36,7 +36,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
               {extensionStatus.state==='connected'?`Connected · v${extensionStatus.version||'?'}`:extensionStatus.state==='checking'?'Checking…':'Not connected'}
             </span>
           </div>
-          <p>Install the Chrome/Firefox extension. In its popup, add this website under <strong>Allowed Pakpost Origins</strong> then use <strong>Scan this Pakpost tab</strong> in the extension popup to review and approve multiple API destinations at once. Grant browser permissions, then reload Pakpost.</p>
+          <p>Install the Chrome/Firefox extension. In its popup, add this website under <strong>Allowed Pakpost Origins</strong> then choose <strong>Allow All</strong> to grant HTTP/HTTPS destinations in one step, or <strong>Specified Destinations</strong> to scan, review and approve hosts in bulk. Approve browser permissions and reload Pakpost.</p>
           <button type="button" className="pp-extension-check" onClick={onCheckExtension}><RefreshCw size={14}/> Check connection</button>
           <p className="pp-extension-hint">The extension does not use Pakpost's backend proxy and does not follow redirects. You must be on the appropriate LAN/VPN.</p>
         </div>}
@@ -45,7 +45,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
       {category==='shortcuts'&&<><h2>Keyboard shortcuts</h2><p>Available while working in REST.</p><dl className="pp-settings-shortcuts"><div><dt>Send request</dt><dd>Ctrl / Cmd + Enter</dd></div><div><dt>Save request</dt><dd>Ctrl / Cmd + S</dd></div><div><dt>Quick search</dt><dd>Ctrl / Cmd + K</dd></div><div><dt>Toggle comment</dt><dd>Ctrl / Cmd + / (editor)</dd></div></dl></>}
       {category==='environments'&&<><h2>Environments</h2><p>Manage local and workspace variables, secrets, and export formats in the right explorer.</p><button className="pp-settings-export-link" onClick={onOpenEnvironments}><Variable size={17}/> Open Environments <ArrowRight size={15}/></button></>}
       {category==='exchange'&&<><h2>Import / Export</h2><p>Import requests from Postman, OpenAPI, Insomnia, Hoppscotch or cURL. Export collections and environments from their action menus.</p><button className="pp-settings-export-link" onClick={onOpenImportExport}><FileUp size={17}/> Open Import / Export <ArrowRight size={15}/></button></>}
-      {category==='privacy'&&<><h2>Privacy & proxy</h2><p>Current request execution safeguards.</p><div className="pp-settings-privacy"><ShieldCheck size={20}/><div><strong>Interceptor isolation</strong><p>The Secure Proxy blocks private targets. Browser Extension requests only approved destinations via your own network/VPN. Credentials are not saved in the extension; redirects are disabled.</p></div></div></>}
+      {category==='privacy'&&<><h2>Privacy & proxy</h2><p>Current request execution safeguards.</p><div className="pp-settings-privacy"><ShieldCheck size={20}/><div><strong>Interceptor isolation</strong><p>The Secure Proxy blocks private targets. Browser Extension requests destinations according to your extension popup policy (Allow All or Specified), but only approved Pakpost origins can control it. Credentials are not saved in the extension; redirects are disabled.</p></div></div></>}
       {category==='about'&&<><h2>About Pakpost</h2><p>Pakpost is an API workbench with local guest drafts and signed-in workspaces.</p><div className="pp-settings-privacy"><Info size={20}/><div><strong>Pakpost Workbench</strong><p>React/Vite with Bun, isolated QuickJS scripting and selectable HTTP interceptors.</p></div></div></>}
     </section></div>
   </div>;

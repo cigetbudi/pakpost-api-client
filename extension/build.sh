@@ -5,6 +5,8 @@ for browser in chrome firefox; do
   out="dist/$browser"
   mkdir -p "$out"
   cp common/{background.js,content.js,popup.html,popup.css,popup.js} "$out/"
+  mkdir -p "$out/icons"
+  cp common/icons/icon-*.png "$out/icons/"
   cp "manifest.$browser.json" "$out/manifest.json"
   echo "Prepared $out"
 done

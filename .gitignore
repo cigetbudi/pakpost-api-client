@@ -16,6 +16,7 @@
 !**/.env.template
 .envrc
 **/.envrc
+.vscode
 
 # Local .NET configuration, secrets and certificates
 **/appsettings.Development.json

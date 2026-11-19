@@ -1,7 +1,8 @@
 /* Popup configuration. All permissions are requested from a user click, not at install time. */
 const api=typeof browser!=='undefined'?browser:chrome;
 const $=id=>document.getElementById(id);
-const SETTINGS={allowedOrigins:[],allowedDestinations:[]};
+const SETTINGS={allowedOrigins:[],allowedDestinations:[],destinationMode:'specified'};
+const ALL_HOSTS=['http://*/*','https://*/*'];
 const KEY={origins:'allowedOrigins',destinations:'allowedDestinations'};
 function normalize(value){
   try{const url=new URL(String(value).trim());
@@ -12,6 +13,89 @@ function normalize(value){
 function pattern(origin){const url=new URL(origin);return `${url.protocol}//${url.hostname}/*`}
 function notice(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error)}
 async function save(){await api.storage.local.set(SETTINGS)}
+
+function favicon(origin,approved=true){
+  const fallback=document.createElement('span');
+  fallback.className='site-fallback';
+  fallback.textContent='◎';
+  fallback.setAttribute('aria-hidden','true');
+
+  const extensionRoot=api.runtime.getURL('');
+  const chromium=/^(chrome|edge)-extension:/i.test(extensionRoot);
+  if(!chromium&&!approved)return fallback;
+
+  const icon=document.createElement('img');
+  icon.className='site-icon';
+  icon.alt='';
+  icon.referrerPolicy='no-referrer';
+  icon.crossOrigin='anonymous';
+  icon.loading='lazy';
+  icon.onerror=()=>icon.replaceWith(fallback);
+
+  if(chromium){
+    const faviconUrl=new URL(api.runtime.getURL('/_favicon/'));
+    faviconUrl.searchParams.set('pageUrl',origin+'/');
+    faviconUrl.searchParams.set('size','32');
+    icon.src=faviconUrl.href;
+  }else{
+    icon.src=new URL('/favicon.ico',origin).href;
+  }
+  return icon;
+}
+
+async function renderDestinationMode(){
+  const allowAll=SETTINGS.destinationMode==='all';
+  const granted=await api.permissions.contains({origins:ALL_HOSTS});
+  $('allowAllButton').classList.toggle('active',allowAll);
+  $('allowAllButton').setAttribute('aria-pressed',String(allowAll));
+  $('specifiedButton').classList.toggle('active',!allowAll);
+  $('specifiedButton').setAttribute('aria-pressed',String(!allowAll));
+  $('specifiedDestinations').classList.toggle('hidden',allowAll);
+  $('revokeBroadButton').classList.toggle('hidden',allowAll||!granted);
+
+  const status=$('destinationModeStatus');
+  status.classList.toggle('warning',allowAll&&!granted);
+  status.textContent=allowAll
+    ? granted
+      ? 'Allow All active. Only approved Pakpost websites can send commands. All HTTP/HTTPS destinations are enabled.'
+      : 'Browser-wide permission is missing. Select Allow All again to grant it.'
+    : granted
+      ? 'Specified mode active. Only your approved list can receive requests. Broad browser permission is still granted; you can revoke it below.'
+      : 'Specified mode active. Destinations require individual or bulk approval.';
+}
+
+$('allowAllButton').addEventListener('click',()=>{
+  // The permission prompt must start directly from a user gesture.
+  let request;
+  try{request=api.permissions.request({origins:ALL_HOSTS})}
+  catch(error){notice(`Permission request failed: ${error.message||error}`,true);return}
+
+  request.then(async granted=>{
+    if(!granted){notice('Allow All was not approved by the browser.',true);return}
+    SETTINGS.destinationMode='all';
+    await save();
+    await renderDestinationMode();
+    notice('Allow All enabled. API destinations no longer require individual approval.');
+  }).catch(error=>notice(`Permission request failed: ${error.message||error}`,true));
+});
+
+$('specifiedButton').addEventListener('click',async()=>{
+  try{
+    SETTINGS.destinationMode='specified';
+    await save();
+    await renderDestinationMode();
+    notice('Specified mode enabled. The destination allowlist is enforced immediately.');
+  }catch(error){notice(error.message,true)}
+});
+
+$('revokeBroadButton').addEventListener('click',async()=>{
+  try{
+    await api.permissions.remove({origins:ALL_HOSTS});
+    await sync();
+    await renderDestinationMode();
+    notice('Broad browser permission revoked. If Pakpost disconnects, re-approve its exact origin and reload the page.');
+  }catch(error){notice(error.message,true)}
+});
 function renderList(which){
   const list=SETTINGS[which],target=$(which==='allowedOrigins'?'originList':'destList');
   target.replaceChildren();
@@ -23,7 +107,7 @@ function renderList(which){
     const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title='Remove '+origin;
     remove.setAttribute('aria-label','Remove '+origin);
     remove.addEventListener('click',()=>removeEntry(which,origin));
-    row.append(title,remove);target.appendChild(row);
+    row.append(favicon(origin),title,remove);target.appendChild(row);
   }
 }
 async function sync(){const response=await api.runtime.sendMessage({kind:'PAKPOST_SYNC'});
@@ -59,9 +143,11 @@ $('originForm').addEventListener('submit',event=>addEntry('allowedOrigins',event
 $('destForm').addEventListener('submit',event=>addEntry('allowedDestinations',event));
 (async()=>{
   try{
-    const stored=await api.storage.local.get(Object.values(KEY));
+    const stored=await api.storage.local.get([...Object.values(KEY),'destinationMode']);
     for(const key of Object.values(KEY))SETTINGS[key]=Array.isArray(stored[key])?stored[key].filter(x=>typeof x==='string'):[];
+    SETTINGS.destinationMode=stored.destinationMode==='all'?'all':'specified';
     renderList('allowedOrigins');renderList('allowedDestinations');
+    await renderDestinationMode();
     // Opening the popup is a user gesture and allows inspecting the active tab.
     const tabs=await api.tabs.query({active:true,currentWindow:true});
     try{$('originInput').value=normalize(tabs?.[0]?.url||'')}catch{}
@@ -95,7 +181,7 @@ function reviewCandidates(values){
     const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.value=origin;
     checkbox.checked=index<remaining;
     const title=document.createElement('span');title.textContent=origin;
-    row.append(checkbox,title);list.appendChild(row);
+    row.append(checkbox,favicon(origin,false),title);list.appendChild(row);
   }
   if(!found.length){const empty=document.createElement('div');empty.className='review-empty';
     empty.textContent='No new destinations. Your previously approved hosts are already in the list.';list.appendChild(empty)}

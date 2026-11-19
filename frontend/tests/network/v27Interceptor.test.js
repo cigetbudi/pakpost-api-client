@@ -12,14 +12,14 @@ const bgSource=fs.readFileSync(path.join(root,'extension/common/background.js'),
 const manifestChrome=JSON.parse(fs.readFileSync(path.join(root,'extension/manifest.chrome.json'),'utf8'));
 const manifestFirefox=JSON.parse(fs.readFileSync(path.join(root,'extension/manifest.firefox.json'),'utf8'));
 
-function makeHarness({origins=['http://localhost:5173'],destinations=['https://echo.example.test'],grant=true}={}){
+function makeHarness({origins=['http://localhost:5173'],destinations=['https://echo.example.test'],destinationMode='specified',grant=true,broadGrant=true}={}){
   let receivedListener;
   let fetchCalls=[];
   const chrome={
     runtime:{id:'extension-test-id',lastError:null,getManifest:()=>({version:'0.1.0'}),
       onMessage:{addListener(fn){receivedListener=fn}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
-    storage:{local:{async get(){return {allowedOrigins:origins,allowedDestinations:destinations}}}},
-    permissions:{async contains(){return grant},request(){}},
+    storage:{local:{async get(){return {allowedOrigins:origins,allowedDestinations:destinations,destinationMode}}}},
+    permissions:{async contains({origins:required}){return grant&&(required?.length===2?broadGrant:true)},request(){}},
     scripting:{async getRegisteredContentScripts(){return []},async registerContentScripts(){},async unregisterContentScripts(){}},
   };
   const fetch=async(url,init)=>{fetchCalls.push({url,init});return {
@@ -122,4 +122,43 @@ test('extension validates the exact calling port, even if the same host has perm
 test('extension refuses requests from subframes',async()=>{
   const h=makeHarness();const response=await h.send({method:'GET',url:'https://echo.example.test'}, {frameId:1});
   assert.equal(response.ok,false);assert.match(response.error,/top-level/i);assert.equal(h.fetchCalls.length,0);
+});
+
+
+test('Allow All accepts new HTTP and HTTPS hosts only after broad permission is granted',async()=>{
+  const h=makeHarness({destinationMode:'all',destinations:[]});
+  const api=await h.send({method:'GET',url:'https://new-api.example.test/v1'});
+  const local=await h.send({method:'GET',url:'http://10.10.1.20:8080/health'});
+  assert.equal(api.ok,true);
+  assert.equal(local.ok,true);
+  assert.equal(h.fetchCalls.length,2);
+});
+
+test('Allow All fails closed if the browser-wide permission was revoked',async()=>{
+  const h=makeHarness({destinationMode:'all',destinations:[],broadGrant:false});
+  const response=await h.send({method:'GET',url:'https://new-api.example.test'});
+  assert.equal(response.ok,false);
+  assert.match(response.error,/Allow All requires HTTP and HTTPS browser permissions/);
+  assert.equal(h.fetchCalls.length,0);
+});
+
+test('switching back to Specified enforces destination list even if broad browser permission remains',async()=>{
+  const h=makeHarness({destinationMode:'specified',destinations:['https://approved.test'],broadGrant:true});
+  const blocked=await h.send({method:'GET',url:'https://unlisted.test/api'});
+  const approved=await h.send({method:'GET',url:'https://approved.test/api'});
+  assert.equal(blocked.ok,false);
+  assert.match(blocked.error,/Destination not allowed/);
+  assert.equal(approved.ok,true);
+  assert.equal(h.fetchCalls.length,1);
+});
+
+test('Allow All never lets untrusted sites or unsafe URLs bypass existing restrictions',async()=>{
+  const h=makeHarness({destinationMode:'all',destinations:[]});
+  const outsider=await h.send({method:'GET',url:'https://good.test'},
+    {url:'https://attacker.test/app',tabUrl:'https://attacker.test/app'});
+  const embeddedAuth=await h.send({method:'GET',url:'https://username:password@good.test'});
+  const dangerousHeader=await h.send({method:'POST',url:'https://good.test',headers:{Cookie:'session=123'}});
+  const badScheme=await h.send({method:'GET',url:'file:///etc/passwd'});
+  for(const response of [outsider,embeddedAuth,dangerousHeader,badScheme])assert.equal(response.ok,false);
+  assert.equal(h.fetchCalls.length,0);
 });

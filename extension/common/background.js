@@ -1,13 +1,14 @@
 /* Pakpost Interceptor – background transport. No network access is granted at install time. */
 const api=typeof browser!=='undefined'?browser:chrome;
 const BRIDGE='pakpost.interceptor.v1';
+const ALL_DESTINATION_PATTERNS=['http://*/*','https://*/*'];
 const MAX_RESPONSE=1048576;
 const MAX_BODY=131072;
 const METHODS=new Set(['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS']);
 const DENIED_HEADERS=new Set(['host','cookie','origin','referer','content-length','connection','transfer-encoding','upgrade','proxy-authorization','proxy-connection','keep-alive','te','trailer','user-agent']);
 const activeByOrigin=new Map();
 
-const storage=()=>api.storage.local.get(['allowedOrigins','allowedDestinations']);
+const storage=()=>api.storage.local.get(['allowedOrigins','allowedDestinations','destinationMode']);
 function parseOrigin(value){
   try{const url=new URL(value);if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)return '';
     return url.origin;
@@ -33,7 +34,9 @@ function validateCommand(command,settings){
   if(target.length>4096)throw Error('URL exceeds 4096 characters');
   const url=new URL(target);
   if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('Only HTTP(S) URLs without embedded credentials are supported.');
-  if(!Array.isArray(settings.allowedDestinations)||!settings.allowedDestinations.includes(url.origin))throw Error(`Destination not allowed: ${url.origin}. Add it in Pakpost Extension first.`);
+  const allowAll=settings.destinationMode==='all';
+  if(!allowAll&&(!Array.isArray(settings.allowedDestinations)||!settings.allowedDestinations.includes(url.origin)))
+    throw Error(`Destination not allowed: ${url.origin}. Approve it in Specified Destinations or enable Allow All.`);
   const mode=String(command.bodyMode||'raw');
   if(!['none','raw','urlencoded','multipart','binary'].includes(mode))throw Error('Unsupported body mode');
   const headers=command.headers||{};
@@ -103,6 +106,10 @@ async function handleMessage(message,sender){
   if(message.action==='PING')return {ok:true,result:{name:'Pakpost Interceptor',version:api.runtime.getManifest().version}};
   if(message.action!=='SEND')throw Error('Unsupported extension action');
   const validated=validateCommand(message.payload,settings);
+  if(settings.destinationMode==='all'){
+    const broadAccess=await api.permissions.contains({origins:ALL_DESTINATION_PATTERNS});
+    if(!broadAccess)throw Error('Allow All requires HTTP and HTTPS browser permissions. Re-enable it from the extension popup.');
+  }
   const granted=await api.permissions.contains({origins:[pattern(validated.url.origin)]});
   if(!granted)throw Error(`Browser permission missing for ${validated.url.origin}. Grant it in the extension popup.`);
   const active=activeByOrigin.get(pageOrigin)||0;

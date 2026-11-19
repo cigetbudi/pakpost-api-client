@@ -1,4 +1,4 @@
-# Pakpost Interceptor Extension (v0.1.0)
+# Pakpost Interceptor Extension (v0.2.0)
 
 Native browser extension for Pakpost, using Manifest V3 and no external dependencies. Chrome/Edge and Firefox builds use the same core code with separate manifests.
 
@@ -17,17 +17,18 @@ The build outputs are `extension/dist/chrome/` and `extension/dist/firefox/`.
 3. Select the **extracted** `extension/dist/chrome` directory containing `manifest.json`.
 4. Pin **Pakpost Interceptor** to the toolbar, open its popup.
 5. Add your Pakpost web origin (example `http://localhost:5173`) to **Allowed Pakpost Origins**. Accept the browser permission prompt.
-6. Click **Scan this Pakpost tab** in the extension popup. Review all detected API destinations, optionally deselect any, then **Grant selected destinations** once. The browser may ask permission for the set. Alternatively paste multiple full URLs in **Or paste multiple URLs** and review them.
-7. Reload the Pakpost web tab.
-8. In Pakpost, go to **Settings → Interceptor → Browser Extension → Check connection**. It should show Connected.
-9. In the workbench, Send as usual. QuickJS pre/post scripts and environment variables remain in Pakpost.
+6. Choose **Allow All** to request broad HTTP/HTTPS permissions once, or choose **Specified Destinations** to scan and approve hosts in bulk. The browser owns the permission prompt. A denied permission keeps the previous mode.
+7. For Specified, click **Scan this Pakpost tab**, review results, and **Grant selected destinations**. You can also paste multiple URLs. The previously approved list is retained when switching modes.
+8. Reload the Pakpost web tab.
+9. In Pakpost, go to **Settings → Interceptor → Browser Extension → Check connection**. It should show Connected.
+10. In the workbench, Send as usual. QuickJS pre/post scripts and environment variables remain in Pakpost.
 
 ## Firefox (temporary development install)
 
 1. Go to `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on**.
 3. Select `extension/dist/firefox/manifest.json`.
-4. Configure the popup the same way as Chrome (Scan / Review / Grant).
+4. Configure the popup the same way as Chrome (Allow All or Scan / Review / Grant).
 5. Reload Pakpost and check connection in Settings.
 
 Firefox temporary add-ons are removed when Firefox is restarted. For permanent installation, sign/distribute an XPI through an appropriate Mozilla Add-ons / enterprise process.
@@ -43,6 +44,15 @@ The extension discovers host origins, not individual endpoint paths. Several end
 
 The browser must already have LAN/VPN/DNS/TLS access to the destination. Installing the extension does not establish a VPN or trust a self-signed certificate.
 
+## Destination access modes (v0.2.0)
+
+- **Allow All:** asks for optional HTTP/HTTPS host permissions when you click Allow All. New API destinations no longer need to be entered or scanned. It does not authorize any new *Pakpost website* to control the extension.
+- **Specified Destinations:** default for a new installation; requires the API's exact origin to be approved. Previously approved hosts remain available if you switch away and back.
+- Returning to Specified immediately enables the explicit allowlist even if the browser still holds broad permissions. If desired, click **Revoke broad browser permission** to remove the wildcard grant. The browser may also revoke narrower grants at the same time; re-approve the Pakpost origin or destination if it disconnects.
+- Browser access may be controlled separately by Chrome/Firefox extension site-access settings, which take precedence. Switching the popup mode does not override browser-denied permissions.
+- Every request still checks its calling tab, exact Pakpost origin and port, HTTP method, unsafe headers, maximum body size, and browser host permission. Cookies are omitted and redirects are blocked.
+- Toolbar icons are rendered from `frontend/public/branding/pakpost-favicon.svg`, bundled as PNGs. Popup destination icons use Chrome's built-in favicon cache. Firefox uses `/favicon.ico` on an approved host without cookies/referrer. No third-party favicon lookup service is contacted. Hosts without favicons get a neutral icon.
+
 ## v27.1: one-click host discovery
 
 - After authorizing the current Pakpost site and reloading it, open the extension popup while on Pakpost and click **Scan this Pakpost tab**.
@@ -54,8 +64,8 @@ The browser must already have LAN/VPN/DNS/TLS access to the destination. Install
 
 ## Safety model
 
-- **No install-time wildcard host access:** `optional_host_permissions` are only requested on explicit Add clicks.
-- **Two separate allowlists:** approved Pakpost websites (allowed to invoke the extension) vs approved API destinations.
+- **No install-time wildcard host access:** `optional_host_permissions` are requested from explicit Add, Grant selected, or Allow All clicks.
+- **Separate caller and destination policies:** approved Pakpost websites control the extension; destinations use the selected All or Specified policy.
 - **Every request is checked in the background:** extension sender URL, top-level tab origin, browser permission, destination origin and HTTP method.
 - **Privacy:** requests are sent from the browser extension, not forwarded to Pakpost's backend; `credentials: 'omit'` means cookies and ambient credentials are not attached automatically.
 - **No auto-follow redirects**, no browser-proxy fallback, timeout 20 seconds, max four concurrent sends per Pakpost origin.
@@ -68,7 +78,7 @@ The browser must already have LAN/VPN/DNS/TLS access to the destination. Install
 ## Troubleshooting
 
 - **Not connected:** approve the exact Pakpost website origin, grant permission and **reload the tab**. Then Check connection.
-- **Destination not allowed:** add the API's scheme+host+port origin in the popup.
+- **Destination not allowed:** in Specified mode, approve the API's scheme+host+port origin. In Allow All mode, check browser wildcard permissions.
 - **No VPN/DNS/TLS:** extension cannot make unreachable internal endpoints reachable. Check browser address bar/certificate trust and corporate network policies.
 - **Redirect blocked:** request the target URL directly and allow its origin first.
 - **Extension updated/reloaded:** reload the Pakpost webpage to reattach the content script.
