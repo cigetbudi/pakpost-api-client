@@ -37,9 +37,7 @@ public static class CloudFolderRules
             write ? WorkspacePermissions.CollectionWrite : WorkspacePermissions.CollectionRead,
             cancellationToken);
 
-        var item = await collections.FindAsync(collection, cancellationToken);
-
-        if (item is null || item.WorkspaceId != workspace)
+        if (!await collections.ExistsInWorkspaceAsync(collection, workspace, cancellationToken))
         {
             throw AppException.NotFound("Collection not found");
         }

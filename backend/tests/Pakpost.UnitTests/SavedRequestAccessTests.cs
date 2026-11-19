@@ -22,8 +22,8 @@ public sealed class SavedRequestAccessTests
             .Returns(Task.FromResult<WorkspaceMember?>(
                 new WorkspaceMember(workspaceId, actorId, WorkspaceRole.Member, [WorkspaceAccessRole.QA])));
 
-        collections.FindAsync(collection.Id, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<Collection?>(collection));
+        collections.ExistsInWorkspaceAsync(collection.Id, workspaceId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true));
 
         await SavedRequestsAccess.Check(
             actorId,
@@ -59,8 +59,8 @@ public sealed class SavedRequestAccessTests
             .Returns(Task.FromResult<WorkspaceMember?>(
                 new WorkspaceMember(workspaceId, actorId, WorkspaceRole.Owner)));
 
-        collections.FindAsync(otherCollection.Id, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<Collection?>(otherCollection));
+        collections.ExistsInWorkspaceAsync(otherCollection.Id, workspaceId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(false));
 
         var error = await Assert.ThrowsAsync<AppException>(() =>
             SavedRequestsAccess.Check(

@@ -240,6 +240,7 @@ export function useWorkbenchController() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(CACHED?.sidebarCollapsed || false);
   const workspaceRequestsPending = useRef(new Set());
   const workspaceFetchEpoch = useRef(0);
+  const cloudOpenEpoch = useRef(0);
   useEffect(()=>{
     // Clear cached private workspace data after switching accounts or workspaces.
     workspaceFetchEpoch.current+=1;
@@ -340,9 +341,9 @@ export function useWorkbenchController() {
   async function selectRequestHistoryRevision(...args) { return historyActions.selectRequestHistoryRevision(...args); }
   async function restoreRequestRevision(...args) { return historyActions.restoreRequestRevision(...args); }
 
-  function selectTab(...args) { return tabActions.selectTab(...args); }
+  function selectTab(...args) { cloudOpenEpoch.current++; return tabActions.selectTab(...args); }
   function navigateConsoleEvent(...args) { return tabActions.navigateConsoleEvent(...args); }
-  function addTab(...args) { return tabActions.addTab(...args); }
+  function addTab(...args) { cloudOpenEpoch.current++; return tabActions.addTab(...args); }
   const { importPreparedEnvironments, importCloudCollections, importRequestsAndEnvironments } = createCollectionImportActions({
     STORAGE_LOCAL, STORAGE_WORKSPACE, activeTabRef, allowedStorageScope, api, blankDraft,
     collectionImportSources, collections, draftsRef, getMessage, localCollections, localEnvironments,
@@ -365,10 +366,21 @@ export function useWorkbenchController() {
   function openCollectionImport(...args) { return collectionActions.openCollectionImport(...args); }
   async function submitCollectionImport(...args) { return collectionActions.submitCollectionImport(...args); }
   function openBoundRequest(...args) { return collectionActions.openBoundRequest(...args); }
-  function openLocalRequest(...args) { return collectionActions.openLocalRequest(...args); }
+  function openLocalRequest(...args) { cloudOpenEpoch.current++; return collectionActions.openLocalRequest(...args); }
   function previewSavedExample(...args) { return collectionActions.previewSavedExample(...args); }
-  function openLocalExample(...args) { return collectionActions.openLocalExample(...args); }
-  function openWorkspaceExample(...args) { return collectionActions.openWorkspaceExample(...args); }
+  function openLocalExample(...args) { cloudOpenEpoch.current++; return collectionActions.openLocalExample(...args); }
+  async function openWorkspaceExample(request,collectionId,example) {
+    const selection=++cloudOpenEpoch.current;
+    if(!request?.isIndex)return collectionActions.openWorkspaceExample(request,collectionId,example);
+    const workspaceId=selectedWs,auth=token;
+    try {
+      const full=await api(`/api/workspaces/${workspaceId}/collections/${collectionId}/requests/${request.id}`,'GET',undefined,auth);
+      if(currentTokenRef.current!==auth||selectedWorkspaceRef.current!==workspaceId||selection!==cloudOpenEpoch.current)return;
+      return collectionActions.openWorkspaceExample(full,collectionId,example);
+    } catch(error) {
+      if(currentTokenRef.current===auth&&selection===cloudOpenEpoch.current)setNotice(`Cannot open response example: ${getMessage(error)}`);
+    }
+  }
   function downloadJson(...args) { return collectionActions.downloadJson(...args); }
   function updateLocal(...args) { return collectionActions.updateLocal(...args); }
   function createCollectionDraft(...args) { return collectionActions.createCollectionDraft(...args); }
@@ -417,7 +429,26 @@ export function useWorkbenchController() {
     draggingRef.current = false;
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
-  function loadSavedRequest(...args) { return tabActions.loadSavedRequest(...args); }
+  async function loadSavedRequest(item) {
+    const selection=++cloudOpenEpoch.current;
+    if (!item?.isIndex) { tabActions.loadSavedRequest(item); return true; }
+    const workspaceId=selectedWs;
+    const collectionId=item.collectionId||selectedCol;
+    const auth=token;
+    const existing=openTabs.find(tab=>tab.source?.scope==='workspace'
+      &&tab.source.workspaceId===workspaceId&&tab.source.collectionId===collectionId
+      &&tab.source.requestId===item.id);
+    if (existing) { tabActions.selectTab(existing.id); return true; }
+    try {
+      const full=await api(`/api/workspaces/${workspaceId}/collections/${collectionId}/requests/${item.id}`,'GET',undefined,auth);
+      if (currentTokenRef.current!==auth||selectedWorkspaceRef.current!==workspaceId||selection!==cloudOpenEpoch.current)return false;
+      tabActions.loadSavedRequest(full);
+      return true;
+    } catch(error) {
+      if(currentTokenRef.current===auth&&selection===cloudOpenEpoch.current)setNotice(`Cannot open Cloud request: ${getMessage(error)}`);
+      return false;
+    }
+  }
   async function resetSandboxRequest(...args) { return tabActions.resetSandboxRequest(...args); }
 
 
@@ -594,7 +625,7 @@ export function useWorkbenchController() {
     const key=workspaceCollectionKey(selectedWs,selectedCol);
     const epoch=workspaceFetchEpoch.current;
     setSavedRequests(workspaceRequestLists[key]||[]);
-    api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests`, 'GET', undefined, token)
+    api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/index`, 'GET', undefined, token)
       .then(items=>{if(cancelled||epoch!==workspaceFetchEpoch.current)return;setSavedRequests(items);setWorkspaceRequestLists(old=>({...old,[key]:items}));})
       .catch(e=>{if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
     return ()=>{cancelled=true;};
@@ -611,7 +642,7 @@ export function useWorkbenchController() {
       const key=workspaceCollectionKey(selectedWs,col.id);
       workspaceRequestsPending.current.add(key);
       const epoch=workspaceFetchEpoch.current;
-      api(`/api/workspaces/${selectedWs}/collections/${col.id}/requests`,'GET',undefined,token)
+      api(`/api/workspaces/${selectedWs}/collections/${col.id}/requests/index`,'GET',undefined,token)
         .then(items=>{if(epoch===workspaceFetchEpoch.current)setWorkspaceRequestLists(old=>({...old,[key]:items}));})
         .catch(e=>{if(epoch!==workspaceFetchEpoch.current)return;setNotice(`Cannot load ${col.name}: ${getMessage(e)}`);setWorkspaceRequestLists(old=>({...old,[key]:[]}));})
         .finally(()=>workspaceRequestsPending.current.delete(key));

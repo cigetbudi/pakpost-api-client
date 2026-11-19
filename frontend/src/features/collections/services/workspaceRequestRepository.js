@@ -16,7 +16,7 @@ export function getWorkspaceCollections(workspaceId, token) {
   return api(workspaceCollectionsPath(workspaceId), 'GET', undefined, token);
 }
 export function getWorkspaceRequests(workspaceId, collectionId, token) {
-  return api(workspaceRequestsPath(workspaceId, collectionId), 'GET', undefined, token);
+  return api(`${workspaceRequestsPath(workspaceId, collectionId)}/index`, 'GET', undefined, token);
 }
 export function createWorkspaceRequest(workspaceId, collectionId, payload, token) {
   return api(workspaceRequestsPath(workspaceId, collectionId), 'POST', payload, token);

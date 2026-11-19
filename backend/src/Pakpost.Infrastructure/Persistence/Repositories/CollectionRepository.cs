@@ -18,6 +18,23 @@ public sealed class CollectionRepository(PakpostDbContext db) : ICollectionRepos
         return collection;
     }
 
+    public Task<bool> ExistsInWorkspaceAsync(Guid collectionId, Guid workspaceId, CancellationToken ct) =>
+        db.Collections.AsNoTracking().AnyAsync(
+            collection => collection.Id == collectionId && collection.WorkspaceId == workspaceId, ct);
+
+    public async Task<IReadOnlyList<CollectionOverview>> ListOverviewAsync(
+        Guid workspaceId,
+        CancellationToken ct) =>
+        await db.Collections.AsNoTracking()
+            .Where(collection => collection.WorkspaceId == workspaceId)
+            .OrderBy(collection => collection.Name)
+            .Select(collection => new CollectionOverview(
+                collection.Id,
+                collection.WorkspaceId,
+                collection.Name,
+                db.SavedRequests.Count(request => request.CollectionId == collection.Id)))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Collection>> ListAsync(Guid workspaceId, CancellationToken ct)
     {
         var collections = await db.Collections

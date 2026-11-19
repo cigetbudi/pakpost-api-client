@@ -16,6 +16,14 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
     [HttpGet]
     public async Task<IActionResult> List(Guid workspaceId,Guid collectionId,CancellationToken ct)
         =>Ok(await sender.Send(new ListSavedRequestsQuery(User.GetUserId(),workspaceId,collectionId),ct));
+    [HttpGet("index")]
+    public async Task<IActionResult> Index(Guid workspaceId, Guid collectionId, CancellationToken ct)
+        => Ok(await sender.Send(new ListSavedRequestIndexQuery(User.GetUserId(), workspaceId, collectionId), ct));
+
+    [HttpGet("{requestId:guid}")]
+    public async Task<IActionResult> Detail(Guid workspaceId, Guid collectionId, Guid requestId, CancellationToken ct)
+        => Ok(await sender.Send(new GetSavedRequestQuery(User.GetUserId(), workspaceId, collectionId, requestId), ct));
+
     [HttpPost]
     public async Task<IActionResult> Save(Guid workspaceId,Guid collectionId,SaveRequestBody body,CancellationToken ct)
     {

@@ -24,9 +24,7 @@ public static class SavedRequestsAccess
             destructive ? WorkspacePermissions.CollectionWrite : WorkspacePermissions.CollectionRead,
             cancellationToken);
 
-        var collection = await collections.FindAsync(collectionId, cancellationToken);
-
-        if (collection is null || collection.WorkspaceId != workspaceId)
+        if (!await collections.ExistsInWorkspaceAsync(collectionId, workspaceId, cancellationToken))
         {
             throw AppException.NotFound("Collection not found");
         }

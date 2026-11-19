@@ -54,23 +54,16 @@ public sealed class DeleteFolderItemsHandler(
             allFolders,
             cmd.Folders.Select(folder => folder.Id));
 
-        var allRequests = await requests.ListAsync(cmd.CollectionId, ct);
-        var byRequestId = allRequests.ToDictionary(request => request.Id);
+        var selectedRequestIds = cmd.RequestIds.Distinct().ToArray();
 
-        if (cmd.RequestIds.Any(requestId => !byRequestId.ContainsKey(requestId)))
+        if (selectedRequestIds.Length > 0 &&
+            await requests.CountExistingAsync(cmd.CollectionId, selectedRequestIds, ct) != selectedRequestIds.Length)
         {
             throw AppException.Conflict("A selected request changed. Reload before deleting.");
         }
 
-        var selectedRequestIds = cmd.RequestIds.ToHashSet();
-        var requestsToDelete = allRequests.Where(request =>
-            selectedRequestIds.Contains(request.Id) ||
-            (request.FolderId is Guid folder && deletedFolders.Contains(folder))).ToArray();
-
-        foreach (var request in requestsToDelete)
-        {
-            requests.Remove(request);
-        }
+        // Executes inside the serializable transaction. No request bodies or scripts are loaded.
+        await requests.DeleteSelectedAsync(cmd.CollectionId, selectedRequestIds, deletedFolders, ct);
 
         foreach (var folder in allFolders.Where(folder => deletedFolders.Contains(folder.Id)))
         {

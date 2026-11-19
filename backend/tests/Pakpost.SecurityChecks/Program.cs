@@ -256,6 +256,11 @@ sealed class FakeCollections:ICollectionRepository
     public List<Collection> Items{get;}=[];
     public Dictionary<Guid,int> RequestCounts{get;}=[];
     public Task<Collection?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<Collection?>(Items.FirstOrDefault(x=>x.Id==id));
+    public Task<bool> ExistsInWorkspaceAsync(Guid id,Guid ws,CancellationToken ct)
+        =>Task.FromResult(Items.Any(x=>x.Id==id&&x.WorkspaceId==ws));
+    public Task<IReadOnlyList<CollectionOverview>> ListOverviewAsync(Guid ws,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<CollectionOverview>>(Items.Where(x=>x.WorkspaceId==ws)
+            .Select(x=>new CollectionOverview(x.Id,x.WorkspaceId,x.Name,RequestCounts.GetValueOrDefault(x.Id))).ToArray());
     public Task<IReadOnlyList<Collection>> ListAsync(Guid ws,CancellationToken ct)
         =>Task.FromResult<IReadOnlyList<Collection>>(Items.Where(x=>x.WorkspaceId==ws).ToArray());
     public Task<IReadOnlyDictionary<Guid,int>> CountRequestsAsync(Guid ws,CancellationToken ct)
@@ -266,8 +271,18 @@ sealed class FakeCollections:ICollectionRepository
 sealed class FakeSavedRequests:ISavedRequestRepository
 {
     public Task<SavedRequest?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<SavedRequest?>(null);
+    public Task<SavedRequest?> FindInCollectionAsync(Guid id,Guid collectionId,CancellationToken ct)
+        =>Task.FromResult<SavedRequest?>(null);
+    public Task<bool> ExistsInCollectionAsync(Guid id,Guid collectionId,CancellationToken ct)
+        =>Task.FromResult(false);
+    public Task<IReadOnlyList<SavedRequestIndex>> ListIndexAsync(Guid collectionId,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<SavedRequestIndex>>([]);
     public Task<IReadOnlyList<SavedRequest>> ListAsync(Guid id,CancellationToken ct)
         =>Task.FromResult<IReadOnlyList<SavedRequest>>([]);
+    public Task<int> CountExistingAsync(Guid col,IReadOnlyCollection<Guid> ids,CancellationToken ct)
+        =>Task.FromResult(0);
+    public Task<int> DeleteSelectedAsync(Guid col,IReadOnlyCollection<Guid> ids,IReadOnlyCollection<Guid> folders,CancellationToken ct)
+        =>Task.FromResult(0);
     public void Add(SavedRequest value){}
     public void Remove(SavedRequest value){}
 }
@@ -278,6 +293,7 @@ sealed class ForbiddenRevisionRepository:ISavedRequestRevisionRepository
         new("Forbidden operation accessed request revision history");
     public Task<bool> AnyAsync(Guid requestId,CancellationToken ct) => throw Unexpected();
     public Task<IReadOnlyList<SavedRequestRevision>> ListAsync(Guid requestId,int take,CancellationToken ct) => throw Unexpected();
+    public Task<IReadOnlyList<SavedRequestRevisionOverview>> ListOverviewAsync(Guid requestId,int take,CancellationToken ct) => throw Unexpected();
     public Task<SavedRequestRevision?> FindAsync(Guid requestId,int revision,CancellationToken ct) => throw Unexpected();
     public Task TrimAsync(Guid requestId,int keepExisting,CancellationToken ct) => throw Unexpected();
     public void Add(SavedRequestRevision revision) => throw Unexpected();

@@ -9,6 +9,21 @@ public sealed class SavedRequestRevisionRepository(PakpostDbContext db) : ISaved
     public Task<bool> AnyAsync(Guid requestId, CancellationToken ct) =>
         db.SavedRequestRevisions.AnyAsync(revision => revision.RequestId == requestId, ct);
 
+    public async Task<IReadOnlyList<SavedRequestRevisionOverview>> ListOverviewAsync(
+        Guid requestId,
+        int take,
+        CancellationToken ct) => await db.SavedRequestRevisions
+            .AsNoTracking()
+            .Where(revision => revision.RequestId == requestId)
+            .OrderByDescending(revision => revision.Revision)
+            .Take(Math.Clamp(take, 1, 50))
+            .Select(revision => new SavedRequestRevisionOverview(
+                revision.Revision,
+                revision.Action,
+                revision.ActorId,
+                revision.CreatedAt))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<SavedRequestRevision>> ListAsync(
         Guid requestId,
         int take,

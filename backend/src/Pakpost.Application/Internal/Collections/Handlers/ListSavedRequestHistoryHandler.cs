@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Mediator;
+using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Internal.Collections.DTOs;
 using Pakpost.Application.Internal.Collections.Queries;
@@ -13,8 +14,14 @@ public sealed class ListSavedRequestHistoryHandler(IWorkspaceRepository workspac
 {
     public async ValueTask<IReadOnlyList<SavedRequestHistoryItemDto>> Handle(ListSavedRequestHistoryQuery q, CancellationToken ct)
     {
-        await SavedRequestHistoryAccess.Check(q.ActorId, q.WorkspaceId, q.CollectionId, q.RequestId, false, workspaces, collections, requests, ct);
-        return (await history.ListAsync(q.RequestId, 50, ct))
-        .Select(x => new SavedRequestHistoryItemDto(x.Revision, x.Action, x.ActorId, x.CreatedAt)).ToArray();
+        await SavedRequestsAccess.Check(q.ActorId, q.WorkspaceId, q.CollectionId, workspaces, collections, ct);
+        if (!await requests.ExistsInCollectionAsync(q.RequestId, q.CollectionId, ct))
+        {
+            throw AppException.NotFound("Saved request not found");
+        }
+
+        return (await history.ListOverviewAsync(q.RequestId, 50, ct))
+            .Select(x => new SavedRequestHistoryItemDto(x.Revision, x.Action, x.ActorId, x.CreatedAt))
+            .ToArray();
     }
 }

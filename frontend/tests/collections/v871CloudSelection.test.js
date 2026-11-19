@@ -30,8 +30,12 @@ test('backend commits subtree deletes once, checks permission, and emits refresh
   const controller=read('../../../backend/src/Pakpost.Api/Controllers/CollectionFoldersController.cs');
   const code=handlers.slice(handlers.indexOf('public sealed class DeleteFolderItemsHandler'));
   assert.match(code,/CheckAccess\(\s*cmd\.ActorId,\s*cmd\.WorkspaceId,\s*cmd\.CollectionId,\s*true/);
-  assert.match(code,/deletedFolders\.Contains\(folder\)/);
-  assert.match(code,/requests\.Remove\(request\)/);
+  assert.match(code,/requests\.CountExistingAsync\(cmd\.CollectionId/);
+  assert.match(code,/requests\.DeleteSelectedAsync\(cmd\.CollectionId, selectedRequestIds, deletedFolders, ct\)/);
+  const repository=read('../../../backend/src/Pakpost.Infrastructure/Persistence/Repositories/SavedRequestRepository.cs');
+  assert.match(repository,/request\.CollectionId == collectionId/);
+  assert.match(repository,/folders\.Contains\(request\.FolderId\.Value\)/);
+  assert.match(repository,/ExecuteDeleteAsync\(ct\)/);
   assert.match(code,/folders\.Remove\(folder\)/);
   assert.equal((code.match(/unitOfWork\.SaveChangesAsync\(ct\)/g)||[]).length,1);
   assert.match(controller,/"folder\.deleted"/);

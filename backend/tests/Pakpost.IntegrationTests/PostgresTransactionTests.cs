@@ -247,6 +247,25 @@ public sealed class PostgresTransactionTests
         var fetchedRevision = await new SavedRequestRevisionRepository(db)
             .FindAsync(request.Id, revision.Revision, CancellationToken.None);
 
+        var index = await new SavedRequestRepository(db)
+            .ListIndexAsync(collection.Id, CancellationToken.None);
+        var indexed = Assert.Single(index);
+        Assert.Equal(request.Id, indexed.Id);
+        Assert.Equal(request.Revision, indexed.Revision);
+        Assert.Equal("https://private.example.test/api", indexed.Url);
+        Assert.Contains("private-header-value", indexed.HeadersJson);
+        Assert.DoesNotContain("private-body-value", indexed.HeadersJson);
+
+        var indexedDetail = await new SavedRequestRepository(db)
+            .FindInCollectionAsync(request.Id, collection.Id, CancellationToken.None);
+        Assert.Equal("private-body-value", indexedDetail!.Body);
+        Assert.Null(await new SavedRequestRepository(db)
+            .FindInCollectionAsync(request.Id, Guid.NewGuid(), CancellationToken.None));
+
+        var overview = await new SavedRequestRevisionRepository(db)
+            .ListOverviewAsync(request.Id, 50, CancellationToken.None);
+        Assert.Equal(revision.Revision, Assert.Single(overview).Revision);
+
         Assert.Equal("https://private.example.test/api", fetchedRequest!.Url);
         Assert.Equal("private-body-value", fetchedRequest.Body);
         Assert.Contains("private-header-value", fetchedRequest.HeadersJson);
@@ -285,6 +304,95 @@ public sealed class PostgresTransactionTests
             .FindAsync(request.Id, CancellationToken.None);
 
         Assert.Equal("updated-private-body", updatedDecrypted!.Body);
+    }
+
+    [Fact]
+    public async Task CollectionOverviewCountsRequestsWithoutDecryptingCollectionVariables()
+    {
+        var options = await CreateMigratedOptionsAsync();
+        var user = new User($"overview-{Guid.NewGuid():N}@example.test", "Overview", "hash");
+        var workspace = new Workspace("Overview workspace", user.Id);
+        var collection = new Collection(workspace.Id, "API collection", user.Id);
+        collection.SetVariables("[{\"Key\":\"secret\",\"StoredValue\":\"private-data\"}]");
+
+        await using (var setup = NewContext(options))
+        {
+            setup.Users.Add(user);
+            setup.Workspaces.Add(workspace);
+            setup.Collections.Add(collection);
+            setup.SavedRequests.AddRange(
+                new SavedRequest(collection.Id, "A", "GET", "https://example.test/a", "{}", ""),
+                new SavedRequest(collection.Id, "B", "POST", "https://example.test/b", "{}", "payload"));
+            await setup.SaveChangesAsync();
+        }
+
+        // Metadata reads must not require unwrapping the Workspace DEK.
+        await using var metadataOnlyDb = new PakpostDbContext(options);
+        var repository = new CollectionRepository(metadataOnlyDb);
+        var overview = Assert.Single(await repository.ListOverviewAsync(workspace.Id, CancellationToken.None));
+
+        Assert.Equal(collection.Id, overview.Id);
+        Assert.Equal("API collection", overview.Name);
+        Assert.Equal(2, overview.RequestCount);
+        Assert.True(await repository.ExistsInWorkspaceAsync(collection.Id, workspace.Id, CancellationToken.None));
+        Assert.False(await repository.ExistsInWorkspaceAsync(collection.Id, Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task BulkDeleteUsesSetBasedSqlAndRespectsTransactionRollbackAndCollectionBoundary()
+    {
+        var options = await CreateMigratedOptionsAsync();
+        var user = new User($"set-delete-{Guid.NewGuid():N}@example.test", "Bulk delete", "hash");
+        var workspace = new Workspace("Bulk delete workspace", user.Id);
+        var first = new Collection(workspace.Id, "First", user.Id);
+        var second = new Collection(workspace.Id, "Second", user.Id);
+        var folder = new CollectionFolder(first.Id, null, "Nested");
+        var direct = new SavedRequest(first.Id, "Direct", "GET", "https://example.test/one", "{}", "");
+        var nested = new SavedRequest(first.Id, "Nested", "GET", "https://example.test/two", "{}", "", folderId: folder.Id);
+        var unrelated = new SavedRequest(second.Id, "Keep", "GET", "https://example.test/three", "{}", "");
+
+        await using (var setup = NewContext(options))
+        {
+            setup.Users.Add(user);
+            setup.Workspaces.Add(workspace);
+            setup.Collections.AddRange(first, second);
+            setup.CollectionFolders.Add(folder);
+            setup.SavedRequests.AddRange(direct, nested, unrelated);
+            await setup.SaveChangesAsync();
+        }
+
+        await using (var db = NewContext(options))
+        {
+            var repository = new SavedRequestRepository(db);
+            Assert.Equal(1, await repository.CountExistingAsync(first.Id, [direct.Id], CancellationToken.None));
+            Assert.Equal(0, await repository.CountExistingAsync(first.Id, [unrelated.Id], CancellationToken.None));
+
+            await using (await db.BeginSerializableAsync(CancellationToken.None))
+            {
+                Assert.Equal(2, await repository.DeleteSelectedAsync(
+                    first.Id, [direct.Id, unrelated.Id], [folder.Id], CancellationToken.None));
+            }
+        }
+
+        await using (var afterRollback = NewContext(options))
+        {
+            Assert.True(await afterRollback.SavedRequests.AnyAsync(item => item.Id == direct.Id));
+            Assert.True(await afterRollback.SavedRequests.AnyAsync(item => item.Id == nested.Id));
+        }
+
+        await using (var db = NewContext(options))
+        {
+            var repository = new SavedRequestRepository(db);
+            await using var transaction = await db.BeginSerializableAsync(CancellationToken.None);
+            Assert.Equal(2, await repository.DeleteSelectedAsync(
+                first.Id, [direct.Id], [folder.Id], CancellationToken.None));
+            await transaction.CommitAsync(CancellationToken.None);
+        }
+
+        await using var verification = NewContext(options);
+        Assert.False(await verification.SavedRequests.AnyAsync(item => item.Id == direct.Id));
+        Assert.False(await verification.SavedRequests.AnyAsync(item => item.Id == nested.Id));
+        Assert.True(await verification.SavedRequests.AnyAsync(item => item.Id == unrelated.Id));
     }
 
     private static readonly Lazy<WorkspaceCryptography> TestCryptography = new(() =>

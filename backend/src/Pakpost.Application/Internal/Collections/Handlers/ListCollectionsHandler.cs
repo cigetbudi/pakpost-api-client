@@ -21,15 +21,14 @@ public sealed class ListCollectionsHandler(
             query.ActorId,
             ct);
 
-        var items = await collections.ListAsync(query.WorkspaceId, ct);
-        var counts = await collections.CountRequestsAsync(query.WorkspaceId, ct);
+        var items = await collections.ListOverviewAsync(query.WorkspaceId, ct);
 
         return items
             .Select(collection => new CollectionDto(
                 collection.Id,
                 collection.WorkspaceId,
                 collection.Name,
-                counts.TryGetValue(collection.Id, out var count) ? count : 0))
+                collection.RequestCount))
             .ToArray();
     }
 }

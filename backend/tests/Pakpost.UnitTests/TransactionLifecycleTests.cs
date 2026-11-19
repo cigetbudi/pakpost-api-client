@@ -28,15 +28,22 @@ public sealed class TransactionLifecycleTests
         context.Folders.ListAsync(context.Collection.Id, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<CollectionFolder>>([parent, child]));
 
-        context.Requests.ListAsync(context.Collection.Id, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<SavedRequest>>([request]));
-
-        var removedRequests = new List<SavedRequest>();
         var removedFolders = new List<CollectionFolder>();
+        var deletedRequests = false;
         var saved = false;
 
-        context.Requests.When(repository => repository.Remove(Arg.Any<SavedRequest>()))
-            .Do(call => removedRequests.Add(call.Arg<SavedRequest>()));
+        context.Requests.DeleteSelectedAsync(
+                context.Collection.Id,
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                Assert.Empty(call.ArgAt<IReadOnlyCollection<Guid>>(1));
+                Assert.Equal(2, call.ArgAt<IReadOnlyCollection<Guid>>(2).Count);
+                deletedRequests = true;
+                return Task.FromResult(1);
+            });
 
         context.Folders.When(repository => repository.Remove(Arg.Any<CollectionFolder>()))
             .Do(call => removedFolders.Add(call.Arg<CollectionFolder>()));
@@ -44,7 +51,7 @@ public sealed class TransactionLifecycleTests
         context.UnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
-                Assert.Single(removedRequests);
+                Assert.True(deletedRequests);
                 Assert.Equal(2, removedFolders.Count);
                 saved = true;
                 return Task.FromResult(3);
@@ -82,9 +89,6 @@ public sealed class TransactionLifecycleTests
         context.Folders.ListAsync(context.Collection.Id, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<CollectionFolder>>([folder]));
 
-        context.Requests.ListAsync(context.Collection.Id, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<SavedRequest>>([]));
-
         context.UnitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException<int>(new InvalidOperationException("Save failed")));
 
@@ -104,6 +108,39 @@ public sealed class TransactionLifecycleTests
 
         await context.Transaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
         await context.Transaction.Received(1).DisposeAsync();
+    }
+
+    [Fact]
+    public async Task MissingExplicitRequestDoesNotDeleteAnything()
+    {
+        var context = CreateContext();
+        var requestId = Guid.NewGuid();
+
+        context.Folders.ListAsync(context.Collection.Id, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<CollectionFolder>>([]));
+        context.Requests.CountExistingAsync(
+                context.Collection.Id,
+                Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(0));
+
+        var error = await Assert.ThrowsAsync<AppException>(async () =>
+            await context.CreateDeleteHandler().Handle(
+                new DeleteFolderItemsCommand(
+                    context.ActorId,
+                    context.WorkspaceId,
+                    context.Collection.Id,
+                    [],
+                    [requestId]),
+                CancellationToken.None));
+
+        Assert.Equal(409, error.StatusCode);
+        await context.Requests.DidNotReceive().DeleteSelectedAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<IReadOnlyCollection<Guid>>(),
+            Arg.Any<IReadOnlyCollection<Guid>>(),
+            Arg.Any<CancellationToken>());
+        await context.Transaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -156,8 +193,8 @@ public sealed class TransactionLifecycleTests
                     WorkspaceRole.Member,
                     [WorkspaceAccessRole.Developer])));
 
-        collections.FindAsync(collection.Id, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<Collection?>(collection));
+        collections.ExistsInWorkspaceAsync(collection.Id, workspaceId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true));
 
         transactions.BeginSerializableAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(transaction));

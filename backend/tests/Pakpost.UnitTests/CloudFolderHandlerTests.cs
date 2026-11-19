@@ -130,8 +130,8 @@ public sealed class CloudFolderHandlerTests
             .Returns(Task.FromResult<WorkspaceMember?>(
                 new WorkspaceMember(workspaceId, actorId, WorkspaceRole.Member, [role])));
 
-        collections.FindAsync(collection.Id, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<Collection?>(collection));
+        collections.ExistsInWorkspaceAsync(collection.Id, workspaceId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true));
 
         unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(1));

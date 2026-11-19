@@ -227,8 +227,15 @@ export function createCollectionActions(dependencies) {
         const rows=workspaceRequestLists[workspaceCollectionKey(selectedWs,item.collectionId)]||savedRequests;
         const request=rows.find(x=>x.id===item.requestId);
         if(!request){setNotice('Open the Cloud request first, then select Versions.');return;}
-        loadSavedRequest({...request,collectionId:item.collectionId});
-        openRequestHistory(activeTabRef.current,{scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,requestId:item.requestId,revision:request.revision});return;
+        const source={scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId,requestId:item.requestId,revision:request.revision};
+        if(request.isIndex){
+          Promise.resolve(loadSavedRequest({...request,collectionId:item.collectionId}))
+            .then(opened=>{if(opened)openRequestHistory(activeTabRef.current,source);});
+        }else{
+          loadSavedRequest({...request,collectionId:item.collectionId});
+          openRequestHistory(activeTabRef.current,source);
+        }
+        return;
       }
       if(action==='variables'){openCollectionVariables({scope:'local',collectionId,name:collection.name});return;}
       if(action==='runCollection'){openCollectionRunner({scope:'local',collectionId,name:collection.name});return;}
@@ -263,7 +270,7 @@ export function createCollectionActions(dependencies) {
       const base=`/api/workspaces/${workspaceId}/collections`;
       if(!valid())return;
       try {
-        const latest=await api(`${base}/${collectionId}/requests`,'GET',undefined,auth);
+        const latest=await api(`${base}/${collectionId}/requests/index`,'GET',undefined,auth);
         if(!valid())return;
         const current=workspaceRequestLists[workspaceCollectionKey(workspaceId,collectionId)]||[];
         const retained=new Set(latest.map(r=>r.id));
@@ -309,7 +316,7 @@ export function createCollectionActions(dependencies) {
           {...t,source:{...t.source,collectionId:targetCollectionId,revision:saved.revision}}:t));
         invalidateWorkspaceRequestLists(selectedWs,[collectionId,targetCollectionId]);
         if(selectedCol===collectionId){
-          const latest=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests`,'GET',undefined,token);
+          const latest=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests/index`,'GET',undefined,token);
           setSavedRequests(latest);
           setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:latest}));
         }
@@ -389,7 +396,7 @@ export function createCollectionActions(dependencies) {
             {name:`${req.name} (copy)`,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript,folderId:req.folderId},token);
           invalidateWorkspaceRequestLists(selectedWs,[item.collectionId]);
           if(selectedCol===item.collectionId){
-            const latest=await api(`${base}/${item.collectionId}/requests`,'GET',undefined,token);
+            const latest=await api(`${base}/${item.collectionId}/requests/index`,'GET',undefined,token);
             setSavedRequests(latest);
             setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,item.collectionId)]:latest}));
           }
@@ -463,7 +470,10 @@ export function createCollectionActions(dependencies) {
           if(selectedCol===collectionId)setSelectedCol('');
         }else if(action==='renameRequest'){
           const item=(workspaceRequestLists[workspaceCollectionKey(selectedWs,collectionId)]||savedRequests).find(x=>x.id===requestId);if(!item)return;
-          const saved=await api(`${base}/requests/${requestId}`,'PUT',{...item,name},token);
+          const original=item.isIndex
+            ?await api(`${base}/requests/${requestId}`,'GET',undefined,token)
+            :item;
+          const saved=await api(`${base}/requests/${requestId}`,'PUT',{...original,name},token);
           adoptSavedRevision(saved);
           setSavedRequests(old=>old.map(x=>x.id===requestId?saved:x));
           setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:(old[workspaceCollectionKey(selectedWs,collectionId)]||[]).map(x=>x.id===requestId?saved:x)}));

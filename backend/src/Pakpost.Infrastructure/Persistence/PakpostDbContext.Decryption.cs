@@ -69,6 +69,30 @@ public sealed partial class PakpostDbContext
         }
     }
 
+    public async Task<(string Url, string HeadersJson)> DecryptRequestIndexAsync(
+        Guid workspaceId,
+        Guid requestId,
+        string encryptedUrl,
+        string encryptedHeaders,
+        CancellationToken ct)
+    {
+        if (_cryptography is null)
+        {
+            throw new InvalidOperationException("Workspace encryption service is required for reads");
+        }
+
+        var key = await GetWorkspaceKeyAsync(workspaceId, ct);
+        var headerCiphertext = JsonSerializer.Deserialize<string>(encryptedHeaders)
+            ?? throw new CryptographicException("Invalid encrypted request header JSON");
+
+        var url = _cryptography.Unprotect(key, workspaceId, "request", requestId,
+            nameof(SavedRequest.Url), encryptedUrl);
+        var headers = _cryptography.Unprotect(key, workspaceId, "request", requestId,
+            nameof(SavedRequest.HeadersJson), headerCiphertext);
+
+        return (url, headers);
+    }
+
     public async Task DecryptEnvironmentVariableAsync(
         RequestEnvironmentVariable variable,
         Guid workspaceId,
