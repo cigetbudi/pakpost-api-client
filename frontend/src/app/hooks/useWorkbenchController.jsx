@@ -38,6 +38,7 @@ import { reconcileRequestTabs, synchronizeWorkspaceChanges } from '../../feature
 import { executeWorkbenchRequest } from '../../features/requests/services/executeWorkbenchRequest.js';
 import { buildRequestCommand, buildRedactedCodeRequest, buildRequestPreview } from '../../features/requests/services/requestCommand.js';
 import { invalidateBrowserSession, planSignedOutWorkbench } from '../../features/auth/services/logoutWorkbench.js';
+import { createAuthTabSync } from '../../features/auth/services/authTabSync.js';
 import { useWorkspaceRealtimeLifecycle } from '../../features/realtime/hooks/useWorkspaceRealtimeLifecycle.js';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
@@ -132,6 +133,7 @@ export function useWorkbenchController() {
   useEffect(()=>{if(new URLSearchParams(window.location.search).has('invite')){const u=new URL(window.location.href);u.searchParams.delete('invite');window.history.replaceState({},'',u.pathname+u.search+u.hash)}},[]);
   const currentTokenRef=useRef(token);
   currentTokenRef.current=token;
+  const authTabSyncRef=useRef(null);
   // Shared header storage context for both Collections and Environments.
   // The legacy cached envScope keeps existing users on their last chosen storage.
   const [storageScope,setStorageScope] = useState(()=>allowedStorageScope(!!storedToken(),CACHED?.envScope || defaultStorageScope(!!storedToken())));
@@ -545,7 +547,10 @@ export function useWorkbenchController() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  function logout() {
+  function logout() { performLogout(true); }
+  function performLogout(broadcast) {
+    const previousToken=currentTokenRef.current;
+    if(broadcast)authTabSyncRef.current?.announceLogout(previousToken);
     // Auth invalidation must happen BEFORE reading any cached draft: missing
     // Local snapshots previously threw inside restoreDraft and aborted logout.
     currentTokenRef.current='';
@@ -581,7 +586,25 @@ export function useWorkbenchController() {
     setAuthOpen, setCanCreateWorkspace, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, setGoogleLinked,
     setMe, setNotice, setPage, setSelectedWs, setStorageScope, setToken,
     setWorkspaceEnvironmentResult, setWorkspaces, token,
+    announceSession:()=>authTabSyncRef.current?.announceSession(),
   });
+  useEffect(()=>{
+    const sync=createAuthTabSync({
+      getToken:()=>currentTokenRef.current,
+      acceptToken:sharedToken=>{
+        if(currentTokenRef.current)return; // Never overwrite an already signed-in account.
+        try{sessionStorage.setItem('pakpost_token',sharedToken);}catch{/* Storage may be blocked. */}
+        currentTokenRef.current=sharedToken;
+        setToken(sharedToken);
+        setStorageScope(STORAGE_WORKSPACE);
+        setAuthOpen(false);
+      },
+      onRemoteLogout:()=>performLogout(false),
+    });
+    authTabSyncRef.current=sync;
+    sync.requestSession();
+    return()=>{sync.close();if(authTabSyncRef.current===sync)authTabSyncRef.current=null;};
+  },[]);
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
   useWorkspaceRealtimeLifecycle({
     enabled: collectionsScope===STORAGE_WORKSPACE,

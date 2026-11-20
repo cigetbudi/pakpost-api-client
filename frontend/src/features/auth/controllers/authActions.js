@@ -2,7 +2,7 @@
 // by App; no global state, persistence middleware or extra network requests.
 export function createAuthActions(dependencies) {
   const {
-    STORAGE_WORKSPACE, api, authBusy, authForm, authMode, currentTokenRef, getMessage,
+    STORAGE_WORKSPACE, announceSession, api, authBusy, authForm, authMode, currentTokenRef, getMessage,
     googleLinkPassword, setAuthBusy, setAuthError, setAuthForm, setAuthMode, setAuthOpen, setCanCreateWorkspace,
     setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, setGoogleLinked, setMe, setNotice, setPage,
     setSelectedWs, setStorageScope, setToken, setWorkspaceEnvironmentResult, setWorkspaces, token,
@@ -20,6 +20,8 @@ export function createAuthActions(dependencies) {
   }
   function completeSignIn(data) {
     sessionStorage.setItem('pakpost_token', data.accessToken);
+    if(currentTokenRef)currentTokenRef.current=data.accessToken;
+    announceSession?.();
     setToken(data.accessToken);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
     setAuthForm({ displayName: '', email: '', password: '' });
     setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
