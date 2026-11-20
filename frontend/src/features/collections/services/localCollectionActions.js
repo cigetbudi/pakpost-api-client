@@ -104,6 +104,42 @@ export function applyLocalAction(collections,action,idFactory=uid){
       }));col.requests.push(...clones);
       for(const [key,value] of Object.entries(col.folderDocs||{})){let entry;try{entry=JSON.parse(key)}catch{continue}if(pathEquals(entry.slice(0,path.length),path))col.folderDocs[JSON.stringify([...path.slice(0,-1),`${path.at(-1)} (copy)`,...entry.slice(path.length)])]=value;}break;
     }
+    case 'moveFolder': {
+      const source=action.folderPath;
+      const parent=action.targetFolderPath;
+      if(!Array.isArray(source)||!source.length||!Array.isArray(parent))
+        throw Error('Invalid folder move');
+      if(action.targetCollectionId&&action.targetCollectionId!==col.id)
+        throw Error('Move folders within the same Local collection');
+      if(pathEquals(source,parent.slice(0,source.length)))
+        throw Error('Cannot move a folder into itself or its descendants');
+      const destination=[...parent,source.at(-1)];
+      const allExistingPaths=[...col.requests.map(row=>row.folderPath||[])];
+      for(const key of Object.keys(col.folderDocs||{})){
+        try{allExistingPaths.push(JSON.parse(key));}catch{}
+      }
+      if(!allExistingPaths.some(path=>pathEquals(path.slice(0,source.length),source)))
+        throw Error('Source folder no longer exists');
+      if(pathEquals(source,destination))break;
+      const allPaths=allExistingPaths;
+      const exists=allPaths.some(path=>path.length>=destination.length&&
+        pathEquals(path.slice(0,destination.length),destination));
+      if(exists)throw Error('A folder with this name already exists under the destination');
+      if(destination.length + Math.max(0,...allPaths.filter(path=>pathEquals(path.slice(0,source.length),source))
+        .map(path=>path.length-source.length))>24)throw Error('Folder nesting limit exceeded');
+      for(const row of col.requests){
+        if(pathEquals((row.folderPath||[]).slice(0,source.length),source))
+          row.folderPath=[...destination,...row.folderPath.slice(source.length)];
+      }
+      const docs={};
+      for(const [key,value] of Object.entries(col.folderDocs||{})){
+        let path;try{path=JSON.parse(key);}catch{docs[key]=value;continue;}
+        docs[JSON.stringify(pathEquals(path.slice(0,source.length),source)?
+          [...destination,...path.slice(source.length)]:path)]=value;
+      }
+      col.folderDocs=docs;
+      break;
+    }
     case 'moveRequest': {
       if(!request)throw Error('Request not found');
       const target=next.find(c=>c.id===(action.targetCollectionId||col.id));if(!target)throw Error('Destination missing');

@@ -34,4 +34,4 @@ cd "$root"
 
 dotnet test \
     backend/tests/Pakpost.IntegrationTests/Pakpost.IntegrationTests.csproj \
-    --no-restore
+    --nologo

@@ -1,5 +1,5 @@
 import React from 'react';
-import {ArrowDownUp, Braces, Copy, Download, Ellipsis, FileText, FolderPlus, GitCompareArrows, History, Pencil, Play, Plus, Trash2} from 'lucide-react';
+import {ArrowDownUp, Braces, Copy, Download, Ellipsis, FileText, FolderPlus, GitCompareArrows, History, MoveRight, Pencil, Play, Plus, Trash2} from 'lucide-react';
 
 // One menu row shared by local collections, Neon collections, and environments.
 // Keep existing action IDs intact; these are visual icons, not new behaviors.
@@ -16,6 +16,8 @@ const actionIcons = {
   sortMethod: ArrowDownUp,
   exportCollection: Download,
   deleteCollection: Trash2,
+  moveFolder: MoveRight,
+  organizeFolders: MoveRight,
   renameFolder: Pencil,
   duplicateFolder: Copy,
   sortFolder: ArrowDownUp,

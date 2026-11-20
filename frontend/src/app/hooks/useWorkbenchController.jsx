@@ -1,3 +1,4 @@
+import {CLOUD_SERVER_PAGING_THRESHOLD} from '../../features/collections/services/cloudRenderBudget.js';
 import { useEnvironmentDataLifecycle } from '../../features/environments/hooks/useEnvironmentDataLifecycle.js';
 import { useWorkbenchPreferencesPersistence } from './useWorkbenchPreferencesPersistence.js';
 import { useCommandPaletteState } from './useCommandPaletteState.js';
@@ -402,6 +403,7 @@ export function useWorkbenchController() {
   function invalidateWorkspaceRequestLists(...args) { return collectionActions.invalidateWorkspaceRequestLists(...args); }
   function refreshCloudCollection(...args) { return collectionActions.refreshCloudCollection(...args); }
   function moveLocalRequest(...args) { return collectionActions.moveLocalRequest(...args); }
+  function moveLocalFolder(...args) { return collectionActions.moveLocalFolder(...args); }
   const WORKSPACE_DRAG='application/x-pakpost-workspace-request';
   async function moveWorkspaceRequest(...args) { return collectionActions.moveWorkspaceRequest(...args); }
   function showWorkspaceMenu(...args) { return collectionActions.showWorkspaceMenu(...args); }
@@ -624,17 +626,24 @@ export function useWorkbenchController() {
     let cancelled=false;
     const key=workspaceCollectionKey(selectedWs,selectedCol);
     const epoch=workspaceFetchEpoch.current;
+    // Large Collection indices are paged by CloudFolderTree instead of being
+    // preloaded in full. Keep full list API for export and Collection Runner.
+    if(!collections.some(col=>col.id===selectedCol)){setSavedRequests([]);return;}
+    if(Number(collections.find(col=>col.id===selectedCol)?.requestCount)>CLOUD_SERVER_PAGING_THRESHOLD){
+      setSavedRequests([]);return;
+    }
     setSavedRequests(workspaceRequestLists[key]||[]);
     api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/index`, 'GET', undefined, token)
       .then(items=>{if(cancelled||epoch!==workspaceFetchEpoch.current)return;setSavedRequests(items);setWorkspaceRequestLists(old=>({...old,[key]:items}));})
       .catch(e=>{if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
     return ()=>{cancelled=true;};
-  }, [selectedWs, selectedCol, token]);
+  }, [selectedWs, selectedCol, token, collections]);
   // Fetch children for *every* expanded Neon collection, not only the selected one.
   // Fetch at most four new lists per render to avoid flooding the backend on Expand all.
   useEffect(()=>{
     if(!token||!selectedWs||explorerTab!=='collections'||collectionsScope!==STORAGE_WORKSPACE)return;
     const next=collections.filter(col=>col.id!==selectedCol
+      && Number(col.requestCount)<=CLOUD_SERVER_PAGING_THRESHOLD
       && isWorkspaceCollectionOpen(expandedCollections,selectedWs,col.id,selectedCol)
       && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,col.id))
       && !workspaceRequestsPending.current.has(workspaceCollectionKey(selectedWs,col.id))).slice(0,4);
@@ -747,7 +756,7 @@ export function useWorkbenchController() {
   });
   // Realtime operations use the same Workbench state as the old inline handlers.
   const realtimeActions = createRealtimeActions({
-    api, activeTabRef, currentTokenRef, draftsRef, expandedCollections, getWorkspaceCollections, getWorkspaceRequests,
+    api, activeTabRef, currentTokenRef, collections, draftsRef, expandedCollections, getWorkspaceCollections, getWorkspaceRequests,
     openTabsRef, realtimeHandlerRef, realtimeQueueRef, realtimeTimerRef, reconcileRequestTabs, restoreDraft,
     selectedColRef, selectedWorkspaceRef, setCollections, setOpenTabs, setRemoteAlerts, setSavedRequests,
     setSelectedCol, setWorkspaceRequestLists, snapshotRef, synchronizeWorkspaceChanges, workspaceDraft, workspaceRequestLists,
@@ -868,12 +877,12 @@ export function useWorkbenchController() {
     createEnvironment, deleteEnvironment, duplicateEnvironment, openExportChoice, importEnvironmentFile, codePreviewRequest, buildCodeRequest,
     snapshot, importRequestsAndEnvironments, setNotice, loadRequest, setSelectedTeam, setWsTab, setExplorerSearch,
     setCollectionSort, expandOrCollapseAllCollections, openCollectionImport, setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest,
-    openLocalExample, handleLocalMenu, moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
+    openLocalExample, handleLocalMenu, moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
     createCollectionDraft, setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample, draftsRef, CodeSidebar, ImportExportSidebar,
     WorkbenchSettings, setTheme, split, setSplit, interceptorMode, setInterceptorMode, extensionStatus,
     refreshExtensionStatus, RequestTabs, requestWorkbenchStore, remoteAlerts, tabDragRef, closeTab, showTabContext,
     setTabMenu, addTab, runnerLoading, openRunnerForCurrentCollection, consoleOpen, setConsoleOpen, realtimeStatus,
-    openRequestHistory, workspaceMenu, MenuActionItem, handleWorkspaceMenu, tabMenu, performTabAction, Copy,
+    openRequestHistory, workspaceMenu, MenuActionItem, handleWorkspaceMenu, setWorkspaceMenu, tabMenu, performTabAction, Copy,
     openSaveAs, Save, X, ArrowRight, AlertTriangle, showConflictDialog, RequestWorkbench,
     AUTH_OPTIONS, ChevronRight, Columns2, KeyValueEditor, LayoutPanelTop, METHODS, Pencil,
     RequestBody, ResponsePane, ScriptEditor, Send, ShieldCheck, Suspense, TextEditor,

@@ -3,13 +3,15 @@ import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History,
 import { RetroSelect } from '../../../components/ui/RetroSelect.jsx';
 import { EnvironmentExplorer } from '../../environments/components/EnvironmentExplorer.jsx';
 import { LocalCollectionsTree } from './LocalCollectionsTree.jsx';
-import { CloudFolderTree } from './CloudFolderTree.jsx';
+import { CloudFolderTree, CLOUD_FOLDER_DRAG } from './CloudFolderTree.jsx';
 import {activeCloudTabForCollection} from '../services/cloudActiveTab.js';
 import { isDarkAppearance } from '../../settings/services/appearance.js';
 import { canWorkspace } from '../../workspace/services/workspaceRoles.js';
 import { STORAGE_LOCAL, STORAGE_WORKSPACE, cloudEndpointCount } from '../../import-export/services/storageScope.js';
 import { isWorkspaceCollectionOpen, workspaceCollectionKey } from '../services/collectionExpansion.js';
 import { decodeStoredHeaders } from '../../requests/services/requestMetadata.js';
+import {CLOUD_SERVER_PAGING_THRESHOLD} from '../services/cloudRenderBudget.js';
+import {isFolderDrag,readFolderDrag,endFolderDrag} from '../services/folderDrag.js';
 import { statusTone } from '../../requests/services/responseExamples.js';
 
 // Only the visible explorer mounts. Code generator and import/export panels are
@@ -27,7 +29,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   const { codePreviewRequest, buildCodeRequest, snapshot, importRequestsAndEnvironments, setNotice, loadRequest } = actions;
   const { setSelectedTeam, setWsTab, setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport } = actions;
   const { setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu } = actions;
-  const { moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, toggleWorkspaceCollectionById, createCollectionDraft, handleWorkspaceMenu, refreshCloudCollection } = actions;
+  const { moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, toggleWorkspaceCollectionById, createCollectionDraft, handleWorkspaceMenu, refreshCloudCollection } = actions;
   const { setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample } = actions;
   const { draftsRef } = refs;
   const { CodeSidebar, ImportExportSidebar } = deferred;
@@ -75,18 +77,34 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
           <div className="pp-side-subhead"><span>COLLECTIONS</span><span>{collectionsScope===STORAGE_LOCAL?localCollections.length:collections.length}</span></div>
           <div className="pp-side-scroll">
             {collectionsScope===STORAGE_LOCAL&&localCollections.length>0&&<>
-              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onOpenExample={openLocalExample} onAction={handleLocalMenu} onMove={moveLocalRequest} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
+              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onOpenExample={openLocalExample} onAction={handleLocalMenu} onMove={moveLocalRequest} onMoveFolder={moveLocalFolder} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
             </>}
             {token && collectionsScope===STORAGE_WORKSPACE ? <>
               {visibleCollections.map(c => {
                 const opened=isWorkspaceCollectionOpen(expandedCollections,selectedWs,c.id,selectedCol);
                 const requestKey=workspaceCollectionKey(selectedWs,c.id);
-                const requests=workspaceRequestLists[requestKey]||[];
-                const endpointCount=cloudEndpointCount(c,workspaceRequestLists,requestKey);
+                const paged=Number(c.requestCount)>CLOUD_SERVER_PAGING_THRESHOLD;
+                const requests=paged?[]:(workspaceRequestLists[requestKey]||[]);
+                const endpointCount=paged?Number(c.requestCount)||0:cloudEndpointCount(c,workspaceRequestLists,requestKey);
                 const activeCloud=activeCloudTabForCollection(openTabs,activeTabId,selectedWs,c.id);
                 return <div key={c.id}>
-                <div className="pp-tree-item-container" style={{'--pp-tree-depth':0}} onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(WORKSPACE_DRAG))e.preventDefault()}} onDrop={e=>moveWorkspaceRequest(e,c.id)}>
-                  <button type="button" aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row pp-explorer-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} onClick={() => toggleWorkspaceCollectionById(c.id)}>
+                <div className="pp-tree-item-container" style={{'--pp-tree-depth':0}}
+                  onDragOver={e=>{if(canEditCloud&&([...(e.dataTransfer.types||[])].includes(WORKSPACE_DRAG)||isFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG))){
+                    e.preventDefault();e.dataTransfer.dropEffect='move';
+                  }}}
+                  onDrop={e=>{
+                    if(!canEditCloud)return;
+                    if(isFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG)){
+                      e.preventDefault();e.stopPropagation();
+                      const item=readFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG);
+                      endFolderDrag();if(!item)return;
+                      if(item.collectionId!==c.id){setNotice('Moving Cloud folders across collections is not supported');return;}
+                      window.dispatchEvent(new CustomEvent('pakpost:cloud-folder-drop-root',{detail:{collectionId:c.id,folderId:item.folderId}}));
+                      return;
+                    }
+                    moveWorkspaceRequest(e,c.id);
+                  }}>
+                  <button type="button" aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row pp-explorer-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} title={`${c.name} · Collection root (open to move folders inside)`} onClick={() => toggleWorkspaceCollectionById(c.id)}>
                     {opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
                     <FolderClosed className="pp-cloud-folder-icon" size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
                   </button>
@@ -97,6 +115,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                 </div>
                 <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}><div className="pp-collection-motion-inner">
                 <CloudFolderTree workspaceId={selectedWs} collectionId={c.id} token={token} open={opened} requests={requests}
+                  paged={paged} virtualize={!Object.entries(expandedWorkspaceExamples).some(([key,value])=>key.startsWith(`${selectedWs}:${c.id}:`)&&value)}
                   activeTabId={activeTabId} activeRequestId={activeCloud.requestId}
                   search={explorerSearch} canEdit={canEditCloud} requestDrag={WORKSPACE_DRAG} sortByName={workspaceSorted[c.id]==='name'}
                   onNotice={setNotice} onCreateDraft={folderId=>createCollectionDraft('workspace',c.id,[],folderId)}
@@ -125,7 +144,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                     <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})}><Settings2 size={14}/></button>
                   </div>)}</div></div>}
                   </React.Fragment>}} />
-                {opened && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,c.id)) && <div className="pp-tree-hint">Loading requests…</div>}
+                {opened && !paged && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,c.id)) && <div className="pp-tree-hint">Loading requests…</div>}
                 </div></div>
               </div>})}
               {!collections.length && <div className="pp-tree-hint">{selectedWs?'No collections yet. Start by creating one.':'No workspace selected. Create one to store Cloud collections.'}</div>}

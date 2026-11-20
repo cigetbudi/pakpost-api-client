@@ -271,6 +271,14 @@ export function createCollectionActions(dependencies) {
       const base=`/api/workspaces/${workspaceId}/collections`;
       if(!valid())return;
       try {
+        const collection=collections.find(item=>item.id===collectionId);
+        if(Number(collection?.requestCount)>800){
+          window.dispatchEvent(new CustomEvent('pakpost:cloud-paged-refresh',
+            {detail:{workspaceId,collectionId}}));
+          const fresh=await api(base,'GET',undefined,auth);
+          if(valid())setCollections(fresh);
+          return;
+        }
         const latest=await api(`${base}/${collectionId}/requests/index`,'GET',undefined,auth);
         if(!valid())return;
         const current=workspaceRequestLists[workspaceCollectionKey(workspaceId,collectionId)]||[];
@@ -301,6 +309,18 @@ export function createCollectionActions(dependencies) {
         {...t,source:{...t.source,collectionId:targetCollectionId}}:t));
     }
 
+  function moveLocalFolder({collectionId,folderPath,targetCollectionId,targetFolderPath}) {
+      if(collectionId!==targetCollectionId) {
+        setNotice('Folder moves between different Local collections are not supported');
+        return;
+      }
+      // Validate synchronously so an illegal drop cannot throw during a later
+      // React state update and take down the entire workbench.
+      const action={type:'moveFolder',collectionId,folderPath,targetCollectionId,targetFolderPath};
+      try { setLocalCollections(applyLocalAction(localCollections,action)); }
+      catch(error){ setNotice(getMessage(error)); }
+    }
+
   async function moveWorkspaceRequest(e,targetCollectionId,targetFolderId=null){
       e.preventDefault();e.stopPropagation();
       if(!token)return;
@@ -316,7 +336,10 @@ export function createCollectionActions(dependencies) {
         setOpenTabs(ts=>ts.map(t=>t.source?.scope==='workspace'&&t.source.workspaceId===selectedWs&&t.source.requestId===requestId?
           {...t,source:{...t.source,collectionId:targetCollectionId,revision:saved.revision}}:t));
         invalidateWorkspaceRequestLists(selectedWs,[collectionId,targetCollectionId]);
-        if(selectedCol===collectionId){
+        if(selectedCol===collectionId&&Number(collections.find(col=>col.id===collectionId)?.requestCount)>800){
+          window.dispatchEvent(new CustomEvent('pakpost:cloud-paged-refresh',
+            {detail:{workspaceId:selectedWs,collectionId}}));
+        }else if(selectedCol===collectionId){
           const latest=await api(`/api/workspaces/${selectedWs}/collections/${collectionId}/requests/index`,'GET',undefined,token);
           setSavedRequests(latest);
           setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,collectionId)]:latest}));
@@ -396,10 +419,16 @@ export function createCollectionActions(dependencies) {
             {name:`${req.name} (copy)`,method:req.method,url:req.url,headersJson:req.headersJson,body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript,folderId:req.folderId},token);
           invalidateWorkspaceRequestLists(selectedWs,[item.collectionId]);
           if(selectedCol===item.collectionId){
-            const latest=await api(`${base}/${item.collectionId}/requests/index`,'GET',undefined,token);
-            setSavedRequests(latest);
-            setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,item.collectionId)]:latest}));
+            if(Number(collections.find(col=>col.id===item.collectionId)?.requestCount)>800){
+              window.dispatchEvent(new CustomEvent('pakpost:cloud-paged-refresh',
+                {detail:{workspaceId:selectedWs,collectionId:item.collectionId}}));
+            }else{
+              const latest=await api(`${base}/${item.collectionId}/requests/index`,'GET',undefined,token);
+              setSavedRequests(latest);
+              setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(selectedWs,item.collectionId)]:latest}));
+            }
           }
+          setCollections(await api(base,'GET',undefined,token));
         }
       });
     }
@@ -505,5 +534,5 @@ export function createCollectionActions(dependencies) {
       }); if(!success)return; }
       setActionDialog(null);
     }
-  return { refreshCloudCollection, createExplorerCollection, openCollectionImport, submitCollectionImport, openBoundRequest, openLocalRequest, previewSavedExample, openLocalExample, openWorkspaceExample, downloadJson, updateLocal, createCollectionDraft, handleLocalMenu, expandOrCollapseAllCollections, toggleWorkspaceCollectionById, invalidateWorkspaceRequestLists, moveLocalRequest, moveWorkspaceRequest, showWorkspaceMenu, workspaceDraft, handleWorkspaceMenu, synchronizeSavedExamples, renameSavedExample, executeActionDialog };
+  return { refreshCloudCollection, createExplorerCollection, openCollectionImport, submitCollectionImport, openBoundRequest, openLocalRequest, previewSavedExample, openLocalExample, openWorkspaceExample, downloadJson, updateLocal, createCollectionDraft, handleLocalMenu, expandOrCollapseAllCollections, toggleWorkspaceCollectionById, invalidateWorkspaceRequestLists, moveLocalRequest, moveLocalFolder, moveWorkspaceRequest, showWorkspaceMenu, workspaceDraft, handleWorkspaceMenu, synchronizeSavedExamples, renameSavedExample, executeActionDialog };
 }

@@ -1,5 +1,6 @@
 import {hydrateOpenCloudDetails} from '../services/workspaceSync.js';
 import {scheduleWorkspaceBatch} from '../services/workspaceBatch.js';
+import {CLOUD_SERVER_PAGING_THRESHOLD} from '../../collections/services/cloudRenderBudget.js';
 
 // Realtime workbench actions. Stateless factory: shared logic remains scoped to the mounted App.
 // Dependencies are passed from the current render; no singleton store or persist middleware.
@@ -8,6 +9,7 @@ export function createRealtimeActions(dependencies) {
     activeTabRef,
     api,
     currentTokenRef,
+    collections,
     draftsRef,
     expandedCollections,
     getWorkspaceCollections,
@@ -38,17 +40,18 @@ export function createRealtimeActions(dependencies) {
         ? {...tab,source:{...tab.source,revision:saved.revision}}:tab));
     }
 
-  async function reconcileCloudRequests(workspaceId,collectionId,items){
+  async function reconcileCloudRequests(workspaceId,collectionId,items,{onlyRequestId=null}={}){
       const auth = currentTokenRef.current;
       const isCurrent = () => auth === currentTokenRef.current
         && workspaceId === selectedWorkspaceRef.current;
+      const scopedTabs=onlyRequestId?openTabsRef.current.filter(tab=>tab.source?.requestId===onlyRequestId):openTabsRef.current;
       const ready = await hydrateOpenCloudDetails({workspaceId,collectionId,requests:items,
-        tabs:openTabsRef.current,
+        tabs:scopedTabs,
         readDraft:id=>id===activeTabRef.current?snapshotRef.current():draftsRef.current[id],
         fetchDetail:id=>api(`/api/workspaces/${workspaceId}/collections/${collectionId}/requests/${id}`,'GET',undefined,auth),
         isCurrent});
       if (!ready || !isCurrent()) return;
-      reconcileRequestTabs({workspaceId,collectionId,requests:ready,tabs:openTabsRef.current,
+      reconcileRequestTabs({workspaceId,collectionId,requests:ready,tabs:scopedTabs,
         activeTabId:activeTabRef.current,
         readDraft:id=>id===activeTabRef.current?snapshotRef.current():draftsRef.current[id],
         transformRemote:workspaceDraft,
@@ -73,6 +76,7 @@ export function createRealtimeActions(dependencies) {
         fetchCollections:getWorkspaceCollections,
         fetchRequests:getWorkspaceRequests,
         isSelectedCollection:id=>id===selectedColRef.current,
+        isPagedCollection:id=>Number(collections.find(item=>item.id===id)?.requestCount)>CLOUD_SERVER_PAGING_THRESHOLD,
       });
     }
 

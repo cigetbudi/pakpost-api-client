@@ -75,7 +75,7 @@ export async function hydrateOpenCloudDetails({workspaceId, collectionId, reques
 export async function synchronizeWorkspaceChanges({events, workspaceId, token, isCurrent,
   tabs, selectedCollectionId, expandedCollections, requestLists,
   setCollections, setSelectedCollectionId, setRequestLists, setSelectedRequests,
-  markConflict, reconcile, fetchCollections, fetchRequests, isSelectedCollection}) {
+  markConflict, reconcile, fetchCollections, fetchRequests, isSelectedCollection, isPagedCollection}) {
   if (!token || !workspaceId || !isCurrent()) return;
   const incoming = events.filter(event => validWorkspaceEvent(event,workspaceId)
     && event.sourceInstance !== CLIENT_INSTANCE_ID);
@@ -107,17 +107,50 @@ export async function synchronizeWorkspaceChanges({events, workspaceId, token, i
   // One index fetch per affected Collection, even if many requests changed.
   const affected = new Map();
   for (const event of incoming) {
-    if (event.kind.startsWith('request.')) affected.set(event.collectionId, event);
+    if (!event.kind.startsWith('request.')) continue;
+    if (!affected.has(event.collectionId)) affected.set(event.collectionId, []);
+    affected.get(event.collectionId).push(event);
   }
   const refreshes = [];
   const openCollectionIds = new Set(tabs.filter(tab => tab.source?.scope === 'workspace'
     && tab.source.workspaceId === workspaceId).map(tab => tab.source.collectionId));
-  for (const [collectionId, relevant] of affected) {
+  for (const [collectionId, changes] of affected) {
+    const relevant = changes.at(-1);
     const cacheKey = workspaceCollectionKey(workspaceId, collectionId);
     const hasOpenTab = openCollectionIds.has(collectionId);
     const expanded = isWorkspaceCollectionOpen(expandedCollections,workspaceId,collectionId,selectedCollectionId);
     if (!shouldRefreshRequestList(relevant, {selectedCol:selectedCollectionId,
       cached:Object.hasOwn(requestLists,cacheKey),hasOpenTab,expanded})) continue;
+    if (isPagedCollection?.(collectionId)) {
+      // Large Collections must never re-fetch the complete request index in
+      // response to SignalR. Refresh only mounted folder pages.
+      setRequestLists(previous => {
+        if (!Object.hasOwn(previous,cacheKey)) return previous;
+        const next={...previous};delete next[cacheKey];return next;
+      });
+      if (isSelectedCollection ? isSelectedCollection(collectionId) : selectedCollectionId===collectionId)
+        setSelectedRequests([]);
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('pakpost:cloud-paged-refresh',
+        {detail:{workspaceId,collectionId}}));
+      // An index page cannot safely reconcile every open tab: omitted records
+      // would otherwise look deleted. Reconcile only the changed request ID.
+      const unique = new Map(changes.filter(event=>event.requestId).map(event=>[event.requestId,event]));
+      for (const event of unique.values()) {
+        if (!isCurrent()) return;
+        if (!tabs.some(tab=>tab.source?.scope==='workspace' && tab.source.workspaceId===workspaceId
+          && tab.source.collectionId===collectionId && tab.source.requestId===event.requestId)) continue;
+        if (event.kind==='request.updated' && Number.isInteger(event.revision) && event.revision>0)
+          await reconcile(workspaceId,collectionId,[{id:event.requestId,revision:event.revision,isIndex:true}],
+            {onlyRequestId:event.requestId});
+        else if (event.kind==='request.deleted')
+          await reconcile(workspaceId,collectionId,[],{onlyRequestId:event.requestId});
+        else if (event.kind==='request.moved')
+          for (const tab of tabs) if (tab.source?.scope==='workspace' && tab.source.workspaceId===workspaceId
+            && tab.source.collectionId===collectionId && tab.source.requestId===event.requestId)
+            markConflict(tab.id,{kind:'conflict',revision:event.revision||null});
+      }
+      continue;
+    }
     refreshes.push({collectionId,cacheKey});
   }
   // Keep NeonDB connection use bounded when many Collections receive events.

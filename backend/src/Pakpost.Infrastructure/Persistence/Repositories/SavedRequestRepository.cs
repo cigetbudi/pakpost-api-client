@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Domain.Entities;
@@ -70,6 +72,59 @@ public sealed class SavedRequestRepository(PakpostDbContext db) : ISavedRequestR
         }
 
         return result;
+    }
+
+    public async Task<SavedRequestIndexPage> PageIndexAsync(
+        Guid collectionId, int size, Guid? afterId, string? afterName, string? search,
+        Guid? folderId, bool rootOnly, bool sortByName, CancellationToken ct)
+    {
+        // PostgreSQL supports UUID range comparison; LINQ Guid.CompareTo
+        // translation varies by EF provider, so keep the UUID seek in SQL.
+        // The outer projection selects only index fields, never Body/Scripts.
+        var after = afterId ?? Guid.Empty;
+        var query = sortByName
+            ? db.SavedRequests.FromSqlInterpolated(
+                $"SELECT * FROM collection.saved_requests WHERE \"CollectionId\" = {collectionId} AND (\"Name\", \"Id\") > ({afterName ?? string.Empty}, {after})").AsNoTracking()
+            : db.SavedRequests.FromSqlInterpolated(
+                $"SELECT * FROM collection.saved_requests WHERE \"CollectionId\" = {collectionId} AND \"Id\" > {after}").AsNoTracking();
+        if (folderId.HasValue) query = query.Where(item => item.FolderId == folderId);
+        else if (rootOnly) query = query.Where(item => item.FolderId == null);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // Request name is non-secret metadata. URL and headers are encrypted
+            // and must not be sent to a search index in plaintext.
+            var escaped = search.Replace("\\", "\\\\")
+                .Replace("%", "\\%").Replace("_", "\\_");
+            query = query.Where(item => EF.Functions.ILike(item.Name, $"%{escaped}%", "\\"));
+        }
+        var sorted = sortByName ? query.OrderBy(item => item.Name).ThenBy(item => item.Id)
+            : query.OrderBy(item => item.Id);
+        var rows = await sorted.Take(size + 1)
+            .Select(item => new SavedRequestIndex(item.Id, item.CollectionId,
+                item.FolderId, item.Revision, item.Name, item.Method,
+                item.Url, item.HeadersJson))
+            .ToListAsync(ct);
+        var hasMore = rows.Count > size;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        if (rows.Count == 0) return new SavedRequestIndexPage(rows, null, false);
+        var workspaceId = await db.WorkspaceForCollectionAsync(collectionId, ct);
+        var result = new SavedRequestIndex[rows.Count];
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var (url, headers) = await db.DecryptRequestIndexAsync(
+                workspaceId, rows[i].Id, rows[i].Url, rows[i].HeadersJson, ct);
+            result[i] = rows[i] with { Url = url, HeadersJson = headers };
+        }
+        string? next = null;
+        if (hasMore)
+        {
+            next = sortByName
+                ? Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
+                    new[] { rows[^1].Name, rows[^1].Id.ToString("N") })))
+                    .TrimEnd('=').Replace('+', '-').Replace('/', '_')
+                : rows[^1].Id.ToString("N");
+        }
+        return new SavedRequestIndexPage(result, next, hasMore);
     }
 
     public async Task<IReadOnlyList<SavedRequest>> ListAsync(Guid collectionId, CancellationToken ct)

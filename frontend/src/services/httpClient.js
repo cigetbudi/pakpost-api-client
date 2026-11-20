@@ -8,7 +8,7 @@ export const CLIENT_INSTANCE_ID =
  * Keep workspace mutation headers and error.status intact: revision conflict
  * handling and existing authorization paths rely on them.
  */
-export async function api(path, method = 'GET', body, token = '') {
+export async function api(path, method = 'GET', body, token = '', {signal} = {}) {
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -20,6 +20,7 @@ export async function api(path, method = 'GET', body, token = '') {
   const response = await fetch(path, {
     method,
     headers,
+    signal,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

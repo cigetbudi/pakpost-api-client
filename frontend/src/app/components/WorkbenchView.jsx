@@ -22,13 +22,13 @@ export function WorkbenchView({ model }) {
     codePreviewRequest, buildCodeRequest, snapshot, importRequestsAndEnvironments, setNotice, loadRequest,
     setSelectedTeam, setWsTab, setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport,
     setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu,
-    moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById, createCollectionDraft,
+    moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById, createCollectionDraft,
     setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample, draftsRef, CodeSidebar, ImportExportSidebar,
     WorkbenchSettings, setTheme, split, setSplit, interceptorMode, setInterceptorMode,
     extensionStatus, refreshExtensionStatus, RequestTabs, requestWorkbenchStore, remoteAlerts, tabDragRef,
     closeTab, showTabContext, setTabMenu, addTab, runnerLoading, openRunnerForCurrentCollection,
     consoleOpen, setConsoleOpen, realtimeStatus, openRequestHistory, workspaceMenu, MenuActionItem,
-    handleWorkspaceMenu, tabMenu, performTabAction, Copy, openSaveAs, Save,
+    handleWorkspaceMenu, setWorkspaceMenu, tabMenu, performTabAction, Copy, openSaveAs, Save,
     ArrowRight, AlertTriangle, showConflictDialog, RequestWorkbench, AUTH_OPTIONS, ChevronRight,
     Columns2, KeyValueEditor, LayoutPanelTop, METHODS, Pencil, RequestBody,
     ResponsePane, ScriptEditor, Send, ShieldCheck, Suspense, TextEditor,
@@ -88,7 +88,7 @@ export function WorkbenchView({ model }) {
     importRequestsAndEnvironments, setNotice, loadRequest, setSelectedTeam, setWsTab,
     setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport, setCreatingLocalCollection,
     createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu,
-    moveLocalRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu, handleWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
+    moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, handleWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
     createCollectionDraft, setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample,
   }}
   refs={{
@@ -103,11 +103,15 @@ export function WorkbenchView({ model }) {
         <RequestTabs store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} runnerLoading={runnerLoading} openRunnerForCurrentCollection={openRunnerForCurrentCollection} consoleOpen={consoleOpen} setConsoleOpen={setConsoleOpen} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
-            ['newRequest','New request'],['newFolder','New folder'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
+            ['newRequest','New request'],['newFolder','New folder'],['organizeFolders','Move folder…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
           ]:workspaceMenu.type==='example'?[
             ['renameExample','Rename example'],['deleteExample','Delete example']
           ]:[['versionHistory','Version history'],['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables','runCollection','versionHistory'].includes(id)} danger={id.startsWith('delete')} onClick={()=>handleWorkspaceMenu(id,workspaceMenu)}>{label}</MenuActionItem>)}
+            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables','runCollection','versionHistory'].includes(id)} danger={id.startsWith('delete')} onClick={()=>{if(id==='organizeFolders'){
+              window.dispatchEvent(new CustomEvent('pakpost:cloud-folder-organizer',
+                {detail:{workspaceId:selectedWs,collectionId:workspaceMenu.collectionId}}));
+              setWorkspaceMenu(null);
+            }else handleWorkspaceMenu(id,workspaceMenu);}}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
@@ -141,7 +145,7 @@ export function WorkbenchView({ model }) {
         setNotice, setOpenTabs, setParams, setPostScript, setPreScript, setReqTab,
         setResTab, setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump,
         setSplit, setUrl, split, splitPercent, theme, url,
-        variableUi,}}/> : <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Workspace…</div>}><WorkspaceManager
+        variableUi,}}/> : page === 'workspace' ? <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Workspace…</div>}><WorkspaceManager
   data={{
     activeWorkspace, workspaces, canCreateWorkspace, newWs, token,
     busyAction, selectedWs, wsTab, canEditCloud, newCollection,
@@ -164,10 +168,10 @@ export function WorkbenchView({ model }) {
   refs={{
     selectedWorkspaceRef, currentTokenRef,
   }}
-/></Suspense>}
+/></Suspense> : null}
       </main>
     </div>
-    <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost REST Client</span><span className="pp-footer-center">{interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
+    <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost | Made with ♡ by cigetbudi</span><span className="pp-footer-center">{interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
       <WorkbenchOverlays model={model}/>
   </div>;
 }

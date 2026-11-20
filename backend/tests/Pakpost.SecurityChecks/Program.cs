@@ -270,6 +270,18 @@ sealed class FakeCollections:ICollectionRepository
 }
 sealed class FakeSavedRequests:ISavedRequestRepository
 {
+    public Task<SavedRequestIndexPage> PageIndexAsync(
+        Guid collectionId,
+        int size,
+        Guid? afterId,
+        string? afterName,
+        string? search,
+        Guid? folderId,
+        bool rootOnly,
+        bool sortByName,
+        CancellationToken ct)
+        => Task.FromResult(new SavedRequestIndexPage([], null, false));
+
     public Task<SavedRequest?> FindAsync(Guid id,CancellationToken ct)=>Task.FromResult<SavedRequest?>(null);
     public Task<SavedRequest?> FindInCollectionAsync(Guid id,Guid collectionId,CancellationToken ct)
         =>Task.FromResult<SavedRequest?>(null);

@@ -41,7 +41,7 @@ test('progressive view preserves existing interaction paths and renders closed c
   const local=read('../../src/features/collections/components/LocalCollectionsTree.jsx');
   const workbench=read('../../src/app/hooks/useWorkbenchController.jsx');
   assert.match(cloud,/open && node && renderNode\(node\)/);
-  assert.match(cloud,/useMemo\(\(\) => open \? makeCloudFolderTree\(folders,requests\) : null/);
+  assert.match(cloud,/useMemo\(\(\) => open \? makeCloudFolderTree\(folders,paged\?\[\]:requests\) : null/);
   assert.match(cloud,/<CloudRequestRows/);
   assert.match(rows,/IntersectionObserver/);
   assert.match(rows,/root: scrollRoot \|\| null/);

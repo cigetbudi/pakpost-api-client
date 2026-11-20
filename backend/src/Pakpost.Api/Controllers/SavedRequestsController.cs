@@ -20,6 +20,16 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
     public async Task<IActionResult> Index(Guid workspaceId, Guid collectionId, CancellationToken ct)
         => Ok(await sender.Send(new ListSavedRequestIndexQuery(User.GetUserId(), workspaceId, collectionId), ct));
 
+    // Additive browsing API. Existing /index remains for full exports and runners.
+    [HttpGet("index/page")]
+    public async Task<IActionResult> Page(Guid workspaceId, Guid collectionId,
+        [FromQuery] int size = 120, [FromQuery] string? after = null,
+        [FromQuery] string? search = null, [FromQuery] Guid? folderId = null,
+        [FromQuery] bool rootOnly = false, [FromQuery] bool sortByName = false,
+        CancellationToken ct = default)
+        => Ok(await sender.Send(new PageSavedRequestIndexQuery(User.GetUserId(),
+            workspaceId, collectionId, size, after, search, folderId, rootOnly, sortByName), ct));
+
     [HttpGet("{requestId:guid}")]
     public async Task<IActionResult> Detail(Guid workspaceId, Guid collectionId, Guid requestId, CancellationToken ct)
         => Ok(await sender.Send(new GetSavedRequestQuery(User.GetUserId(), workspaceId, collectionId, requestId), ct));

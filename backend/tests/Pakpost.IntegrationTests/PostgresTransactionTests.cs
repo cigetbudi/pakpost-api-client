@@ -255,6 +255,12 @@ public sealed class PostgresTransactionTests
         Assert.Equal("https://private.example.test/api", indexed.Url);
         Assert.Contains("private-header-value", indexed.HeadersJson);
         Assert.DoesNotContain("private-body-value", indexed.HeadersJson);
+        var page = await new SavedRequestRepository(db).PageIndexAsync(
+            collection.Id, 1, null, null, "", null, false, false, CancellationToken.None);
+        Assert.Equal(request.Id, Assert.Single(page.Items).Id);
+        Assert.Equal("https://private.example.test/api", page.Items[0].Url);
+        Assert.False(page.HasMore);
+
 
         var indexedDetail = await new SavedRequestRepository(db)
             .FindInCollectionAsync(request.Id, collection.Id, CancellationToken.None);

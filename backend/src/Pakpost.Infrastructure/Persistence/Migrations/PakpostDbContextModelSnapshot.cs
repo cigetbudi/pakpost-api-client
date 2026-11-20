@@ -230,6 +230,10 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CollectionId");
+                    b.HasIndex("CollectionId", "Id");
+                    b.HasIndex("CollectionId", "FolderId", "Id");
+                    b.HasIndex("CollectionId", "Name", "Id");
+                    b.HasIndex("CollectionId", "FolderId", "Name", "Id");
                     b.HasIndex("FolderId");
 
                     b.ToTable("saved_requests", "collection");

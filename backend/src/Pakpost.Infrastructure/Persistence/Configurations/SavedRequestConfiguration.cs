@@ -59,5 +59,9 @@ public sealed class SavedRequestConfiguration : IEntityTypeConfiguration<SavedRe
 
         builder.HasIndex(request => request.CollectionId);
         builder.HasIndex(request => request.FolderId);
+        builder.HasIndex(request => new { request.CollectionId, request.Id });
+        builder.HasIndex(request => new { request.CollectionId, request.FolderId, request.Id });
+        builder.HasIndex(request => new { request.CollectionId, request.Name, request.Id });
+        builder.HasIndex(request => new { request.CollectionId, request.FolderId, request.Name, request.Id });
     }
 }

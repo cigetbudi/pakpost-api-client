@@ -19,3 +19,18 @@ export function filterCloudRequests(requests, search, sortByName = false) {
     ? [...matching].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
     : matching;
 }
+
+// Large-workspace browse uses bounded server pages instead of downloading every
+// encrypted index record when the collection is expanded.
+export const CLOUD_SERVER_PAGING_THRESHOLD = 800;
+export const CLOUD_SERVER_PAGE_SIZE = 120;
+export const CLOUD_VIRTUAL_ROW_HEIGHT = 28;
+export const CLOUD_VIRTUAL_OVERSCAN = 10;
+
+export function cloudVirtualWindow(total,scrollOffset,viewportHeight,
+  rowHeight=CLOUD_VIRTUAL_ROW_HEIGHT,overscan=CLOUD_VIRTUAL_OVERSCAN) {
+  const count=Math.max(0,Math.floor(total)||0);
+  const start=Math.min(count,Math.max(0,Math.floor(Math.max(0,scrollOffset)/rowHeight)-overscan));
+  const end=Math.min(count,Math.max(start,Math.ceil((Math.max(0,scrollOffset)+Math.max(1,viewportHeight))/rowHeight)+overscan));
+  return {start,end,top:start*rowHeight,bottom:(count-end)*rowHeight};
+}

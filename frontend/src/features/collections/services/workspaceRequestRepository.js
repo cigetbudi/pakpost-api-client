@@ -1,3 +1,4 @@
+import {withCloudPageSlot} from './cloudPageQueue.js';
 import { api } from '../../../services/httpClient.js';
 
 /**
@@ -25,4 +26,15 @@ export function updateWorkspaceRequest(workspaceId, collectionId, requestId, pay
   if (!requestId) throw new Error('Missing saved request ID');
   // Do not retry a stale save without its revision, and never auto-force a PUT.
   return api(`${workspaceRequestsPath(workspaceId, collectionId)}/${requestId}`, 'PUT', payload, token);
+}
+
+export function getWorkspaceRequestIndexPage(workspaceId, collectionId, token,
+  {after='',size=120,search='',folderId=null,rootOnly=false,sortByName=false,signal}={}) {
+  const query=new URLSearchParams({size:String(size)});
+  if(after)query.set('after',after);
+  if(search)query.set('search',search);
+  if(folderId)query.set('folderId',folderId);
+  if(rootOnly)query.set('rootOnly','true');
+  if(sortByName)query.set('sortByName','true');
+  return withCloudPageSlot(()=>api(`${workspaceRequestsPath(workspaceId,collectionId)}/index/page?${query}`,'GET',undefined,token,{signal}),signal);
 }
