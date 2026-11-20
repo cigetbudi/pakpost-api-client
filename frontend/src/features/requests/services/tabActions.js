@@ -13,9 +13,12 @@ export function planTabClose(tabs,targetId,activeId,kind){
 }
 
 /** Drag tab source before/after another open tab, retaining source identity. */
-export function reorderTabs(tabs,sourceId,targetId){
+export function reorderTabs(tabs,sourceId,targetId,placement='after'){
   if(sourceId===targetId)return tabs;
-  const from=tabs.findIndex(t=>t.id===sourceId),to=tabs.findIndex(t=>t.id===targetId);
-  if(from<0||to<0)return tabs;
-  const next=[...tabs],item=next.splice(from,1)[0];next.splice(to,0,item);return next;
+  const from=tabs.findIndex(tab=>tab.id===sourceId);
+  if(from<0||!tabs.some(tab=>tab.id===targetId))return tabs;
+  const next=[...tabs],item=next.splice(from,1)[0];
+  const target=next.findIndex(tab=>tab.id===targetId);
+  next.splice(target+(placement==='after'?1:0),0,item);
+  return next;
 }

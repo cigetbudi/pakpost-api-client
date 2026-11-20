@@ -9,5 +9,6 @@ public sealed record MoveFolderCommand(
     Guid CollectionId,
     Guid FolderId,
     Guid? TargetParentId,
-    int ExpectedVersion
+    int ExpectedVersion,
+    Guid? TargetCollectionId = null
 ) : IRequest<FolderDto>;

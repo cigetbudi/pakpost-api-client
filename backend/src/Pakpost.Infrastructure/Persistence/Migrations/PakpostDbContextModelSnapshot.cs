@@ -34,6 +34,16 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ParentCollectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_collection_id");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -60,7 +70,11 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
+                    b.HasIndex("ParentCollectionId");
+
                     b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("WorkspaceId", "ParentCollectionId", "SortOrder");
 
                     b.ToTable("collections", "collection");
                 });
@@ -196,6 +210,12 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order")
+                        .HasDefaultValue(2147483647);
+
                     b.Property<int>("Revision")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
@@ -234,6 +254,7 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.HasIndex("CollectionId", "FolderId", "Id");
                     b.HasIndex("CollectionId", "Name", "Id");
                     b.HasIndex("CollectionId", "FolderId", "Name", "Id");
+                    b.HasIndex("CollectionId", "FolderId", "SortOrder", "Id");
                     b.HasIndex("FolderId");
 
                     b.ToTable("saved_requests", "collection");
@@ -475,6 +496,11 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Pakpost.Domain.Entities.Collection", b =>
                 {
+                    b.HasOne("Pakpost.Domain.Entities.Collection", null)
+                        .WithMany()
+                        .HasForeignKey("ParentCollectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Pakpost.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")

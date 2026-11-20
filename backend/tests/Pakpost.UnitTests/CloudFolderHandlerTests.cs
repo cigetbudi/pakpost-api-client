@@ -88,7 +88,8 @@ public sealed class CloudFolderHandlerTests
             context.Collections,
             context.Folders,
             context.UnitOfWork,
-            context.Transactions);
+            context.Transactions,
+            Substitute.For<ISavedRequestRepository>());
 
         var command = new MoveFolderCommand(
             context.ActorId,

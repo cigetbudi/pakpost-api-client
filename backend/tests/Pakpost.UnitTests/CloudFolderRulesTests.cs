@@ -114,4 +114,37 @@ public sealed class CloudFolderRulesTests
 
         Assert.Equal(409, error.StatusCode);
     }
+
+    [Fact]
+    public void TransferIntoAnotherCollectionIncludesDescendantsAndPreservesIdentity()
+    {
+        var sourceId=Guid.NewGuid();
+        var targetId=Guid.NewGuid();
+        var parent=new CollectionFolder(sourceId,null,"Auth");
+        var child=new CollectionFolder(sourceId,parent.Id,"JWT");
+        var unrelated=new CollectionFolder(sourceId,null,"Other");
+        var destination=new CollectionFolder(targetId,null,"Billing");
+        var move=CloudFolderRules.ValidateTransfer([parent,child,unrelated],
+            [destination],parent,targetId,destination.Id);
+        Assert.Contains(parent.Id,move);
+        Assert.Contains(child.Id,move);
+        Assert.DoesNotContain(unrelated.Id,move);
+        var original=parent.Version;
+        parent.Rehome(targetId,destination.Id);
+        Assert.Equal(targetId,parent.CollectionId);
+        Assert.Equal(original+1,parent.Version);
+    }
+
+    [Fact]
+    public void TransferRejectsNameCollisionAtDestination()
+    {
+        var sourceId=Guid.NewGuid();
+        var targetId=Guid.NewGuid();
+        var original=new CollectionFolder(sourceId,null,"Auth");
+        var clash=new CollectionFolder(targetId,null,"auth");
+        var exception=Assert.Throws<AppException>(()=>CloudFolderRules.ValidateTransfer(
+            [original],[clash],original,targetId,null));
+        Assert.Equal(409,exception.StatusCode);
+    }
+
 }

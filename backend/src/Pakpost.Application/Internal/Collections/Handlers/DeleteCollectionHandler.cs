@@ -19,6 +19,8 @@ public sealed class DeleteCollectionHandler(
         var item = await collections.FindAsync(cmd.CollectionId, ct);
         if (item is null || item.WorkspaceId != cmd.WorkspaceId)
             throw AppException.NotFound("Collection not found");
+        if (await collections.HasChildrenAsync(cmd.WorkspaceId, cmd.CollectionId, ct))
+            throw AppException.Conflict("Move or delete subcollections before deleting this collection");
         collections.Remove(item);
         await uow.SaveChangesAsync(ct);
         return Unit.Value;

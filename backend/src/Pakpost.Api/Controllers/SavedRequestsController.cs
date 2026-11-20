@@ -63,6 +63,17 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
         await realtime.PublishAsync(workspaceId,"request.updated",collectionId,result.Id,result.Revision,Instance,ct);
         return Ok(result);
     }
+    public sealed record ReorderRequestBody(Guid TargetRequestId,string Placement);
+    [HttpPatch("{requestId:guid}/reorder")]
+    public async Task<IActionResult> Reorder(Guid workspaceId,Guid collectionId,Guid requestId,
+        [FromBody] ReorderRequestBody body,CancellationToken ct)
+    {
+        await sender.Send(new ReorderSavedRequestCommand(User.GetUserId(),workspaceId,collectionId,
+            requestId,body.TargetRequestId,body.Placement),ct);
+        // A refresh signal, not a content revision: reordering changes only metadata.
+        await realtime.PublishAsync(workspaceId,"request.reordered",collectionId,null,null,Instance,ct);
+        return NoContent();
+    }
     public sealed record MoveRequestBody(Guid TargetCollectionId,Guid? TargetFolderId=null);
     [HttpPatch("{requestId:guid}/move")]
     public async Task<IActionResult> Move(Guid workspaceId,Guid collectionId,Guid requestId,[FromBody] MoveRequestBody body,CancellationToken ct)

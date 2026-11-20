@@ -24,6 +24,11 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
             .OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.ParentCollectionId).HasColumnName("parent_collection_id");
+        builder.Property(x => x.SortOrder).HasColumnName("sort_order").HasDefaultValue(0);
+        builder.HasOne<Collection>().WithMany().HasForeignKey(x => x.ParentCollectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => new { x.WorkspaceId, x.ParentCollectionId, x.SortOrder });
         builder.HasIndex(x => x.WorkspaceId);
     }
 }

@@ -44,6 +44,18 @@ public sealed class CollectionsController(ISender sender,IWorkspaceChangePublish
         return Ok(result);
     }
 
+    public sealed record PlaceCollectionRequest(Guid? TargetCollectionId, string Placement);
+
+    [HttpPatch("{collectionId:guid}/placement")]
+    public async Task<ActionResult<CollectionDto>> Place(Guid workspaceId, Guid collectionId,
+        [FromBody] PlaceCollectionRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(new PlaceCollectionCommand(User.GetUserId(), workspaceId,
+            collectionId, body.TargetCollectionId, body.Placement), ct);
+        await realtime.PublishAsync(workspaceId,"collection.updated",collectionId,null,null,Instance,ct);
+        return Ok(result);
+    }
+
     [HttpDelete("{collectionId:guid}")]
     public async Task<IActionResult> Delete(Guid workspaceId, Guid collectionId, CancellationToken ct)
     {

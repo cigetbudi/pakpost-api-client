@@ -6,6 +6,8 @@ const FALLBACK_PREFIX='pakpost-folder-dnd:';
 
 export function startFolderDrag(dataTransfer,mime,payload){
   activeFolderMime=mime;
+  if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('pakpost:explorer-drag',
+    {detail:{kind:'folder',scope:payload.workspaceId?'workspace':'local',...payload}}));
   dataTransfer.effectAllowed='move';
   const serialized=JSON.stringify(payload);
   dataTransfer.setData(mime,serialized);
@@ -31,4 +33,9 @@ export function readFolderDrag(dataTransfer,mime){
   }catch{return null;}
 }
 
-export function endFolderDrag(){activeFolderMime=null;}
+export function endFolderDrag(){
+  if(!activeFolderMime)return;
+  activeFolderMime=null;
+  if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent('pakpost:explorer-drag',
+    {detail:{kind:null}}));
+}

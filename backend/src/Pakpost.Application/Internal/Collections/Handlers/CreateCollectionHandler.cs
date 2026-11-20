@@ -15,8 +15,11 @@ public sealed class CreateCollectionHandler(ICollectionRepository collections, I
         await WorkspacePermissions.RequireAsync(workspaces, request.WorkspaceId, request.ActorId,
             WorkspacePermissions.CollectionWrite, ct);
         var col = new Collection(request.WorkspaceId, request.Name, request.ActorId);
+        var existing = await collections.ListOverviewAsync(request.WorkspaceId, ct);
+        col.Place(null, existing.Where(item => item.ParentCollectionId is null)
+            .Select(item => item.SortOrder).DefaultIfEmpty(0).Max() + 1);
         collections.Add(col);
         await uow.SaveChangesAsync(ct);
-        return new(col.Id, col.WorkspaceId, col.Name);
+        return new(col.Id, col.WorkspaceId, col.Name, 0, col.ParentCollectionId, col.SortOrder);
     }
 }

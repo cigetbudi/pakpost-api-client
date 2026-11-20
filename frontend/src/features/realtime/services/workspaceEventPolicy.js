@@ -4,7 +4,7 @@
  */
 export const WORKSPACE_KINDS = new Set([
   'collection.created','collection.updated','collection.deleted','collection.variables',
-  'request.created','request.updated','request.deleted','request.moved',
+  'request.created','request.updated','request.deleted','request.moved','request.reordered',
   'folder.created','folder.updated','folder.moved','folder.deleted'
 ]);
 export function validWorkspaceEvent(event, workspaceId){

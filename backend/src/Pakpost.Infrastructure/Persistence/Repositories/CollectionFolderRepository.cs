@@ -16,6 +16,9 @@ public sealed class CollectionFolderRepository(PakpostDbContext db) : ICollectio
             .OrderBy(folder => folder.Name)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<CollectionFolder>> ListTrackedAsync(Guid collectionId, CancellationToken ct) =>
+        await db.CollectionFolders.Where(folder => folder.CollectionId == collectionId).ToListAsync(ct);
+
     public Task<bool> HasRequestsAsync(Guid id, CancellationToken ct) =>
         db.SavedRequests.AnyAsync(request => request.FolderId == id, ct);
 

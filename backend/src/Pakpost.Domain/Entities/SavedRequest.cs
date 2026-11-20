@@ -10,6 +10,7 @@ public sealed class SavedRequest
     public Guid CollectionId { get; private set; }
     public Guid? FolderId { get; private set; }
     public int Revision { get; private set; } = 1;
+    public int SortOrder { get; private set; } = int.MaxValue;
     public string Name { get; private set; } = "";
     public string Method { get; private set; } = "GET";
     public string Url { get; private set; } = "";
@@ -53,6 +54,12 @@ public sealed class SavedRequest
             formFieldsJson,
             preRequestScript,
             postResponseScript);
+    }
+
+    public void Reorder(int sortOrder)
+    {
+        if (sortOrder < 0) throw new ArgumentOutOfRangeException(nameof(sortOrder));
+        SortOrder = sortOrder;
     }
 
     public void MoveTo(Guid collectionId, Guid? folderId = null)

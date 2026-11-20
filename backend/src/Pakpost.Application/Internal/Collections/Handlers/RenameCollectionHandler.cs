@@ -22,6 +22,6 @@ public sealed class RenameCollectionHandler(
             throw AppException.NotFound("Collection not found");
         item.Rename(cmd.Name);
         await uow.SaveChangesAsync(ct);
-        return new(item.Id, item.WorkspaceId, item.Name);
+        return new(item.Id, item.WorkspaceId, item.Name, 0, item.ParentCollectionId, item.SortOrder);
     }
 }

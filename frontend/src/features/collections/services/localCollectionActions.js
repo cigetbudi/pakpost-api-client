@@ -43,9 +43,15 @@ export function applyLocalAction(collections,action,idFactory=uid){
     }
     case 'duplicateCollection': {
       const copy=toLocalCollection({...col,name:`${col.name} (copy)`},idFactory);
+      copy.parentCollectionId=col.parentCollectionId||null;
+      copy.sortOrder=Number(col.sortOrder||0)+1;
       next.splice(next.indexOf(col)+1,0,copy);break;
     }
-    case 'deleteCollection': next=next.filter(c=>c.id!==col.id);break;
+    case 'deleteCollection': {
+      if(next.some(item=>item.parentCollectionId===col.id))
+        throw Error('Move or delete subcollections before deleting this collection');
+      next=next.filter(c=>c.id!==col.id);break;
+    }
     case 'sortCollection': {
       col.requests.sort((a,b)=>compare(a,b,action.sort));break;
     }
@@ -109,9 +115,9 @@ export function applyLocalAction(collections,action,idFactory=uid){
       const parent=action.targetFolderPath;
       if(!Array.isArray(source)||!source.length||!Array.isArray(parent))
         throw Error('Invalid folder move');
-      if(action.targetCollectionId&&action.targetCollectionId!==col.id)
-        throw Error('Move folders within the same Local collection');
-      if(pathEquals(source,parent.slice(0,source.length)))
+      const target=next.find(item=>item.id===(action.targetCollectionId||col.id));
+      if(!target)throw Error('Destination collection not found');
+      if(target.id===col.id&&pathEquals(source,parent.slice(0,source.length)))
         throw Error('Cannot move a folder into itself or its descendants');
       const destination=[...parent,source.at(-1)];
       const allExistingPaths=[...col.requests.map(row=>row.folderPath||[])];
@@ -120,24 +126,44 @@ export function applyLocalAction(collections,action,idFactory=uid){
       }
       if(!allExistingPaths.some(path=>pathEquals(path.slice(0,source.length),source)))
         throw Error('Source folder no longer exists');
-      if(pathEquals(source,destination))break;
-      const allPaths=allExistingPaths;
+      if(target.id===col.id&&pathEquals(source,destination))break;
+      const allPaths=[...target.requests.map(row=>row.folderPath||[])];
+      for(const key of Object.keys(target.folderDocs||{})){
+        try{allPaths.push(JSON.parse(key));}catch{}
+      }
+      if(parent.length&&!allPaths.some(path=>pathEquals(path.slice(0,parent.length),parent)))
+        throw Error('Destination folder no longer exists');
       const exists=allPaths.some(path=>path.length>=destination.length&&
         pathEquals(path.slice(0,destination.length),destination));
       if(exists)throw Error('A folder with this name already exists under the destination');
-      if(destination.length + Math.max(0,...allPaths.filter(path=>pathEquals(path.slice(0,source.length),source))
+      if(destination.length + Math.max(0,...allExistingPaths.filter(path=>pathEquals(path.slice(0,source.length),source))
         .map(path=>path.length-source.length))>24)throw Error('Folder nesting limit exceeded');
-      for(const row of col.requests){
-        if(pathEquals((row.folderPath||[]).slice(0,source.length),source))
+      if(target.id===col.id){
+        // Moving within the same collection changes paths, never request order.
+        for(const row of col.requests){
+          if(pathEquals((row.folderPath||[]).slice(0,source.length),source))
+            row.folderPath=[...destination,...row.folderPath.slice(source.length)];
+        }
+      }else{
+        const moved=[];
+        col.requests=col.requests.filter(row=>{
+          if(!pathEquals((row.folderPath||[]).slice(0,source.length),source))return true;
           row.folderPath=[...destination,...row.folderPath.slice(source.length)];
+          moved.push(row);return false;
+        });
+        target.requests.push(...moved);
       }
-      const docs={};
-      for(const [key,value] of Object.entries(col.folderDocs||{})){
-        let path;try{path=JSON.parse(key);}catch{docs[key]=value;continue;}
-        docs[JSON.stringify(pathEquals(path.slice(0,source.length),source)?
-          [...destination,...path.slice(source.length)]:path)]=value;
+      const originalDocs={...col.folderDocs};
+      const retained={};
+      const transferred={};
+      for(const [key,value] of Object.entries(originalDocs)){
+        let path;try{path=JSON.parse(key);}catch{retained[key]=value;continue;}
+        if(pathEquals(path.slice(0,source.length),source))
+          transferred[JSON.stringify([...destination,...path.slice(source.length)])]=value;
+        else retained[key]=value;
       }
-      col.folderDocs=docs;
+      col.folderDocs=retained;
+      target.folderDocs={...(target.id===col.id?retained:target.folderDocs),...transferred};
       break;
     }
     case 'moveRequest': {
@@ -146,7 +172,8 @@ export function applyLocalAction(collections,action,idFactory=uid){
       col.requests=col.requests.filter(r=>r.id!==request.id);
       request.folderPath=Array.isArray(action.targetFolderPath)?[...action.targetFolderPath]:request.folderPath;
       const index=target.requests.findIndex(r=>r.id===action.beforeRequestId);
-      target.requests.splice(index<0?target.requests.length:index,0,request);break;
+      const position=index<0?target.requests.length:index+(action.placement==='after'?1:0);
+      target.requests.splice(position,0,request);break;
     }
     default: throw Error('Unsupported collection action');
   }

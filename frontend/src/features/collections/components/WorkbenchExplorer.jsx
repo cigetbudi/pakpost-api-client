@@ -1,4 +1,6 @@
-import React, {useRef} from 'react';
+import React, {useEffect,useMemo,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
+import {Dialog} from '../../../components/ui/WorkbenchPrimitives.jsx';
 import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History, Users, Plus, Search, ChevronsUpDown, ChevronsDownUp, FileUp, X, ChevronDown, FolderClosed, ArrowRight } from 'lucide-react';
 import { RetroSelect } from '../../../components/ui/RetroSelect.jsx';
 import { EnvironmentExplorer } from '../../environments/components/EnvironmentExplorer.jsx';
@@ -12,6 +14,8 @@ import { isWorkspaceCollectionOpen, workspaceCollectionKey } from '../services/c
 import { decodeStoredHeaders } from '../../requests/services/requestMetadata.js';
 import {CLOUD_SERVER_PAGING_THRESHOLD} from '../services/cloudRenderBudget.js';
 import {isFolderDrag,readFolderDrag,endFolderDrag} from '../services/folderDrag.js';
+import {startRequestDrag,peekRequestDrag,isRequestDrag,readRequestDrag,endRequestDrag,dragRowPlacement} from '../services/requestDrag.js';
+import {visibleCollectionNodes,collectionParentChain,arrangeCollections,startCollectionDrag,isCollectionDrag,readCollectionDrag,endCollectionDrag,collectionDropPosition} from '../services/collectionHierarchy.js';
 import { statusTone } from '../../requests/services/responseExamples.js';
 
 // Only the visible explorer mounts. Code generator and import/export panels are
@@ -24,18 +28,70 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   const { localCollectionName, storageScope, collections, visibleLocalCollections, localExpandAllSignal, revealLocalDraft } = data;
   const { visibleCollections, expandedCollections, selectedCol, workspaceRequestLists, WORKSPACE_DRAG, workspaceSorted } = data;
   const { expandedWorkspaceExamples } = data;
-  const { setSidebarCollapsed, setSelectedWs, navigate, setAuthMode, setAuthOpen, setActiveEnvId } = actions;
+  const { setSidebarCollapsed, setSelectedWs, navigate, setAuthMode, setAuthOpen, setActiveEnvId, setExpandedCollections } = actions;
   const { persistEnvironment, createEnvironment, deleteEnvironment, duplicateEnvironment, openExportChoice, importEnvironmentFile } = actions;
   const { codePreviewRequest, buildCodeRequest, snapshot, importRequestsAndEnvironments, setNotice, loadRequest } = actions;
   const { setSelectedTeam, setWsTab, setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport } = actions;
   const { setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu } = actions;
-  const { moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, toggleWorkspaceCollectionById, createCollectionDraft, handleWorkspaceMenu, refreshCloudCollection } = actions;
+  const { moveLocalRequest, moveLocalFolder, moveLocalCollection, moveWorkspaceCollection,
+    moveWorkspaceFolder, reorderWorkspaceRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu,
+    toggleWorkspaceCollectionById, createCollectionDraft, handleWorkspaceMenu, refreshCloudCollection } = actions;
   const { setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample } = actions;
   const { draftsRef } = refs;
   const { CodeSidebar, ImportExportSidebar } = deferred;
   // Request index records are immutable in React. Cache parsed response-example
   // metadata per record, not per entire Collection (which would defeat paging).
   // Weak keys are garbage-collected when a Workspace or Collection is replaced.
+  const [collectionOrganizer,setCollectionOrganizer]=useState(null);
+  const [organizeDestination,setOrganizeDestination]=useState('root:');
+  const [collectionDropTarget,setCollectionDropTarget]=useState('');
+  const [requestDropTarget,setRequestDropTarget]=useState('');
+  const [dragging,setDragging]=useState(null);
+  useEffect(()=>{
+    const listener=e=>setDragging(e.detail?.kind&&e.detail?.scope==='workspace'&&
+      e.detail.workspaceId===selectedWs?e.detail:null);
+    window.addEventListener('pakpost:explorer-drag',listener);
+    return()=>window.removeEventListener('pakpost:explorer-drag',listener);
+  },[selectedWs]);
+  useEffect(()=>{
+    const open=event=>{
+      const detail=event.detail;
+      if(detail?.scope==='workspace'&&detail.workspaceId===selectedWs){
+        setCollectionOrganizer({scope:'workspace',sourceId:detail.collectionId});
+        setOrganizeDestination('root:');
+      }
+    };
+    window.addEventListener('pakpost:collection-organizer',open);
+    return()=>window.removeEventListener('pakpost:collection-organizer',open);
+  },[selectedWs]);
+  const localMove=(source,target,placement)=>{setCollectionSort('manual');if(placement==='inside'&&target)window.dispatchEvent(new CustomEvent('pakpost:local-collection-reveal',{detail:{collectionId:target}}));moveLocalCollection(source,target,placement);};
+  const cloudMove=(source,target,placement)=>{
+    if(!canEditCloud)return;
+    setCollectionSort('manual');
+    if(placement==='inside'&&target)setExpandedCollections(old=>({...old,...Object.fromEntries(
+      collectionParentChain(collections,target).map(id=>[workspaceCollectionKey(selectedWs,id),true]))}));
+    moveWorkspaceCollection(source,target,placement);
+  };
+  const cloudNodes=useMemo(()=>visibleCollectionNodes(collections,{sort:collectionSort,search:explorerSearch,
+    isOpen:col=>isWorkspaceCollectionOpen(expandedCollections,selectedWs,col.id,selectedCol),
+    requestMatches:col=>(workspaceRequestLists[workspaceCollectionKey(selectedWs,col.id)]||[]).some(request=>
+      `${request.name||''} ${request.url||''}`.toLowerCase().includes(explorerSearch.toLowerCase()))}),
+    [collections,collectionSort,explorerSearch,expandedCollections,selectedWs,selectedCol,workspaceRequestLists]);
+  const organizationList=collectionOrganizer?.scope==='local'?localCollections:collections;
+  const chosen=organizationList.find(item=>item.id===collectionOrganizer?.sourceId);
+  const organizationOptions=chosen?[{value:'root:',label:'Collection root (last)'},
+    ...organizationList.flatMap(item=>['inside','before','after'].flatMap(placement=>{
+      try{arrangeCollections(organizationList,chosen.id,item.id,placement);}
+      catch{return [];}
+      return [{value:`${placement}:${item.id}`,label:`${placement==='inside'?'Inside':placement==='before'?'Before':'After'} ${item.name}`}];
+    }))]:[];
+  const organize=async()=>{
+    if(!chosen)return;
+    const [placement,target]=organizeDestination.split(':');
+    if(collectionOrganizer.scope==='local')localMove(chosen.id,target||null,placement);
+    else cloudMove(chosen.id,target||null,placement);
+    setCollectionOrganizer(null);
+  };
   const requestMetadata = useRef(new WeakMap());
   const readRequestMetadata = request => {
     const cached = requestMetadata.current.get(request);
@@ -46,6 +102,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   };
 
   return (
+<>
 <aside className="pp-explorer">
         <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Collections' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'environments' ? 'Environments' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
         {explorerTab === 'environments' ? <>
@@ -77,10 +134,28 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
           <div className="pp-side-subhead"><span>COLLECTIONS</span><span>{collectionsScope===STORAGE_LOCAL?localCollections.length:collections.length}</span></div>
           <div className="pp-side-scroll">
             {collectionsScope===STORAGE_LOCAL&&localCollections.length>0&&<>
-              <LocalCollectionsTree collections={visibleLocalCollections} search={explorerSearch} onOpen={openLocalRequest} onOpenExample={openLocalExample} onAction={handleLocalMenu} onMove={moveLocalRequest} onMoveFolder={moveLocalFolder} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
+              <LocalCollectionsTree collections={localCollections} collectionSort={collectionSort} search={explorerSearch} onOpen={openLocalRequest} onOpenExample={openLocalExample} onAction={handleLocalMenu} onMove={moveLocalRequest} onMoveFolder={moveLocalFolder} onMoveCollection={localMove}
+                onOrganizeCollection={sourceId=>{setCollectionOrganizer({scope:'local',sourceId});setOrganizeDestination('root:');}} expandAllSignal={localExpandAllSignal} revealDraft={revealLocalDraft} pendingTabs={openTabs.filter(t=>t.source?.pending&&t.source.scope==='local')} onOpenPending={selectTab}/>
             </>}
             {token && collectionsScope===STORAGE_WORKSPACE ? <>
-              {visibleCollections.map(c => {
+              {canEditCloud&&dragging&&<div className="pp-collection-root-zone" role="region" aria-label="Move collection or folder to Cloud root"
+                onDragOver={e=>{if(isCollectionDrag(e.dataTransfer)||isFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG)){
+                  e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';
+                }}}
+                onDrop={e=>{
+                  e.preventDefault();e.stopPropagation();
+                  const collection=readCollectionDrag(e.dataTransfer);
+                  if(collection?.scope==='workspace'&&collection.workspaceId===selectedWs){
+                    endCollectionDrag();cloudMove(collection.collectionId,null,'root');return;
+                  }
+                  const folder=readFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG);
+                  if(folder?.workspaceId===selectedWs){
+                    endFolderDrag();moveWorkspaceFolder({...folder,targetCollectionId:folder.collectionId,targetParentId:null});
+                  }
+                }}>
+                Drop a collection or folder here to move it to root
+              </div>}
+              {cloudNodes.map(({collection:c,depth}) => {
                 const opened=isWorkspaceCollectionOpen(expandedCollections,selectedWs,c.id,selectedCol);
                 const requestKey=workspaceCollectionKey(selectedWs,c.id);
                 const paged=Number(c.requestCount)>CLOUD_SERVER_PAGING_THRESHOLD;
@@ -88,23 +163,40 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                 const endpointCount=paged?Number(c.requestCount)||0:cloudEndpointCount(c,workspaceRequestLists,requestKey);
                 const activeCloud=activeCloudTabForCollection(openTabs,activeTabId,selectedWs,c.id);
                 return <div key={c.id}>
-                <div className="pp-tree-item-container" style={{'--pp-tree-depth':0}}
-                  onDragOver={e=>{if(canEditCloud&&([...(e.dataTransfer.types||[])].includes(WORKSPACE_DRAG)||isFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG))){
+                <div className={`pp-tree-item-container ${collectionDropTarget.startsWith(`${c.id}:`)?'pp-collection-drop-target':''} ${collectionDropTarget===`${c.id}:before`?'pp-collection-drop-before':''} ${collectionDropTarget===`${c.id}:after`?'pp-collection-drop-after':''}`} style={{'--pp-tree-depth':depth}}
+                  draggable={canEditCloud}
+                  onDragStart={e=>{if(!canEditCloud)return;e.stopPropagation();startCollectionDrag(e.dataTransfer,{scope:'workspace',workspaceId:selectedWs,collectionId:c.id});}}
+                  onDragEnd={()=>{endCollectionDrag();setCollectionDropTarget('');}}
+                  onDragOver={e=>{if(canEditCloud&&isCollectionDrag(e.dataTransfer)){
+                    e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';
+                    setCollectionDropTarget(`${c.id}:${collectionDropPosition(e)}`);
+                  }else if(canEditCloud&&([...(e.dataTransfer.types||[])].includes(WORKSPACE_DRAG)||isFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG))){
                     e.preventDefault();e.dataTransfer.dropEffect='move';
                   }}}
                   onDrop={e=>{
                     if(!canEditCloud)return;
+                    const drag=readCollectionDrag(e.dataTransfer);
+                    if(drag){e.preventDefault();e.stopPropagation();endCollectionDrag();setCollectionDropTarget('');
+                      if(drag.scope==='workspace'&&drag.workspaceId===selectedWs)
+                        cloudMove(drag.collectionId,c.id,collectionDropPosition(e));
+                      return;
+                    }
                     if(isFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG)){
                       e.preventDefault();e.stopPropagation();
                       const item=readFolderDrag(e.dataTransfer,CLOUD_FOLDER_DRAG);
                       endFolderDrag();if(!item)return;
-                      if(item.collectionId!==c.id){setNotice('Moving Cloud folders across collections is not supported');return;}
-                      window.dispatchEvent(new CustomEvent('pakpost:cloud-folder-drop-root',{detail:{collectionId:c.id,folderId:item.folderId}}));
+                      if(item.workspaceId!==selectedWs){setNotice('Folders cannot move across workspaces');return;}
+                      if(item.collectionId!==c.id)
+                        moveWorkspaceFolder({...item,targetCollectionId:c.id,targetParentId:null});
+                      else window.dispatchEvent(new CustomEvent('pakpost:cloud-folder-drop-root',
+                        {detail:{collectionId:c.id,folderId:item.folderId}}));
                       return;
                     }
                     moveWorkspaceRequest(e,c.id);
                   }}>
-                  <button type="button" aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row pp-explorer-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} title={`${c.name} · Collection root (open to move folders inside)`} onClick={() => toggleWorkspaceCollectionById(c.id)}>
+                  <button type="button" draggable={canEditCloud}
+                    onDragStart={e=>{if(!canEditCloud)return;e.stopPropagation();startCollectionDrag(e.dataTransfer,{scope:'workspace',workspaceId:selectedWs,collectionId:c.id});}}
+                    aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row pp-explorer-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} title={`${c.name} · Drag to reorder, or drop into another collection`} onClick={() => toggleWorkspaceCollectionById(c.id)}>
                     {opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
                     <FolderClosed className="pp-cloud-folder-icon" size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
                   </button>
@@ -115,7 +207,8 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                 </div>
                 <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}><div className="pp-collection-motion-inner">
                 <CloudFolderTree workspaceId={selectedWs} collectionId={c.id} token={token} open={opened} requests={requests}
-                  paged={paged} virtualize={!Object.entries(expandedWorkspaceExamples).some(([key,value])=>key.startsWith(`${selectedWs}:${c.id}:`)&&value)}
+                  collections={collections} onMoveFolder={moveWorkspaceFolder}
+                  baseDepth={depth} paged={paged} virtualize={!Object.entries(expandedWorkspaceExamples).some(([key,value])=>key.startsWith(`${selectedWs}:${c.id}:`)&&value)}
                   activeTabId={activeTabId} activeRequestId={activeCloud.requestId}
                   search={explorerSearch} canEdit={canEditCloud} requestDrag={WORKSPACE_DRAG} sortByName={workspaceSorted[c.id]==='name'}
                   onNotice={setNotice} onCreateDraft={folderId=>createCollectionDraft('workspace',c.id,[],folderId)}
@@ -130,7 +223,26 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                   const meta=readRequestMetadata(r);
                   const examplesOpen=expandedWorkspaceExamples[`${selectedWs}:${c.id}:${r.id}`]??!!explorerSearch;
                   const tabActive=activeCloud.requestId===r.id;
-                  return <React.Fragment key={r.id}><div className="pp-tree-item-container" style={{'--pp-tree-depth':depth+1}} draggable={canEditCloud} onDragStart={e=>{if(!canEditCloud)return;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(WORKSPACE_DRAG,JSON.stringify({collectionId:c.id,requestId:r.id}));}}>
+                  return <React.Fragment key={r.id}><div className={`pp-tree-item-container ${requestDropTarget===`${c.id}:${r.id}:before`?'pp-request-drop-before':''} ${requestDropTarget===`${c.id}:${r.id}:after`?'pp-request-drop-after':''}`}
+                    style={{'--pp-tree-depth':depth+1}} draggable={canEditCloud}
+                    onDragStart={e=>{if(!canEditCloud)return;e.stopPropagation();
+                      startRequestDrag(e.dataTransfer,WORKSPACE_DRAG,{collectionId:c.id,folderId:r.folderId||null,requestId:r.id});}}
+                    onDragEnd={()=>{endRequestDrag();setRequestDropTarget('');}}
+                    onDragOver={e=>{
+                      const drag=peekRequestDrag(WORKSPACE_DRAG);
+                      if(!canEditCloud||!drag||drag.collectionId!==c.id||
+                        (drag.folderId||null)!==(r.folderId||null)||drag.requestId===r.id)return;
+                      e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';
+                      setRequestDropTarget(`${c.id}:${r.id}:${dragRowPlacement(e)}`);
+                    }}
+                    onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setRequestDropTarget('');}}
+                    onDrop={e=>{
+                      const drag=readRequestDrag(e.dataTransfer,WORKSPACE_DRAG);
+                      if(!drag||drag.collectionId!==c.id||(drag.folderId||null)!==(r.folderId||null)||
+                        drag.requestId===r.id)return;
+                      e.preventDefault();e.stopPropagation();setRequestDropTarget('');endRequestDrag();
+                      reorderWorkspaceRequest(c.id,drag.requestId,r.id,dragRowPlacement(e));
+                    }}>
                     {!!meta.responseExamples?.length&&<button type="button" className="pp-endpoint-example-toggle pp-workspace-example-toggle" aria-expanded={examplesOpen} title={`${examplesOpen?'Hide':'Show'} ${meta.responseExamples.length} response examples`} aria-label={`${examplesOpen?'Collapse':'Expand'} examples for ${r.name}`} onClick={e=>{e.stopPropagation();setExpandedWorkspaceExamples(old=>({...old,[`${selectedWs}:${c.id}:${r.id}`]:!examplesOpen}));}}>{examplesOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>}
                     <button className={`pp-tree-request pp-cloud-request-row pp-explorer-tree-request ${tabActive?'pp-cloud-tab-active':''} ${selectionProps.className||''}`} data-cloud-select-key={selectionProps['data-cloud-select-key']} aria-pressed={selectionProps['aria-pressed']} aria-current={tabActive?'page':undefined} title={r.url}
                       onContextMenu={e=>{selectionProps.onContextMenu?.(e);showWorkspaceMenu(e,{type:'request',collectionId:c.id,requestId:r.id,name:r.name})}}
@@ -158,5 +270,22 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
           </div>
         </>}
       </aside>
+      {collectionOrganizer&&createPortal(<Dialog title="Move collection" subtitle="Reorder on the same level or nest a collection inside another. Its requests and folders stay unchanged." onClose={()=>setCollectionOrganizer(null)}>
+        <form className="pp-folder-move-form" onSubmit={e=>{e.preventDefault();organize();}}>
+          <label htmlFor="pp-collection-source">Collection to move</label>
+          <select id="pp-collection-source" value={collectionOrganizer.sourceId}
+            onChange={e=>{setCollectionOrganizer(old=>({...old,sourceId:e.target.value}));setOrganizeDestination('root:');}}>
+            {organizationList.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <label htmlFor="pp-collection-target">Destination</label>
+          <select id="pp-collection-target" value={organizeDestination} onChange={e=>setOrganizeDestination(e.target.value)}>
+            {organizationOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <div className="pp-action-dialog-buttons"><button type="button" onClick={()=>setCollectionOrganizer(null)}>Cancel</button>
+            <button type="submit" disabled={!chosen||collectionOrganizer.scope==='workspace'&&!canEditCloud} className="pp-modal-submit">Move collection</button>
+          </div>
+        </form>
+      </Dialog>,document.body)}
+</>
   );
 }

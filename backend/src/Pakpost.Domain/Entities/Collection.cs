@@ -9,6 +9,9 @@ public sealed class Collection
     public Guid Id { get; private set; }
     public Guid WorkspaceId { get; private set; }
     public string Name { get; private set; } = string.Empty;
+    // Organization metadata is separate from the collection's own requests and folders.
+    public Guid? ParentCollectionId { get; private set; }
+    public int SortOrder { get; private set; }
     public string VariablesJson { get; private set; } = "[]";
     public int VariablesVersion { get; private set; }
     public Guid CreatedByUserId { get; private set; }
@@ -36,6 +39,13 @@ public sealed class Collection
         }
 
         Name = name.Trim();
+    }
+
+    public void Place(Guid? parentCollectionId, int sortOrder)
+    {
+        if (parentCollectionId == Id) throw new ArgumentException("Collection cannot parent itself");
+        ParentCollectionId = parentCollectionId;
+        SortOrder = sortOrder;
     }
 
     public void SetVariables(string json)

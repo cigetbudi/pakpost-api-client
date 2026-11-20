@@ -27,13 +27,23 @@ public sealed class CollectionRepository(PakpostDbContext db) : ICollectionRepos
         CancellationToken ct) =>
         await db.Collections.AsNoTracking()
             .Where(collection => collection.WorkspaceId == workspaceId)
-            .OrderBy(collection => collection.Name)
+            .OrderBy(collection => collection.SortOrder)
+            .ThenBy(collection => collection.Name)
             .Select(collection => new CollectionOverview(
                 collection.Id,
                 collection.WorkspaceId,
                 collection.Name,
-                db.SavedRequests.Count(request => request.CollectionId == collection.Id)))
+                db.SavedRequests.Count(request => request.CollectionId == collection.Id),
+                collection.ParentCollectionId,
+                collection.SortOrder))
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Collection>> ListForOrganizationAsync(Guid workspaceId, CancellationToken ct) =>
+        await db.Collections.Where(item => item.WorkspaceId == workspaceId).ToListAsync(ct);
+
+    public Task<bool> HasChildrenAsync(Guid workspaceId, Guid collectionId, CancellationToken ct) =>
+        db.Collections.AsNoTracking().AnyAsync(item => item.WorkspaceId == workspaceId &&
+            item.ParentCollectionId == collectionId, ct);
 
     public async Task<IReadOnlyList<Collection>> ListAsync(Guid workspaceId, CancellationToken ct)
     {

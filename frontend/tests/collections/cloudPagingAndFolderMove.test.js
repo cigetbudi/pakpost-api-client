@@ -40,7 +40,7 @@ test('Local folder rejects cycles, sibling collisions, and moving between collec
   assert.throws(()=>applyLocalAction(make(),{type:'moveFolder',collectionId:'collection-1',folderPath:['A','Inner'],targetFolderPath:['A','Inner']}),/descendants/);
   const collided=make();collided[0].requests.push({id:'four',name:'four',folderPath:['Inner'],responseExamples:[]});
   assert.throws(()=>applyLocalAction(collided,{type:'moveFolder',collectionId:'collection-1',folderPath:['A','Inner'],targetFolderPath:[]}),/already exists/);
-  assert.throws(()=>applyLocalAction(make(),{type:'moveFolder',collectionId:'collection-1',folderPath:['A'],targetCollectionId:'other',targetFolderPath:[]}),/same Local collection/);
+  assert.throws(()=>applyLocalAction(make(),{type:'moveFolder',collectionId:'collection-1',folderPath:['A'],targetCollectionId:'other',targetFolderPath:[]}),/Destination collection/);
 });
 test('Cloud page uses keyset bounds and keeps existing full index for export',()=>{
   const api=source('../../src/features/collections/services/workspaceRequestRepository.js');

@@ -8,9 +8,11 @@ import {statusTone} from '../../requests/services/responseExamples.js';
 import {Dialog} from '../../../components/ui/WorkbenchPrimitives.jsx';
 import {localFolderMoveTargets,localFolderPaths} from '../services/folderMoveTargets.js';
 import {startFolderDrag,isFolderDrag,readFolderDrag,endFolderDrag} from '../services/folderDrag.js';
+import {dragRowPlacement} from '../services/requestDrag.js';
+import {visibleCollectionNodes,collectionParentChain,startCollectionDrag,isCollectionDrag,readCollectionDrag,endCollectionDrag,collectionDropPosition} from '../services/collectionHierarchy.js';
 
 const menus={
-  collection:[['newRequest','New request'],['organizeFolders','Move folder…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
+  collection:[['newRequest','New request'],['organizeFolders','Move folder…'],['organizeCollection','Move collection…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
   folder:[['newRequest','New request here'],['moveFolder','Move to…'],['documentation','Documentation'],['renameFolder','Rename folder'],['duplicateFolder','Duplicate folder'],['sortFolder','Sort folder'],['deleteFolder','Delete folder']],
   request:[['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']],
   example:[['renameExample','Rename example'],['deleteExample','Delete example']]
@@ -60,7 +62,14 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
       const exampleKey=`examples:${collectionId}:${r.id}`;
       const examplesOpen=expanded[exampleKey]??!!search;
       return <React.Fragment key={r.id}>
-        <div className="pp-tree-item-container" style={{'--pp-tree-depth':depth+1}} draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(DRAG_MIME,JSON.stringify({collectionId,requestId:r.id}));}} onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(DRAG_MIME))e.preventDefault()}} onDrop={e=>{e.preventDefault();e.stopPropagation();onMove(e,collectionId,path,r.id)}}>
+        <div className={`pp-tree-item-container ${dropTarget===`req:${r.id}:before`?'pp-request-drop-before':''} ${dropTarget===`req:${r.id}:after`?'pp-request-drop-after':''}`}
+          style={{'--pp-tree-depth':depth+1}} draggable onDragStart={e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData(DRAG_MIME,JSON.stringify({collectionId,requestId:r.id}));}}
+          onDragEnd={()=>setDropTarget('')}
+          onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes(DRAG_MIME)){
+            e.preventDefault();e.stopPropagation();setDropTarget(`req:${r.id}:${dragRowPlacement(e)}`);
+          }}}
+          onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDropTarget('');}}
+          onDrop={e=>{e.preventDefault();e.stopPropagation();setDropTarget('');onMove(e,collectionId,path,r.id,dragRowPlacement(e));}}>
           {!!examples.length&&<button type="button" className="pp-endpoint-example-toggle pp-local-example-toggle" aria-expanded={examplesOpen} aria-label={`${examplesOpen?'Collapse':'Expand'} ${examples.length} examples for ${r.requestName||r.name}`} title={`${examplesOpen?'Hide':'Show'} ${examples.length} response examples`} onClick={e=>{e.stopPropagation();toggle(exampleKey,!!search);}}>{examplesOpen?<ChevronDown size={13}/>:<ChevronRight size={13}/>}</button>}
           <button type="button" className="pp-tree-request pp-local-request pp-explorer-tree-request" title={r.url} onClick={()=>onOpen(r,collectionId)} onContextMenu={e=>onMenu(e,{type:'request',collectionId,requestId:r.id,name:r.requestName||r.name})}>
             <span className="pp-tree-disclosure-slot" aria-hidden="true"/><span className={`pp-http-label ${(r.method||'GET').toLowerCase()}`}>{r.method||'GET'}</span><span className="pp-tree-name">{r.requestName||r.name}</span>
@@ -77,9 +86,15 @@ function Branch({node,collectionId,path=[],depth=0,search,onOpen,onOpenExample,o
     })}
   </>;
 }
-export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample,onAction,onMove,onMoveFolder,expandAllSignal,revealDraft,pendingTabs=[],onOpenPending=()=>{}}){
+export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample,onAction,onMove,onMoveFolder,onMoveCollection,onOrganizeCollection,collectionSort='manual',expandAllSignal,revealDraft,pendingTabs=[],onOpenPending=()=>{}}){
   const [expanded,setExpanded]=useState({}),[menu,setMenu]=useState(null),[dropTarget,setDropTarget]=useState('');
   const [moveDialog,setMoveDialog]=useState(null);
+  const [dragging,setDragging]=useState(null);
+  useEffect(()=>{
+    const change=e=>setDragging(e.detail?.kind&&e.detail?.scope==='local'?e.detail:null);
+    window.addEventListener('pakpost:explorer-drag',change);
+    return()=>window.removeEventListener('pakpost:explorer-drag',change);
+  },[]);
   // Only opened collections build trees. Reuse each immutable Local request
   // array's tree until it changes, instead of rebuilding on every UI keystroke.
   const treeCache = useRef(new WeakMap());
@@ -93,11 +108,18 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
   };
   const toggle=(key,defaultOpen=true)=>setExpanded(old=>({...old,[key]:!(old[key]??defaultOpen)}));
   useEffect(()=>{
+    const reveal=event=>{const id=event.detail?.collectionId;
+      if(id)setExpanded(old=>({...old,...Object.fromEntries(collectionParentChain(collections,id)
+        .map(item=>[`collection:${item}`,true]))}));};
+    window.addEventListener('pakpost:local-collection-reveal',reveal);
+    return()=>window.removeEventListener('pakpost:local-collection-reveal',reveal);
+  },[collections]);
+  useEffect(()=>{
     if(!revealDraft)return;
     const {collectionId,folderPath=[]}=revealDraft;
-    const keys=[`collection:${collectionId}`,...folderPath.map((_,index)=>`${collectionId}:${JSON.stringify(folderPath.slice(0,index+1))}`)];
+    const keys=[...collectionParentChain(collections,collectionId).map(id=>`collection:${id}`),...folderPath.map((_,index)=>`${collectionId}:${JSON.stringify(folderPath.slice(0,index+1))}`)];
     setExpanded(old=>({...old,...Object.fromEntries(keys.map(key=>[key,true]))}));
-  },[revealDraft]);
+  },[revealDraft,collections]);
   useEffect(()=>{
     if(!expandAllSignal)return;
     setExpanded(old=>({...old,...Object.fromEntries(collectLocalExpansionKeys(collections).map(key=>[key,expandAllSignal.open]))}));
@@ -108,7 +130,7 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
     window.addEventListener('pointerdown',close);window.addEventListener('keydown',escape);
     return ()=>{window.removeEventListener('pointerdown',close);window.removeEventListener('keydown',escape)};
   },[menu]);
-  const drop=(e,targetCollectionId,targetFolderPath=[],beforeRequestId)=>{
+  const drop=(e,targetCollectionId,targetFolderPath=[],beforeRequestId,placement='before')=>{
     const source=readFolderDrag(e.dataTransfer,FOLDER_DRAG_MIME);
     if(source){
       if(typeof source.collectionId==='string'&&Array.isArray(source.folderPath))
@@ -120,27 +142,57 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
       const raw=e.dataTransfer.getData(DRAG_MIME);
       if(!raw)return;
       const data=JSON.parse(raw);
-      if(data.requestId!==beforeRequestId)onMove({...data,targetCollectionId,targetFolderPath,beforeRequestId});
+      if(data.requestId!==beforeRequestId)onMove({...data,targetCollectionId,targetFolderPath,beforeRequestId,placement});
     }catch{/* Ignore malformed drops from outside the workbench. */}
     finally{endFolderDrag();}
   };
+  const collectionNodes=visibleCollectionNodes(collections,{sort:collectionSort,search,
+    isOpen:col=>expanded[`collection:${col.id}`]!==false,
+    requestMatches:col=>(col.requests||[]).some(r=>`${r.name||r.requestName} ${r.url||''}`.toLowerCase().includes(search.toLowerCase()))});
   const moveCollection=moveDialog?collections.find(c=>c.id===moveDialog.collectionId):null;
+  const destinationCollection=moveDialog?collections.find(c=>c.id===moveDialog.targetCollectionId):null;
   const sourcePaths=moveDialog?localFolderPaths(moveCollection):[];
-  const moveTargets=moveDialog&&moveDialog.folderPath?.length?localFolderMoveTargets(
-    moveCollection,moveDialog.folderPath):[];
+  const moveTargets=moveDialog&&moveDialog.folderPath?.length?
+    (moveDialog.targetCollectionId===moveDialog.collectionId?
+      localFolderMoveTargets(moveCollection,moveDialog.folderPath):
+      [[],...localFolderPaths(destinationCollection)]):[];
   return <div className="pp-local-collections" aria-label="Local collections">
-    {collections.map(col=>{
+    {dragging&&<div className="pp-collection-root-zone" role="region" aria-label="Move collection or folder to Local root"
+      onDragOver={e=>{if(isCollectionDrag(e.dataTransfer)||isFolderDrag(e.dataTransfer,FOLDER_DRAG_MIME)){
+        e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';
+      }}}
+      onDrop={e=>{
+        e.preventDefault();e.stopPropagation();
+        const item=readCollectionDrag(e.dataTransfer);
+        if(item?.scope==='local'){endCollectionDrag();onMoveCollection?.(item.collectionId,null,'root');return;}
+        const folder=readFolderDrag(e.dataTransfer,FOLDER_DRAG_MIME);
+        if(folder?.collectionId){onMoveFolder?.({...folder,targetCollectionId:folder.collectionId,targetFolderPath:[]});endFolderDrag();}
+      }}>
+      Drop a collection or folder here to move it to root
+    </div>}
+    {collectionNodes.map(({collection:col,depth})=>{
       const key=`collection:${col.id}`;const opened=!!search||expanded[key]!==false;
       // Closed Local collections keep their expansion state, not a hidden DOM subtree.
       const rawTree=opened?cachedTree(col.requests):null;
       const tree=rawTree&&(col.name.toLowerCase().includes(search.toLowerCase())?rawTree:filterCollectionTree(rawTree,search));
-      if(search&&!tree.requests.length&&!tree.folders.length&&!col.name.toLowerCase().includes(search.toLowerCase())
-        &&!pendingTabs.some(t=>t.source?.collectionId===col.id && t.name.toLowerCase().includes(search.toLowerCase())))return null;
-      return <div key={col.id} className="pp-local-collection" onDragOver={e=>{if(isLocalDrag(e.dataTransfer))e.preventDefault()}} onDrop={e=>{e.preventDefault();e.stopPropagation();setDropTarget('');drop(e,col.id,[])}}>
-        <div className={`pp-local-collection-head pp-tree-item-container ${dropTarget===key?'pp-folder-drop-target':''}`} style={{'--pp-tree-depth':0}} onDragOver={e=>{if(isLocalDrag(e.dataTransfer)){e.preventDefault();e.stopPropagation();setDropTarget(key);}}}
+      return <div key={col.id} className="pp-local-collection" onDragOver={e=>{if(isLocalDrag(e.dataTransfer))e.preventDefault()}} onDrop={e=>{
+        if(isCollectionDrag(e.dataTransfer))return;
+        e.preventDefault();e.stopPropagation();setDropTarget('');drop(e,col.id,[]);
+      }}>
+        <div className={`pp-local-collection-head pp-tree-item-container ${dropTarget===key?'pp-folder-drop-target':''} ${dropTarget.startsWith(`${key}:`)?'pp-collection-drop-target':''} ${dropTarget===`${key}:before`?'pp-collection-drop-before':''} ${dropTarget===`${key}:after`?'pp-collection-drop-after':''}`} style={{'--pp-tree-depth':depth}}
+          draggable onDragStart={e=>{e.stopPropagation();startCollectionDrag(e.dataTransfer,{scope:'local',collectionId:col.id});}}
+          onDragEnd={()=>{endCollectionDrag();setDropTarget('');}}
+          onDragOver={e=>{if(isCollectionDrag(e.dataTransfer)){
+            e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';setDropTarget(`${key}:${collectionDropPosition(e)}`);
+          }else if(isLocalDrag(e.dataTransfer)){e.preventDefault();e.stopPropagation();setDropTarget(key);}}}
           onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDropTarget('');}}
-          onDrop={e=>{e.preventDefault();e.stopPropagation();setDropTarget('');drop(e,col.id,[]);}}>
-          <button type="button" className="pp-tree-row pp-explorer-tree-row" onClick={()=>toggle(key)} title={`${col.name} · Collection root (open to move folders inside)`} aria-expanded={opened} onContextMenu={e=>openMenu(e,{type:'collection',collectionId:col.id,name:col.name})}>
+          onDrop={e=>{e.preventDefault();e.stopPropagation();setDropTarget('');
+            const data=readCollectionDrag(e.dataTransfer);
+            if(data){endCollectionDrag();if(data.scope==='local')onMoveCollection?.(data.collectionId,col.id,collectionDropPosition(e));return;}
+            drop(e,col.id,[]);
+          }}>
+          <button type="button" draggable onDragStart={e=>{e.stopPropagation();startCollectionDrag(e.dataTransfer,{scope:'local',collectionId:col.id});}}
+            className="pp-tree-row pp-explorer-tree-row" onClick={()=>toggle(key)} title={`${col.name} · Drag to reorder, or drop into another collection`} aria-expanded={opened} onContextMenu={e=>openMenu(e,{type:'collection',collectionId:col.id,name:col.name})}>
             {opened?<ChevronDown size={14}/>:<ChevronRight size={14}/>}<FolderClosed size={15}/><span>{col.name}</span><small>{col.requests.length}</small>
           </button>
           <div className="pp-tree-actions">
@@ -149,16 +201,16 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
           </div>
         </div>
         <div className={`pp-collection-motion ${opened?'is-open':''}`} aria-hidden={!opened} inert={!opened}>
-          <div className="pp-collection-motion-inner">{opened&&tree&&<Branch node={tree} collectionId={col.id} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={openMenu} expanded={expanded} toggle={toggle} onMove={drop} pendingTabs={pendingTabs} onOpenPending={onOpenPending} dropTarget={dropTarget} setDropTarget={setDropTarget}/>}</div>
+          <div className="pp-collection-motion-inner">{opened&&tree&&<Branch node={tree} collectionId={col.id} depth={depth} search={search} onOpen={onOpen} onOpenExample={onOpenExample} onMenu={openMenu} expanded={expanded} toggle={toggle} onMove={drop} pendingTabs={pendingTabs} onOpenPending={onOpenPending} dropTarget={dropTarget} setDropTarget={setDropTarget}/>}</div>
         </div>
       </div>;
     })}
-    {moveDialog&&createPortal(<Dialog title="Move Local folder" subtitle="Choose a source folder and where to put it within this collection." onClose={()=>setMoveDialog(null)}>
+    {moveDialog&&createPortal(<Dialog title="Move Local folder" subtitle="Move a folder and all nested requests/documentation to any Local collection." onClose={()=>setMoveDialog(null)}>
       <form className="pp-folder-move-form" onSubmit={e=>{
         e.preventDefault();
         if(!moveDialog.folderPath.length)return;
         onMoveFolder?.({collectionId:moveDialog.collectionId,folderPath:moveDialog.folderPath,
-          targetCollectionId:moveDialog.collectionId,targetFolderPath:moveDialog.targetFolderPath});
+          targetCollectionId:moveDialog.targetCollectionId,targetFolderPath:moveDialog.targetFolderPath});
         setMoveDialog(null);
       }}>
         <label htmlFor="pp-local-folder-move-source">Folder to move</label>
@@ -168,6 +220,11 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
           {sourcePaths.map(path=><option key={JSON.stringify(path)} value={JSON.stringify(path)}>{path.join(' / ')}</option>)}
         </select>
         {!sourcePaths.length&&<p className="pp-folder-move-note">This collection has no folders yet. Create a folder first.</p>}
+        <label htmlFor="pp-local-folder-move-collection">Destination collection</label>
+        <select id="pp-local-folder-move-collection" value={moveDialog.targetCollectionId}
+          onChange={e=>setMoveDialog(old=>({...old,targetCollectionId:e.target.value,targetFolderPath:[]}))}>
+          {collections.map(col=><option key={col.id} value={col.id}>{col.name}</option>)}
+        </select>
         <label htmlFor="pp-local-folder-move-target">Destination folder</label>
         <select id="pp-local-folder-move-target" disabled={!moveDialog.folderPath.length} value={JSON.stringify(moveDialog.targetFolderPath)}
           onChange={e=>setMoveDialog(old=>({...old,targetFolderPath:JSON.parse(e.target.value)}))}>
@@ -178,7 +235,7 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
       </form>
     </Dialog>,document.body)}
     {menu&&createPortal(<div role="menu" className="pp-collection-popup" style={{left:Math.max(8,menu.x),top:Math.max(8,menu.y)}}>
-      {menus[menu.type].map(([action,label])=><MenuActionItem key={action} action={action} danger={action.startsWith('delete')} onClick={()=>{if(action==='moveFolder'||action==='organizeFolders'){setMoveDialog({collectionId:menu.collectionId,folderPath:action==='moveFolder'?menu.folderPath:[],targetFolderPath:[]});}else onAction({...menu,action});setMenu(null);}}>{label}</MenuActionItem>)}
+      {menus[menu.type].map(([action,label])=><MenuActionItem key={action} action={action} danger={action.startsWith('delete')} onClick={()=>{if(action==='organizeCollection'){onOrganizeCollection?.(menu.collectionId);}else if(action==='moveFolder'||action==='organizeFolders'){setMoveDialog({collectionId:menu.collectionId,targetCollectionId:menu.collectionId,folderPath:action==='moveFolder'?menu.folderPath:[],targetFolderPath:[]});}else onAction({...menu,action});setMenu(null);}}>{label}</MenuActionItem>)}
     </div>,document.body)}
   </div>;
 }

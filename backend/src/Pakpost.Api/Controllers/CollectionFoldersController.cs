@@ -15,7 +15,7 @@ public sealed class CollectionFoldersController(ISender sender,IWorkspaceChangeP
     private string Instance=>Request.Headers["X-PakPost-Instance"].ToString();
     public sealed record CreateBody(string Name,Guid? ParentFolderId);
     public sealed record RenameBody(string Name,int Version);
-    public sealed record MoveBody(Guid? ParentFolderId,int Version);
+    public sealed record MoveBody(Guid? ParentFolderId,int Version,Guid? TargetCollectionId=null);
     public sealed record DeleteItemsBody(List<FolderDeleteTarget> Folders,List<Guid> RequestIds);
     [HttpPost("delete-items")]
     public async Task<IActionResult> DeleteItems(Guid workspaceId,Guid collectionId,[FromBody] DeleteItemsBody body,CancellationToken ct)
@@ -46,8 +46,16 @@ public sealed class CollectionFoldersController(ISender sender,IWorkspaceChangeP
     [HttpPatch("{folderId:guid}/move")]
     public async Task<IActionResult> Move(Guid workspaceId,Guid collectionId,Guid folderId,[FromBody] MoveBody body,CancellationToken ct)
     {
-        var saved=await sender.Send(new MoveFolderCommand(User.GetUserId(),workspaceId,collectionId,folderId,body.ParentFolderId,body.Version),ct);
+        var targetCollectionId = body.TargetCollectionId ?? collectionId;
+        var saved=await sender.Send(new MoveFolderCommand(User.GetUserId(),workspaceId,collectionId,
+            folderId,body.ParentFolderId,body.Version,targetCollectionId),ct);
         await realtime.PublishAsync(workspaceId,"folder.moved",collectionId,null,null,Instance,ct);
+        if (targetCollectionId != collectionId)
+        {
+            await realtime.PublishAsync(workspaceId,"folder.moved",targetCollectionId,null,null,Instance,ct);
+            await realtime.PublishAsync(workspaceId,"request.moved",collectionId,null,null,Instance,ct);
+            await realtime.PublishAsync(workspaceId,"request.moved",targetCollectionId,null,null,Instance,ct);
+        }
         return Ok(saved);
     }
     [HttpDelete("{folderId:guid}")]

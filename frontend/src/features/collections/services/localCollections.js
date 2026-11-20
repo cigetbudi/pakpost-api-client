@@ -21,13 +21,27 @@ export function toLocalCollection(source,idFactory=uid){
     responseExamples:(r.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),
     result:null,scriptLog:[],scriptTests:[],scriptError:'',
   }));
-  return {id:idFactory(),name:String(source?.name||'Imported collection'),variables:(source?.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret})),documentation:String(source?.documentation||''),folderDocs:{...(source?.folderDocs||{})},requests};
+  return {id:idFactory(),name:String(source?.name||'Imported collection'),parentCollectionId:null,sortOrder:0,variables:(source?.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret})),documentation:String(source?.documentation||''),folderDocs:{...(source?.folderDocs||{})},requests};
 }
 
 export function validateLibrary(collections){
   if(!Array.isArray(collections)||collections.length>MAX_COLLECTIONS)throw Error(`Maximum ${MAX_COLLECTIONS} local collections.`);
   if(collections.reduce((total,c)=>total+(c.requests||[]).length,0)>MAX_REQUESTS)throw Error(`Maximum ${MAX_REQUESTS} local requests.`);
-  for(const collection of collections)validateCollectionVariableRows(collection.variables||[]);
+  const ids=new Set(collections.map(c=>c.id));
+  if(ids.size!==collections.length)throw Error('Duplicate local collection IDs');
+  for(const collection of collections){
+    validateCollectionVariableRows(collection.variables||[]);
+    if(collection.parentCollectionId&&(!ids.has(collection.parentCollectionId)||collection.parentCollectionId===collection.id))
+      throw Error('Invalid local collection parent');
+  }
+  for(const item of collections){
+    const seen=new Set([item.id]);let parent=item.parentCollectionId,depth=1;
+    while(parent){
+      if(seen.has(parent)||depth++>=12)throw Error('Collection nesting cycle or depth limit exceeded');
+      seen.add(parent);
+      parent=collections.find(c=>c.id===parent)?.parentCollectionId||null;
+    }
+  }
   return collections;
 }
 

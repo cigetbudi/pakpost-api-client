@@ -17,12 +17,12 @@ export function WorkbenchView({ model }) {
     recent, teams, selectedTeam, collectionsScope, explorerSearch, collectionSort,
     busyAction, canEditCloud, creatingLocalCollection, localCollectionName, collections, visibleLocalCollections,
     localExpandAllSignal, revealLocalDraft, visibleCollections, expandedCollections, selectedCol, workspaceRequestLists,
-    WORKSPACE_DRAG, workspaceSorted, expandedWorkspaceExamples, setSelectedWs, navigate, setAuthMode,
+    WORKSPACE_DRAG, workspaceSorted, expandedWorkspaceExamples, setSelectedWs, setExpandedCollections, navigate, setAuthMode,
     persistEnvironment, createEnvironment, deleteEnvironment, duplicateEnvironment, openExportChoice, importEnvironmentFile,
     codePreviewRequest, buildCodeRequest, snapshot, importRequestsAndEnvironments, setNotice, loadRequest,
     setSelectedTeam, setWsTab, setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport,
     setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu,
-    moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById, createCollectionDraft,
+    moveLocalRequest, moveLocalFolder, moveLocalCollection, moveWorkspaceCollection, selectTab, moveWorkspaceFolder, reorderWorkspaceRequest, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById, createCollectionDraft,
     setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample, draftsRef, CodeSidebar, ImportExportSidebar,
     WorkbenchSettings, setTheme, split, setSplit, interceptorMode, setInterceptorMode,
     extensionStatus, refreshExtensionStatus, RequestTabs, requestWorkbenchStore, remoteAlerts, tabDragRef,
@@ -82,13 +82,13 @@ export function WorkbenchView({ model }) {
     workspaceSorted, expandedWorkspaceExamples,
   }}
   actions={{
-    setSidebarCollapsed, setSelectedWs, navigate, setAuthMode, setAuthOpen,
+    setSidebarCollapsed, setSelectedWs, setExpandedCollections, navigate, setAuthMode, setAuthOpen,
     setActiveEnvId, persistEnvironment, createEnvironment, deleteEnvironment, duplicateEnvironment,
     openExportChoice, importEnvironmentFile, codePreviewRequest, buildCodeRequest, snapshot,
     importRequestsAndEnvironments, setNotice, loadRequest, setSelectedTeam, setWsTab,
     setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport, setCreatingLocalCollection,
     createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu,
-    moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, handleWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
+    moveLocalRequest, moveLocalFolder, moveLocalCollection, moveWorkspaceCollection, selectTab, moveWorkspaceFolder, reorderWorkspaceRequest, moveWorkspaceRequest, showWorkspaceMenu, handleWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
     createCollectionDraft, setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample,
   }}
   refs={{
@@ -103,11 +103,15 @@ export function WorkbenchView({ model }) {
         <RequestTabs store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} runnerLoading={runnerLoading} openRunnerForCurrentCollection={openRunnerForCurrentCollection} consoleOpen={consoleOpen} setConsoleOpen={setConsoleOpen} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
-            ['newRequest','New request'],['newFolder','New folder'],['organizeFolders','Move folder…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
+            ['newRequest','New request'],['newFolder','New folder'],['organizeFolders','Move folder…'],['organizeCollection','Move collection…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
           ]:workspaceMenu.type==='example'?[
             ['renameExample','Rename example'],['deleteExample','Delete example']
           ]:[['versionHistory','Version history'],['documentation','Documentation'],['renameRequest','Rename'],['duplicateRequest','Duplicate'],['deleteRequest','Delete']]).map(([id,label])=>
-            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables','runCollection','versionHistory'].includes(id)} danger={id.startsWith('delete')} onClick={()=>{if(id==='organizeFolders'){
+            <MenuActionItem key={id} action={id} disabled={!canEditCloud && !['exportCollection','documentation','variables','runCollection','versionHistory'].includes(id)} danger={id.startsWith('delete')} onClick={()=>{if(id==='organizeCollection'){
+              window.dispatchEvent(new CustomEvent('pakpost:collection-organizer',
+                {detail:{scope:'workspace',workspaceId:selectedWs,collectionId:workspaceMenu.collectionId}}));
+              setWorkspaceMenu(null);
+            }else if(id==='organizeFolders'){
               window.dispatchEvent(new CustomEvent('pakpost:cloud-folder-organizer',
                 {detail:{workspaceId:selectedWs,collectionId:workspaceMenu.collectionId}}));
               setWorkspaceMenu(null);

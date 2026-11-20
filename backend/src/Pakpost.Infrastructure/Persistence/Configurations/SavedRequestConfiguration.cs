@@ -57,6 +57,10 @@ public sealed class SavedRequestConfiguration : IEntityTypeConfiguration<SavedRe
             .HasForeignKey(request => request.FolderId)
             .OnDelete(DeleteBehavior.NoAction);
 
+        builder.Property(request => request.SortOrder)
+            .HasColumnName("sort_order").HasDefaultValue(int.MaxValue);
+        builder.HasIndex(request => new { request.CollectionId, request.FolderId,
+            request.SortOrder, request.Id });
         builder.HasIndex(request => request.CollectionId);
         builder.HasIndex(request => request.FolderId);
         builder.HasIndex(request => new { request.CollectionId, request.Id });

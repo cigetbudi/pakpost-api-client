@@ -404,8 +404,12 @@ export function useWorkbenchController() {
   function refreshCloudCollection(...args) { return collectionActions.refreshCloudCollection(...args); }
   function moveLocalRequest(...args) { return collectionActions.moveLocalRequest(...args); }
   function moveLocalFolder(...args) { return collectionActions.moveLocalFolder(...args); }
+  function moveLocalCollection(...args) { return collectionActions.moveLocalCollection(...args); }
+  async function moveWorkspaceCollection(...args) { return collectionActions.moveWorkspaceCollection(...args); }
   const WORKSPACE_DRAG='application/x-pakpost-workspace-request';
   async function moveWorkspaceRequest(...args) { return collectionActions.moveWorkspaceRequest(...args); }
+  async function moveWorkspaceFolder(...args) { return collectionActions.moveWorkspaceFolder(...args); }
+  async function reorderWorkspaceRequest(...args) { return collectionActions.reorderWorkspaceRequest(...args); }
   function showWorkspaceMenu(...args) { return collectionActions.showWorkspaceMenu(...args); }
   function workspaceDraft(...args) { return collectionActions.workspaceDraft(...args); }
   async function handleWorkspaceMenu(...args) { return collectionActions.handleWorkspaceMenu(...args); }
@@ -873,11 +877,11 @@ export function useWorkbenchController() {
     activeTabId, localEnvironments, localCollections, recent, teams, selectedTeam, collectionsScope,
     explorerSearch, collectionSort, busyAction, canEditCloud, creatingLocalCollection, localCollectionName, collections,
     visibleLocalCollections, localExpandAllSignal, revealLocalDraft, visibleCollections, expandedCollections, selectedCol, workspaceRequestLists,
-    WORKSPACE_DRAG, workspaceSorted, expandedWorkspaceExamples, setSelectedWs, navigate, setAuthMode, persistEnvironment,
+    WORKSPACE_DRAG, workspaceSorted, expandedWorkspaceExamples, setSelectedWs, setExpandedCollections, navigate, setAuthMode, persistEnvironment,
     createEnvironment, deleteEnvironment, duplicateEnvironment, openExportChoice, importEnvironmentFile, codePreviewRequest, buildCodeRequest,
     snapshot, importRequestsAndEnvironments, setNotice, loadRequest, setSelectedTeam, setWsTab, setExplorerSearch,
     setCollectionSort, expandOrCollapseAllCollections, openCollectionImport, setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest,
-    openLocalExample, handleLocalMenu, moveLocalRequest, moveLocalFolder, selectTab, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
+    openLocalExample, handleLocalMenu, moveLocalRequest, moveLocalFolder, moveLocalCollection, moveWorkspaceCollection, selectTab, moveWorkspaceFolder, reorderWorkspaceRequest, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
     createCollectionDraft, setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample, draftsRef, CodeSidebar, ImportExportSidebar,
     WorkbenchSettings, setTheme, split, setSplit, interceptorMode, setInterceptorMode, extensionStatus,
     refreshExtensionStatus, RequestTabs, requestWorkbenchStore, remoteAlerts, tabDragRef, closeTab, showTabContext,

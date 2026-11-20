@@ -18,6 +18,7 @@ const actionIcons = {
   deleteCollection: Trash2,
   moveFolder: MoveRight,
   organizeFolders: MoveRight,
+  organizeCollection: MoveRight,
   renameFolder: Pencil,
   duplicateFolder: Copy,
   sortFolder: ArrowDownUp,

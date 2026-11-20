@@ -117,6 +117,38 @@ public static class CloudFolderRules
         }
     }
 
+    public static HashSet<Guid> ValidateTransfer(
+        IReadOnlyList<CollectionFolder> source,
+        IReadOnlyList<CollectionFolder> destination,
+        CollectionFolder moving,
+        Guid targetCollectionId,
+        Guid? targetParentId)
+    {
+        var selected = ExpandSubtrees(source, new[] { moving.Id });
+        if (destination.Count + selected.Count > MaximumFolders)
+            throw AppException.BadRequest("Target collection folder limit exceeded");
+        ValidatePlacement(destination, targetCollectionId, targetParentId, moving.Name);
+        var byId = source.ToDictionary(item => item.Id);
+        var maxSubtreeDepth = 1;
+        foreach (var id in selected)
+        {
+            var depth = 1;
+            var visited = new HashSet<Guid>();
+            var current = byId[id].ParentFolderId;
+            while (current is Guid parentId && selected.Contains(parentId))
+            {
+                if (!visited.Add(parentId)) throw AppException.Conflict("Invalid folder cycle");
+                depth++;
+                current = byId[parentId].ParentFolderId;
+            }
+            maxSubtreeDepth = Math.Max(maxSubtreeDepth, depth);
+        }
+        var destinationDepth = GetParentDepth(destination, targetCollectionId, targetParentId, null);
+        if (destinationDepth + maxSubtreeDepth > MaximumDepth)
+            throw AppException.BadRequest("Folder subtree would exceed maximum depth");
+        return selected;
+    }
+
     public static HashSet<Guid> ExpandSubtrees(
         IReadOnlyList<CollectionFolder> folders,
         IEnumerable<Guid> rootIds)

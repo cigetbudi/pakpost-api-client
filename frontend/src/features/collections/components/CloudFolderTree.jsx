@@ -18,11 +18,20 @@ const FOLDER_DRAG=CLOUD_FOLDER_DRAG;
 /** The Cloud tree owns keyboard selection. No new global key handler affects the request editor. */
 export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[],search='',canEdit=false,activeTabId,activeRequestId,
   requestDrag,renderRequest,renderDraft,onMoveRequest,onCreateDraft,onNotice,onRefreshRequests,onRenameRequest,
-  sortByName=false,paged=false,virtualize=true}){
+  sortByName=false,paged=false,virtualize=true,baseDepth=0,collections=[],onMoveFolder}){
   const [folders,setFolders]=useState([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
   const [expanded,setExpanded]=useState({}),[editing,setEditing]=useState(null),[selection,setSelection]=useState([]);
   const [confirmDelete,setConfirmDelete]=useState(null),[menu,setMenu]=useState(null),[dragging,setDragging]=useState(false);
   const [moveDialog,setMoveDialog]=useState(null);
+  const [targetFolders,setTargetFolders]=useState([]);
+  useEffect(()=>{
+    if(!moveDialog||!token||moveDialog.targetCollectionId===collectionId){setTargetFolders([]);return;}
+    let active=true;
+    api(`/api/workspaces/${workspaceId}/collections/${moveDialog.targetCollectionId}/folders`,
+      'GET',undefined,token).then(items=>{if(active)setTargetFolders(Array.isArray(items)?items:[]);})
+      .catch(error=>{if(active)onNotice?.(error.message||'Cannot load destination folders');});
+    return()=>{active=false;};
+  },[moveDialog?.targetCollectionId,collectionId,workspaceId,token]);
   const [reload,setReload]=useState(0),[busy,setBusy]=useState(false),[dropTarget,setDropTarget]=useState('');
   const rootRef=useRef(null),anchorRef=useRef(''),lastEditedFolderRef=useRef('');
   const pagedRecordsRef=useRef(new Map());
@@ -63,7 +72,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
       setEditing({mode:'create',parentId:null,name:''});setMenu(null);
     }};
     const organize=e=>{if(e.detail?.workspaceId===workspaceId&&e.detail?.collectionId===collectionId&&canEdit){
-      setError('');setMenu(null);setMoveDialog({folderId:'',targetParentId:null});
+      setError('');setMenu(null);setMoveDialog({folderId:'',targetCollectionId:collectionId,targetParentId:null});
     }};
     window.addEventListener('pakpost:cloud-folder-organizer',organize);
     window.addEventListener('pakpost:cloud-folders-changed',notify);
@@ -114,7 +123,12 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
     const folder=readFolderDrag(event.dataTransfer,FOLDER_DRAG);
     if(folder){
       event.preventDefault();event.stopPropagation();
-      if(folder.collectionId!==collectionId){onNotice?.('Folders can only be moved within the same Cloud collection');return;}
+      if(folder.workspaceId&&folder.workspaceId!==workspaceId){onNotice?.('Cannot move folders across workspaces');return;}
+      if(folder.collectionId!==collectionId){
+        try{await onMoveFolder?.({...folder,targetCollectionId:collectionId,targetParentId:targetId});}
+        catch(error){onNotice?.(error.message||'Could not move folder');}
+        return;
+      }
       await moveCloudFolder(folder.folderId,targetId);
       return;
     }
@@ -201,7 +215,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
     onError:onNotice,onRows:trackPage,refreshKey:reload,virtualize,sortByName};
   // makeCloudFolderTree already disconnects corrupt cycles; no ancestry Set
   // allocation per recursive branch is needed while rendering.
-  const renderNode=(branch,depth=0)=>{
+  const renderNode=(branch,depth=baseDepth)=>{
     if(paged&&filter)return depth===0?<CloudPagedRequestRows key={`search:${filter}:${reload}`}
       {...pageProps} depth={0} rootOnly={false} virtualize={false}/>:null;
     const children=branch.folders.map(folder=>{
@@ -209,7 +223,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
       const key=folderKey(folder.id);
       return <React.Fragment key={folder.id}>
         <div className={`pp-tree-item-container ${dropTarget===folder.id?'pp-folder-drop-target':''}`} style={{'--pp-tree-depth':depth+1}} draggable={canEdit} onDragStart={e=>{
-          e.stopPropagation();setDragging(true);startFolderDrag(e.dataTransfer,FOLDER_DRAG,{collectionId,folderId:folder.id});}}
+          e.stopPropagation();setDragging(true);startFolderDrag(e.dataTransfer,FOLDER_DRAG,{workspaceId,collectionId,folderId:folder.id,version:folder.version});}}
           onDragEnd={()=>{setDragging(false);setDropTarget('');endFolderDrag();}}
           onDragOver={e=>{
             if(!canEdit)return;
@@ -219,9 +233,9 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
             }
           }}
           onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDropTarget('');}}
-          onDrop={e=>{setDropTarget('');folderMove(e,folder.id);endFolderDrag();}}>
+          onDrop={e=>{e.preventDefault();e.stopPropagation();setDropTarget('');folderMove(e,folder.id);endFolderDrag();}}>
           <button type="button" draggable={canEdit} data-cloud-select-key={key} aria-pressed={selectedKeys.has(key)}
-            onDragStart={e=>{if(!canEdit)return;e.stopPropagation();setDragging(true);startFolderDrag(e.dataTransfer,FOLDER_DRAG,{collectionId,folderId:folder.id});}}
+            onDragStart={e=>{if(!canEdit)return;e.stopPropagation();setDragging(true);startFolderDrag(e.dataTransfer,FOLDER_DRAG,{workspaceId,collectionId,folderId:folder.id,version:folder.version});}}
             onDragOver={e=>{if(canEdit&&(Array.from(e.dataTransfer.types||[]).includes(requestDrag)||isFolderDrag(e.dataTransfer,FOLDER_DRAG))){e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';setDropTarget(folder.id);}}}
             onDrop={e=>{e.preventDefault();e.stopPropagation();setDropTarget('');folderMove(e,folder.id);endFolderDrag();}}
             className={`pp-tree-row pp-local-folder pp-cloud-folder-row pp-explorer-tree-row ${selectedKeys.has(key)?'pp-cloud-selected':''}`} aria-expanded={isOpen}
@@ -245,7 +259,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
     </>;
   };
   return <div ref={rootRef} className="pp-cloud-folders" onKeyDown={onKeys}
-    onDragOver={e=>{if(canEdit&&(Array.from(e.dataTransfer.types||[]).includes(requestDrag)||isFolderDrag(e.dataTransfer,FOLDER_DRAG)))setDragging(true);}}>
+    onDragOver={e=>{if(canEdit&&isFolderDrag(e.dataTransfer,FOLDER_DRAG))setDragging(true);}}>
     {canEdit&&dragging&&<div className={`pp-cloud-root-drop ${dropTarget==='root'?'pp-folder-drop-target':''}`}
       onDragOver={e=>{e.preventDefault();e.stopPropagation();setDropTarget('root');}}
       onDragLeave={()=>setDropTarget('')}
@@ -276,16 +290,26 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
     {menu&&createPortal(<div className="pp-collection-popup" role="menu" style={{left:Math.max(8,menu.x),top:Math.max(8,menu.y)}}>
       <MenuActionItem action="newFolder" onClick={()=>{setEditing({mode:'create',parentId:menu.folder.id,name:''});setMenu(null);}}>New subfolder</MenuActionItem>
       <MenuActionItem action="newRequest" onClick={()=>{onCreateDraft(menu.folder.id);setMenu(null);}}>New request</MenuActionItem>
-      {canEdit&&<MenuActionItem action="moveFolder" onClick={()=>{setError('');setMoveDialog({folderId:menu.folder.id,targetParentId:null});setMenu(null);}}>Move to…</MenuActionItem>}
+      {canEdit&&<MenuActionItem action="moveFolder" onClick={()=>{setError('');setMoveDialog({folderId:menu.folder.id,targetCollectionId:collectionId,targetParentId:null});setMenu(null);}}>Move to…</MenuActionItem>}
       <MenuActionItem action="renameFolder" onClick={()=>{rename(folderKey(menu.folder.id));setMenu(null);}}>Rename (F2)</MenuActionItem>
       <MenuActionItem action="deleteFolder" danger onClick={()=>requestDelete(selectedKeys.has(folderKey(menu.folder.id))?selection:[folderKey(menu.folder.id)])}>Delete folder and contents</MenuActionItem>
     </div>,document.body)}
-    {moveDialog&&createPortal(<Dialog title="Move Cloud folder" subtitle="Choose a folder in this collection or move it back to the root." onClose={()=>!busy&&setMoveDialog(null)}>
+    {moveDialog&&createPortal(<Dialog title="Move Cloud folder" subtitle="Move the entire folder tree between collections in this workspace." onClose={()=>!busy&&setMoveDialog(null)}>
       <form className="pp-folder-move-form" onSubmit={e=>{
         e.preventDefault();
         if(busy)return;
         if(!moveDialog.folderId)return;
-        moveCloudFolder(moveDialog.folderId,moveDialog.targetParentId,()=>setMoveDialog(null));
+        if(moveDialog.targetCollectionId===collectionId)
+          moveCloudFolder(moveDialog.folderId,moveDialog.targetParentId,()=>setMoveDialog(null));
+        else {
+          const source=folders.find(folder=>folder.id===moveDialog.folderId);
+          if(!source)return;
+          mutate(async()=>{
+            await onMoveFolder?.({workspaceId,collectionId,folderId:source.id,version:source.version,
+              targetCollectionId:moveDialog.targetCollectionId,targetParentId:moveDialog.targetParentId});
+            setMoveDialog(null);
+          });
+        }
       }}>
         <label htmlFor="pp-cloud-folder-move-source">Folder to move</label>
         <select id="pp-cloud-folder-move-source" autoFocus disabled={busy||loading} value={moveDialog.folderId}
@@ -297,10 +321,21 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
         </select>
         {loading&&<p className="pp-folder-move-note">Loading folders…</p>}
         {!loading&&!folders.length&&<p className="pp-folder-move-note">This collection has no folders yet. Create a folder first.</p>}
+        <label htmlFor="pp-cloud-folder-move-collection">Destination collection</label>
+        <select id="pp-cloud-folder-move-collection" disabled={busy} value={moveDialog.targetCollectionId||collectionId}
+          onChange={e=>setMoveDialog(old=>({...old,targetCollectionId:e.target.value,targetParentId:null}))}>
+          {collections.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}
+        </select>
         <label htmlFor="pp-cloud-folder-move-target">Destination folder</label>
         <select id="pp-cloud-folder-move-target" disabled={busy||!moveDialog.folderId} value={moveDialog.targetParentId||''}
           onChange={e=>setMoveDialog(old=>({...old,targetParentId:e.target.value||null}))}>
-          {cloudFolderMoveTargets(folders,moveDialog.folderId).map(option=><option key={option.id||'root'} value={option.id||''}>{option.label}</option>)}
+          {(moveDialog.targetCollectionId===collectionId?
+            cloudFolderMoveTargets(folders,moveDialog.folderId):
+            [{id:null,label:'Collection root'},...targetFolders.map(folder=>{
+              let label=folder.name;
+              try{label=folderPathForId(targetFolders,folder.id).join(' / ');}catch{}
+              return {id:folder.id,label};
+            }).sort((a,b)=>a.label.localeCompare(b.label))]).map(option=><option key={option.id||'root'} value={option.id||''}>{option.label}</option>)}
         </select>
         {!!error&&<p role="alert" className="pp-env-error">{error}</p>}
         <div className="pp-action-dialog-buttons"><button type="button" disabled={busy} onClick={()=>setMoveDialog(null)}>Cancel</button>

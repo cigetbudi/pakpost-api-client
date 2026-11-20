@@ -18,6 +18,11 @@ public interface ISavedRequestRepository
         IReadOnlyCollection<Guid> requestIds,
         IReadOnlyCollection<Guid> folderIds,
         CancellationToken ct);
+    Task<IReadOnlyList<MovedFolderRequestReference>> ListFolderRequestReferencesAsync(
+        Guid sourceCollectionId, IReadOnlyCollection<Guid> folderIds, CancellationToken ct);
+    Task<int> MoveFolderRequestsAsync(Guid sourceCollectionId, Guid targetCollectionId,
+        IReadOnlyCollection<Guid> folderIds, CancellationToken ct);
+    Task<IReadOnlyList<SavedRequest>> ListForReorderAsync(Guid collectionId, Guid? folderId, CancellationToken ct);
     void Add(SavedRequest value);
     void Remove(SavedRequest value);
 }

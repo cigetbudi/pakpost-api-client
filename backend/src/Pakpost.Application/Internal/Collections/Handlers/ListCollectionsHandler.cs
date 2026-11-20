@@ -28,7 +28,9 @@ public sealed class ListCollectionsHandler(
                 collection.Id,
                 collection.WorkspaceId,
                 collection.Name,
-                collection.RequestCount))
+                collection.RequestCount,
+                collection.ParentCollectionId,
+                collection.SortOrder))
             .ToArray();
     }
 }

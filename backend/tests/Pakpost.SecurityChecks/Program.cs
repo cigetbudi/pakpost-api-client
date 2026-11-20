@@ -261,6 +261,10 @@ sealed class FakeCollections:ICollectionRepository
     public Task<IReadOnlyList<CollectionOverview>> ListOverviewAsync(Guid ws,CancellationToken ct)
         =>Task.FromResult<IReadOnlyList<CollectionOverview>>(Items.Where(x=>x.WorkspaceId==ws)
             .Select(x=>new CollectionOverview(x.Id,x.WorkspaceId,x.Name,RequestCounts.GetValueOrDefault(x.Id))).ToArray());
+    public Task<IReadOnlyList<Collection>> ListForOrganizationAsync(Guid ws,CancellationToken ct)
+        =>Task.FromResult<IReadOnlyList<Collection>>(Items.Where(x=>x.WorkspaceId==ws).ToArray());
+    public Task<bool> HasChildrenAsync(Guid ws,Guid id,CancellationToken ct)
+        =>Task.FromResult(Items.Any(x=>x.WorkspaceId==ws&&x.ParentCollectionId==id));
     public Task<IReadOnlyList<Collection>> ListAsync(Guid ws,CancellationToken ct)
         =>Task.FromResult<IReadOnlyList<Collection>>(Items.Where(x=>x.WorkspaceId==ws).ToArray());
     public Task<IReadOnlyDictionary<Guid,int>> CountRequestsAsync(Guid ws,CancellationToken ct)
@@ -295,6 +299,18 @@ sealed class FakeSavedRequests:ISavedRequestRepository
         =>Task.FromResult(0);
     public Task<int> DeleteSelectedAsync(Guid col,IReadOnlyCollection<Guid> ids,IReadOnlyCollection<Guid> folders,CancellationToken ct)
         =>Task.FromResult(0);
+    // Security checks must not silently perform folder transfer or request reordering.
+    // These operations are only allowed after write-permission checks pass.
+    public Task<IReadOnlyList<MovedFolderRequestReference>> ListFolderRequestReferencesAsync(
+        Guid sourceCollectionId, IReadOnlyCollection<Guid> folderIds, CancellationToken ct)
+        =>throw new NotSupportedException("Security test fake does not support folder transfers.");
+    public Task<int> MoveFolderRequestsAsync(
+        Guid sourceCollectionId, Guid targetCollectionId,
+        IReadOnlyCollection<Guid> folderIds, CancellationToken ct)
+        =>throw new NotSupportedException("Security test fake does not support folder transfers.");
+    public Task<IReadOnlyList<SavedRequest>> ListForReorderAsync(
+        Guid collectionId, Guid? folderId, CancellationToken ct)
+        =>throw new NotSupportedException("Security test fake does not support request reordering.");
     public void Add(SavedRequest value){}
     public void Remove(SavedRequest value){}
 }

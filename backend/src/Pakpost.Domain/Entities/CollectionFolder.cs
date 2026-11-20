@@ -34,6 +34,14 @@ public sealed class CollectionFolder
         Version++;
     }
 
+    // Called after validating both collections and all nested folders in one transaction.
+    public void Rehome(Guid collectionId, Guid? parentFolderId)
+    {
+        CollectionId = collectionId;
+        ParentFolderId = parentFolderId;
+        Version++;
+    }
+
     private static string ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 120)
