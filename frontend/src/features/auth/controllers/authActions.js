@@ -1,3 +1,4 @@
+import { BROWSER_SESSION, setBrowserCsrf } from '../../../services/httpClient.js';
 // Feature controller. Actions execute with the current Workbench context supplied
 // by App; no global state, persistence middleware or extra network requests.
 export function createAuthActions(dependencies) {
@@ -19,12 +20,15 @@ export function createAuthActions(dependencies) {
     if (target === 'workspace') loadWorkspaces();
   }
   function completeSignIn(data) {
-    sessionStorage.setItem('pakpost_token', data.accessToken);
-    if(currentTokenRef)currentTokenRef.current=data.accessToken;
+    // Cookies are established by the server. Never store/receive a JWT here.
+    const alreadySignedIn = currentTokenRef?.current === BROWSER_SESSION;
+    setBrowserCsrf(data.csrfToken);
+    if(currentTokenRef)currentTokenRef.current=BROWSER_SESSION;
     announceSession?.();
-    setToken(data.accessToken);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
+    setToken(BROWSER_SESSION);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
     setAuthForm({ displayName: '', email: '', password: '' });
     setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
+    if(alreadySignedIn)loadWorkspaces(BROWSER_SESSION);
   }
   async function submitAuth(e) {
     e.preventDefault(); setAuthBusy(true); setAuthError('');

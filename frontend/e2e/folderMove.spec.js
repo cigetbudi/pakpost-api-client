@@ -57,3 +57,19 @@ test('Settings shows Preferences without Workspace Management mounted below',asy
   await expect(page.locator('.pp-manager')).toHaveCount(0);
   await expect(page.locator('.pp-settings-screen')).toBeVisible();
 });
+
+// Inserting the transient root target must not displace the folder under the
+// pointer, otherwise HTML5 drop can land in empty space instead of B.
+test('showing Local root drop target does not shift folder rows',async({page})=>{
+  await seedLocalFolders(page);
+  const a=page.getByRole('button',{name:'A',exact:true});
+  const b=page.getByRole('button',{name:'B',exact:true});
+  const oldA=await a.boundingBox(),oldB=await b.boundingBox();
+  await a.dispatchEvent('dragstart',{dataTransfer:await page.evaluateHandle(()=>new DataTransfer())});
+  await expect(page.getByRole('region',{name:'Move collection or folder to Local root'})).toBeVisible();
+  const newA=await a.boundingBox(),newB=await b.boundingBox();
+  expect(newA.y).toBeCloseTo(oldA.y,1);
+  expect(newB.y).toBeCloseTo(oldB.y,1);
+  await a.dispatchEvent('dragend');
+  await expect(page.getByRole('region',{name:'Move collection or folder to Local root'})).toHaveCount(0);
+});

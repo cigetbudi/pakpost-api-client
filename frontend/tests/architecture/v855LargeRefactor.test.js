@@ -34,7 +34,7 @@ test('logout credentials are invalidated even if recovery clearing throws', () =
   const app=readWorkbenchSource();
   assert.match(app,/onClick=\{logout\}/);
   assert.match(app,/aria-label="Sign out"/);
-  const handler=app.slice(app.indexOf('  function logout() {'),app.indexOf('  function requiresLogin('));
+  const handler=app.slice(app.indexOf('  function performLogout(broadcast) {'),app.indexOf('  const { requiresLogin,'));
   assert.ok(handler.indexOf('invalidateBrowserSession(')<handler.indexOf('planSignedOutWorkbench('));
   assert.ok(handler.indexOf("setToken('')")<handler.indexOf('planSignedOutWorkbench('));
 });

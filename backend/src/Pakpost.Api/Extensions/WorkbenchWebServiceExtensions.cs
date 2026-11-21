@@ -60,7 +60,7 @@ public static class WorkbenchWebServiceExtensions
         });
 
         var origins = configuration.GetSection("Cors:AllowedOrigins")
-            .Get<string[]>() ?? ["http://localhost:5173"];
+            .Get<string[]>() ?? ["http://localhost:5173", "http://127.0.0.1:5173"];
 
         services.AddCors(options =>
             options.AddPolicy("Frontend", policy =>

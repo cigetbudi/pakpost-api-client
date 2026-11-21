@@ -88,9 +88,16 @@
 .pp-explorer .pp-local-collection-head[draggable=true]>.pp-tree-row:active,
 .pp-explorer .pp-cloud-collection-row[draggable=true]:active{cursor:grabbing}
 
-/* Temporary root drop target appears only while a collection/folder is being dragged. */
-.pp-explorer .pp-collection-root-zone{position:sticky;top:0;z-index:6;background:var(--surface);
+/* Keep the transient root drop target outside the scroll layout. An in-flow
+ * target inserted on dragstart shifts the rows under the pointer, causing
+ * native drag/drop (including Playwright dragTo) to miss the destination. */
+.pp-explorer{position:relative}
+.pp-explorer .pp-collection-root-zone{position:absolute;top:auto;bottom:10px;left:10px;right:10px;
+  z-index:30;margin:0;background:var(--surface);pointer-events:auto;
   border-color:var(--accent);color:var(--accent);box-shadow:0 3px 12px color-mix(in srgb,var(--accent) 12%,transparent)}
+/* An insertion indicator must not alter row geometry while dragging near an edge. */
+.pp-explorer .pp-collection-drop-before{border-top:0;box-shadow:inset 0 2px 0 var(--accent)}
+.pp-explorer .pp-collection-drop-after{border-bottom:0;box-shadow:inset 0 -2px 0 var(--accent)}
 /* Endpoint insertion lines match Collection reorder feedback. */
 .pp-explorer .pp-request-drop-before{box-shadow:inset 0 2px 0 var(--accent);border-radius:4px}
 .pp-explorer .pp-request-drop-after{box-shadow:inset 0 -2px 0 var(--accent);border-radius:4px}

@@ -14,6 +14,7 @@ public sealed partial class PakpostDbContext(
     private readonly WorkspaceCryptography? _cryptography = cryptography;
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<UserExternalIdentity> UserExternalIdentities => Set<UserExternalIdentity>();
     public DbSet<Workspace> Workspaces => Set<Workspace>();
     public DbSet<WorkspaceEncryptionKey> WorkspaceEncryptionKeys => Set<WorkspaceEncryptionKey>();

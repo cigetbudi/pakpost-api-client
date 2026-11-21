@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
  * Keep SignalR connection lifecycle outside App. No hub for guests or Local
  * storage; callback ref prevents reconnection on unrelated React renders.
  */
-export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, onEvent,
+export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, sessionRevision=0, onEvent,
   onAccessChanged, onStatus, onReset }) {
   const callbacks = useRef({onEvent,onAccessChanged,onStatus,onReset});
   callbacks.current = {onEvent,onAccessChanged,onStatus,onReset};
@@ -24,5 +24,5 @@ export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, onE
     ).then(cleanup => { if (disposed) cleanup?.(); else stop = cleanup; })
       .catch(() => { if (!disposed) callbacks.current.onStatus?.('offline'); });
     return () => { disposed = true; stop?.(); callbacks.current.onReset?.(); };
-  }, [enabled, token, workspaceId]);
+  }, [enabled, token, workspaceId, sessionRevision]);
 }

@@ -108,8 +108,9 @@ test('Auth controller signs in without requiring a global Zustand store', () => 
       setSelectedWs:()=>{},setWorkspaceEnvironmentResult:()=>{},setAuthOpen:()=>{},
       setAuthForm:()=>{},setNotice:value=>{updates.notice=value},
     });
-    auth.completeSignIn({accessToken:'example-jwt',user:{displayName:'Tester'}});
-    assert.equal(session.get('pakpost_token'),'example-jwt');
+    auth.completeSignIn({csrfToken:'test-csrf-proof',user:{displayName:'Tester'}});
+    assert.equal(session.has('pakpost_token'),false);
+    assert.equal(updates.token,'pakpost:cookie-session');
     assert.equal(updates.scope,'workspace');
     assert.equal(updates.me.displayName,'Tester');
   } finally {globalThis.sessionStorage=previous;}

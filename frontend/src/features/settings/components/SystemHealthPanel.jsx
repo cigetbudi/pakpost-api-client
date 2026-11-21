@@ -36,7 +36,7 @@ export function SystemHealthPanel({ token = '' }) {
     const [live, ready, detail] = await Promise.all([
       inspect('/health/live', { signal }),
       inspect('/health/ready', { signal }),
-      token ? inspect('/api/system/health', { signal, headers: { Authorization: `Bearer ${token}` } }) : Promise.resolve(null)
+      token ? inspect('/api/system/health', { signal }) : Promise.resolve(null)
     ]);
 
     if (signal.aborted) return;

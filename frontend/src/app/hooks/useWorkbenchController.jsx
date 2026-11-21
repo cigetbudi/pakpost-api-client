@@ -42,7 +42,7 @@ import { createAuthTabSync } from '../../features/auth/services/authTabSync.js';
 import { useWorkspaceRealtimeLifecycle } from '../../features/realtime/hooks/useWorkspaceRealtimeLifecycle.js';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
-import { api } from '../../services/httpClient.js';
+import { api, BROWSER_SESSION, getBrowserCsrf, setBrowserCsrf } from '../../services/httpClient.js';
 import { prettyJson, initialLocalEnvs } from '../../utils/workbenchHelpers.js';
 import { Dialog } from '../../components/ui/WorkbenchPrimitives.jsx';
 import { ResponsePane } from '../../components/workbench/ResponsePane.jsx';
@@ -103,7 +103,7 @@ const CACHED = readWorkbenchCache();
 const RECOVERED = CACHED?.drafts?.[CACHED.activeTabId] || {};
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const EMPTY_HEADER = { key: '', value: '', description: '', enabled: true };
-const storedToken = () => sessionStorage.getItem('pakpost_token') || '';
+const storedToken = () => ''; // Auth comes only from a server session, asynchronously.
 const getMessage = (e) => e?.message || 'Something went wrong';
 
 
@@ -130,8 +130,10 @@ export function useWorkbenchController() {
   const { commandOpen, setCommandOpen, commandQuery, setCommandQuery, commandIndex, setCommandIndex } = useCommandPaletteState();
   const {theme, setTheme} = useWorkbenchTheme();
   const [token, setToken] = useState(storedToken);
+  const [authSessionRevision,setAuthSessionRevision]=useState(0);
   useEffect(()=>{if(new URLSearchParams(window.location.search).has('invite')){const u=new URL(window.location.href);u.searchParams.delete('invite');window.history.replaceState({},'',u.pathname+u.search+u.hash)}},[]);
   const currentTokenRef=useRef(token);
+  const authEpochRef=useRef(0);
   currentTokenRef.current=token;
   const authTabSyncRef=useRef(null);
   // Shared header storage context for both Collections and Environments.
@@ -140,6 +142,7 @@ export function useWorkbenchController() {
   const collectionsScope=storageScope;
   const envScope=storageScope;
   const [me, setMe] = useState(null);
+  const currentUserRef=useRef(me);currentUserRef.current=me;
   const {
     authOpen, setAuthOpen, authMode, setAuthMode, authBusy, setAuthBusy,
     authError, setAuthError, authForm, setAuthForm, googleLinkOpen, setGoogleLinkOpen,
@@ -538,7 +541,7 @@ export function useWorkbenchController() {
     let ignore = false;
     if (!token) { setMe(null); setWorkspaces([]); return; }
     api('/api/auth/me', 'GET', undefined, token).then(user => { if (!ignore) setMe(user); })
-      .catch(() => { if (!ignore) logout(); });
+      .catch(error => { if (!ignore && error?.status === 401) performLogout(false); });
     return () => { ignore = true; };
   }, [token]);
   useEffect(() => {
@@ -547,10 +550,20 @@ export function useWorkbenchController() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  function logout() { performLogout(true); }
+  async function logout() {
+    authEpochRef.current += 1;
+    try {
+      await api('/api/auth/logout','POST',{},currentTokenRef.current);
+      performLogout(true);
+    } catch (error) {
+      if (error?.status === 401) performLogout(true);
+      else setNotice(`Logout could not revoke the server session: ${getMessage(error)}. Try again.`);
+    }
+  }
   function performLogout(broadcast) {
-    const previousToken=currentTokenRef.current;
-    if(broadcast)authTabSyncRef.current?.announceLogout(previousToken);
+    authEpochRef.current += 1;
+    if(broadcast)authTabSyncRef.current?.announceLogout();
+    setBrowserCsrf('');
     // Auth invalidation must happen BEFORE reading any cached draft: missing
     // Local snapshots previously threw inside restoreDraft and aborted logout.
     currentTokenRef.current='';
@@ -586,29 +599,49 @@ export function useWorkbenchController() {
     setAuthOpen, setCanCreateWorkspace, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, setGoogleLinked,
     setMe, setNotice, setPage, setSelectedWs, setStorageScope, setToken,
     setWorkspaceEnvironmentResult, setWorkspaces, token,
-    announceSession:()=>authTabSyncRef.current?.announceSession(),
+    announceSession:()=>{authEpochRef.current += 1;setAuthSessionRevision(v=>v+1);authTabSyncRef.current?.announceSession();},
   });
   useEffect(()=>{
-    const sync=createAuthTabSync({
-      getToken:()=>currentTokenRef.current,
-      acceptToken:sharedToken=>{
-        if(currentTokenRef.current)return; // Never overwrite an already signed-in account.
-        try{sessionStorage.setItem('pakpost_token',sharedToken);}catch{/* Storage may be blocked. */}
-        currentTokenRef.current=sharedToken;
-        setToken(sharedToken);
-        setStorageScope(STORAGE_WORKSPACE);
-        setAuthOpen(false);
-      },
-      onRemoteLogout:()=>performLogout(false),
-    });
+    // Purge credentials written by pre-cookie versions of PakPost.
+    try{sessionStorage.removeItem('pakpost_token');}catch{}
+    let active=true;
+    const refresh=async()=>{
+      const epoch=authEpochRef.current;
+      try {
+        const result=await api('/api/auth/session','GET');
+        if(!active || epoch!==authEpochRef.current)return;
+        if(result?.authenticated && result.user && result.csrfToken){
+          const switchedAccount=currentTokenRef.current===BROWSER_SESSION &&
+            currentUserRef.current?.id && currentUserRef.current.id!==result.user.id;
+          if(switchedAccount)performLogout(false);
+          if(result.csrfToken!==getBrowserCsrf())setAuthSessionRevision(v=>v+1);
+          setBrowserCsrf(result.csrfToken);
+          currentTokenRef.current=BROWSER_SESSION;
+          setToken(BROWSER_SESSION);
+          setMe(result.user);
+          setAuthOpen(false);
+          setStorageScope(scope=>allowedStorageScope(true,scope));
+          if(switchedAccount)loadWorkspaces(BROWSER_SESSION);
+        }else if(currentTokenRef.current){
+          performLogout(false);
+        }else setBrowserCsrf('');
+      }catch{
+        // Network errors must NOT silently sign an active user out.
+        // Initial startup stays in guest mode until a successful check.
+      }
+    };
+    const sync=createAuthTabSync({onSessionChanged:refresh});
     authTabSyncRef.current=sync;
-    sync.requestSession();
-    return()=>{sync.close();if(authTabSyncRef.current===sync)authTabSyncRef.current=null;};
+    refresh(); // Cookie is shared by every tab; no token broadcast required.
+    const visible=()=>{if(document.visibilityState==='visible')refresh();};
+    document.addEventListener('visibilitychange',visible);
+    return()=>{active=false;sync.close();document.removeEventListener('visibilitychange',visible);
+      if(authTabSyncRef.current===sync)authTabSyncRef.current=null;};
   },[]);
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
   useWorkspaceRealtimeLifecycle({
     enabled: collectionsScope===STORAGE_WORKSPACE,
-    token, workspaceId:selectedWs,
+    token, workspaceId:selectedWs, sessionRevision:authSessionRevision,
     onEvent:enqueueWorkspaceChange,
     onStatus:setRealtimeStatus,
     onReset:()=>{

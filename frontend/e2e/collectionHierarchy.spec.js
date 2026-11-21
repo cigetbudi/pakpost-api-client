@@ -44,3 +44,21 @@ test('Local collections can reorder by dropping near top of destination row',asy
       .sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0)).map(item=>item.id);
   }).toEqual(['col-2','col-0','col-1']);
 });
+
+// Root drop target must be an overlay: mounting it must not move the source
+// or target that the pointer is dragging toward.
+test('showing Local root drop target does not shift collection rows',async({page})=>{
+  await seed(page);
+  const first=page.locator('.pp-local-collection-head').first();
+  const last=page.locator('.pp-local-collection-head').last();
+  const beforeFirst=await first.boundingBox();
+  const beforeLast=await last.boundingBox();
+  await last.dispatchEvent('dragstart',{dataTransfer:await page.evaluateHandle(()=>new DataTransfer())});
+  await expect(page.getByRole('region',{name:'Move collection or folder to Local root'})).toBeVisible();
+  const afterFirst=await first.boundingBox();
+  const afterLast=await last.boundingBox();
+  expect(afterFirst.y).toBeCloseTo(beforeFirst.y,1);
+  expect(afterLast.y).toBeCloseTo(beforeLast.y,1);
+  await last.dispatchEvent('dragend');
+  await expect(page.getByRole('region',{name:'Move collection or folder to Local root'})).toHaveCount(0);
+});

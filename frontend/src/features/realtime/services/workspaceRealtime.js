@@ -1,5 +1,6 @@
 /** SignalR transport, loaded only for an authenticated Cloud workspace. */
 import { validWorkspaceEvent } from './workspaceEventPolicy.js';
+import { getBrowserCsrf } from '../../../services/httpClient.js';
 
 // Keep the public helpers re-exported for existing callers/tests. The module
 // itself must never be statically imported by startup/reconciliation code.
@@ -8,7 +9,8 @@ export { WORKSPACE_KINDS, validWorkspaceEvent, shouldRefreshRequestList } from '
 export async function connectWorkspaceRealtime({workspaceId,getToken,onEvent,onStatus,onAccessChanged}){
   const {HubConnectionBuilder,LogLevel}=await import('@microsoft/signalr');
   const hub=new HubConnectionBuilder()
-    .withUrl('/hubs/workspace',{accessTokenFactory:()=>getToken()||''})
+    // The browser supplies the HttpOnly cookie; only negotiate needs a CSRF header.
+    .withUrl('/hubs/workspace',{headers:{'X-PakPost-CSRF':getBrowserCsrf()}})
     .withAutomaticReconnect([0,2000,5000,10000,30000])
     .configureLogging(LogLevel.Error)
     .build();

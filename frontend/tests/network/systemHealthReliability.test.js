@@ -9,7 +9,7 @@ test('system health panel uses minimal public health checks and authenticated pr
   assert.match(panel, /['"]\/health\/live['"]/);
   assert.match(panel, /['"]\/health\/ready['"]/);
   assert.match(panel, /['"]\/api\/system\/health['"]/);
-  assert.match(panel, /Authorization: `Bearer \$\{token\}`/);
+  assert.doesNotMatch(panel, /Authorization: `Bearer/);
   assert.match(panel, /setInterval\(refresh, 30000\)/);
   assert.doesNotMatch(panel, /localStorage|sessionStorage/);
 });

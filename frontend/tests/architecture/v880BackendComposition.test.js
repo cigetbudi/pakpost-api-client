@@ -13,15 +13,16 @@ test('API Program delegates Mediator and JWT setup to focused extensions', () =>
   assert.doesNotMatch(program, /AddJwtBearer\(|AddMediator\(\(/);
 });
 
-test('JWT extraction preserves the existing PakPost security contract', () => {
+test('cookie session auth defaults to server-side sessions and does not accept bearer JWT', () => {
   const auth = read('backend/src/Pakpost.Api/Extensions/AuthenticationServiceExtensions.cs');
-  assert.match(auth, /Jwt:SigningKey/);
-  assert.match(auth, /GetByteCount\(signingKey\) < 32/);
-  assert.match(auth, /MapInboundClaims = false/);
-  assert.match(auth, /StartsWithSegments\("\/hubs\/workspace"\)/);
-  assert.match(auth, /Jwt:Issuer/);
-  assert.match(auth, /Jwt:Audience/);
-  assert.match(auth, /ValidateLifetime = true/);
-  assert.match(auth, /ValidateIssuerSigningKey = true/);
-  assert.match(auth, /TimeSpan\.FromSeconds\(30\)/);
+  const middleware = read('backend/src/Pakpost.Api/Security/BrowserSessionSecurityMiddleware.cs');
+  const handler = read('backend/src/Pakpost.Api/Security/BrowserSessionAuthenticationHandler.cs');
+  const sessions = read('backend/src/Pakpost.Api/Security/ServerSessionStore.cs');
+  assert.match(auth, /Jwt:SigningKey/); // still used as the HMAC key for CSRF proofs
+  assert.match(auth, /DefaultAuthenticateScheme = BrowserSessionAuthenticationHandler\.Scheme/);
+  assert.doesNotMatch(auth,/AddJwtBearer\(/);
+  assert.match(handler,/Request\.Cookies/);
+  assert.match(sessions,/SHA256\.HashData/);
+  assert.match(middleware,/X-PakPost-CSRF/);
+  assert.match(middleware,/IsTrustedOrigin/);
 });

@@ -330,6 +330,22 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("user_external_identities", "auth");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.UserSession", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<Guid>("UserId").HasColumnType("uuid");
+                    b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+                    b.Property<string>("CsrfHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+                    b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset>("ExpiresAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset?>("RevokedAt").HasColumnType("timestamp with time zone");
+                    b.HasKey("Id");
+                    b.HasIndex("TokenHash").IsUnique();
+                    b.HasIndex("UserId");
+                    b.HasIndex("ExpiresAt");
+                    b.ToTable("user_sessions", "auth");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -587,6 +603,15 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.UserSession", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

@@ -1,5 +1,12 @@
 // A unique instance per browser tab prevents SignalR events from being
 // mistaken for changes coming from another tab. Do not persist this value.
+// A non-secret marker keeps existing Workbench auth guards compatible while
+// session credentials live exclusively in HttpOnly cookies, not JavaScript.
+export const BROWSER_SESSION = 'pakpost:cookie-session';
+let csrfProof = '';
+export function setBrowserCsrf(proof) { csrfProof = typeof proof === 'string' ? proof : ''; }
+export function getBrowserCsrf() { return csrfProof; }
+
 export const CLIENT_INSTANCE_ID =
   globalThis.crypto?.randomUUID?.() || `tab-${Math.random().toString(36).slice(2)}`;
 
@@ -11,7 +18,13 @@ export const CLIENT_INSTANCE_ID =
 export async function api(path, method = 'GET', body, token = '', {signal} = {}) {
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers.Authorization = `Bearer ${token}`;
+  // Legacy token argument remains in the API signature for old unit callers;
+  // the cookie-session marker is NEVER sent in Authorization.
+  if (token && token !== BROWSER_SESSION) headers.Authorization = `Bearer ${token}`;
+  if (csrfProof && !['GET','HEAD','OPTIONS'].includes(method.toUpperCase()) &&
+      (path.startsWith('/api/') || path.startsWith('/hubs/'))) {
+    headers['X-PakPost-CSRF'] = csrfProof;
+  }
 
   if (method !== 'GET' && path.startsWith('/api/workspaces/')) {
     headers['X-PakPost-Instance'] = CLIENT_INSTANCE_ID;
@@ -21,6 +34,7 @@ export async function api(path, method = 'GET', body, token = '', {signal} = {})
     method,
     headers,
     signal,
+    credentials: 'same-origin',
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
