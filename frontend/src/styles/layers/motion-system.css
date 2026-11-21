@@ -1,0 +1,148 @@
+/* PakPost motion system — last stylesheet in main.jsx.
+ * Short, predictable movement for floating UI; color transitions for dense lists.
+ * No layout-affecting transitions, broad property transitions, visual filters or animation libraries.
+ */
+:root {
+  --pp-motion-ease: cubic-bezier(.2, .75, .25, 1);
+  --pp-motion-color: 125ms;
+  --pp-motion-press: 85ms;
+  --pp-motion-pop: 155ms;
+  --pp-motion-dialog: 185ms;
+}
+
+@keyframes pp-motion-pop-in {
+  from { opacity: 0; transform: translate3d(0, 5px, 0) scale(.99); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes pp-motion-dialog-in {
+  from { opacity: 0; transform: translate3d(0, 9px, 0) scale(.985); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes pp-motion-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pp-motion-content-in {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Color-only responses remain inexpensive even with thousands of explorer rows.
+   Specific component rules (including the existing 100ms interactions) take priority. */
+:where(.pp-app button, .pp-app [role='menuitem'], .pp-app [role='tab']) {
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: var(--pp-motion-color);
+  transition-timing-function: ease-out;
+}
+
+/* Press feedback is intentionally restricted to static actions — never draggable
+   collection rows/tabs, resizing handles, editor inputs or scroll containers. */
+:is(
+  .pp-send, .pp-save-action, .pp-signin, .pp-profile, .pp-modal-submit,
+  .pp-env-primary, .pp-plain-btn, .pp-settings-heading > button,
+  .pp-settings-layouts button, .pp-rail button, .pp-layout-actions button,
+  .pp-signout-actions button, .pp-security-panel button,
+  .pp-command-results button, .pp-env-action-dialog button
+) {
+  transition-property: background-color, border-color, color, opacity, transform;
+  transition-duration: var(--pp-motion-color), var(--pp-motion-color), var(--pp-motion-color), var(--pp-motion-color), var(--pp-motion-press);
+  transition-timing-function: ease-out, ease-out, ease-out, ease-out, var(--pp-motion-ease);
+}
+:is(
+  .pp-send, .pp-save-action, .pp-signin, .pp-profile, .pp-modal-submit,
+  .pp-env-primary, .pp-plain-btn, .pp-settings-heading > button,
+  .pp-settings-layouts button, .pp-rail button, .pp-layout-actions button,
+  .pp-signout-actions button, .pp-security-panel button,
+  .pp-command-results button, .pp-env-action-dialog button
+):active:not(:disabled) { transform: scale(.975); }
+
+/* Legacy interactions.css uses !important on these frequently clicked controls.
+   Extend that fast transition rather than making press scale snap instantly. */
+.pp-app :is(.pp-send, .pp-save-action, .pp-rail button) {
+  transition: background-color 110ms ease-out, color 110ms ease-out,
+    border-color 110ms ease-out, transform var(--pp-motion-press) var(--pp-motion-ease) !important;
+}
+
+/* A subtle lift on the main actions, without moving neighboring controls. */
+@media (hover: hover) and (pointer: fine) {
+  :where(.pp-send, .pp-save-action, .pp-modal-submit, .pp-env-primary):hover:not(:disabled) {
+    transform: translate3d(0, -1px, 0);
+  }
+  :where(.pp-theme-option, .pp-settings-layouts button):hover:not(:disabled) {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+:where(.pp-theme-option, .pp-settings-layouts button) {
+  transition-property: background-color, border-color, color, transform;
+  transition-duration: var(--pp-motion-color), var(--pp-motion-color), var(--pp-motion-color), var(--pp-motion-color);
+  transition-timing-function: var(--pp-motion-ease);
+}
+
+/* Popovers and menus: one compositor-friendly entrance, no layout reflow. */
+:is(
+  .pp-account-menu, .pp-collection-popup, .pp-env-editor-menu,
+  .pp-tab-context, .pp-select-popover, .pp-url-suggestions,
+  .pp-var-popover
+) {
+  animation: pp-motion-pop-in var(--pp-motion-pop) var(--pp-motion-ease) both;
+}
+
+/* Modals: dim the backdrop separately from its content. Keep each dialog's
+   existing z-index, position, focus handling and overflow rules unchanged. */
+:is(
+  .overlay, .pp-signout-backdrop, .pp-security-confirm,
+  .pp-env-action-backdrop, .pp-env-editor-modal-backdrop,
+  .pp-command-backdrop, .pp-workspace-delete-backdrop
+) {
+  animation: pp-motion-fade-in 135ms ease-out both;
+}
+:is(
+  .dialog, .pp-signout-modal, .pp-security-confirm-inner,
+  .pp-env-action-dialog, .pp-env-editor-modal, .pp-env-editor-confirm,
+  .pp-command-dialog, .pp-workspace-delete-dialog,
+  .pp-import-modal, .pp-unsaved-confirm, .pp-revision-dialog,
+  .pp-runner-dialog, .pp-code-dialog, .pp-compare-dialog,
+  .pp-cv-dialog
+) {
+  animation: pp-motion-dialog-in var(--pp-motion-dialog) var(--pp-motion-ease) both;
+}
+
+/* Short feedback on newly mounted secondary content. Never animate the entire
+   workbench, CodeMirror, response payloads, long collection trees or tab DnD. */
+:is(
+  .pp-settings-heading, .pp-security-title, .pp-security-sessions,
+  .pp-manager-details, .pp-response-empty, .pp-toast
+) {
+  animation: pp-motion-content-in 145ms var(--pp-motion-ease) both;
+}
+
+/* Deliberate affordances without adding extra animated layers per list item. */
+.pp-profile svg:last-child {
+  transition: transform var(--pp-motion-color) var(--pp-motion-ease);
+}
+:where(.pp-security-session, .pp-env-list > button, .pp-settings-categories button) {
+  transition: background-color var(--pp-motion-color) ease-out, color var(--pp-motion-color) ease-out;
+}
+
+/* Accessibility: honor the OS preference across portaled menus and modals too.
+   This also disables inherited animations from older feature-specific CSS. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  /* Match the specificity of the !important legacy-control override above. */
+  .pp-app :is(.pp-send, .pp-save-action, .pp-rail button) {
+    transition: none !important;
+  }
+  :where(.pp-send, .pp-save-action, .pp-modal-submit, .pp-env-primary,
+         .pp-theme-option, .pp-settings-layouts button):hover:not(:disabled),
+  :where(.pp-send, .pp-save-action, .pp-signin, .pp-profile, .pp-modal-submit,
+         .pp-env-primary, .pp-plain-btn, .pp-settings-heading > button,
+         .pp-settings-layouts button, .pp-rail button, .pp-layout-actions button,
+         .pp-signout-actions button, .pp-security-panel button,
+         .pp-command-results button, .pp-env-action-dialog button):active:not(:disabled) {
+    transform: none !important;
+  }
+}

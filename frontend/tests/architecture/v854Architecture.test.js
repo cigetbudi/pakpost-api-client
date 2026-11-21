@@ -16,7 +16,7 @@ const store = read('features/workspace/store/createWorkspaceUiStore.js');
 
 test('Workspace UI starts with correctly typed collections, never lazy functions', () => {
   const state = initialWorkspaceUiState();
-  for (const key of ['workspaces', 'members', 'teams', 'teamMembers', 'newMemberRoles', 'editingMemberRoles', 'inviteRoles', 'invitationRows']) {
+  for (const key of ['workspaces', 'members', 'newMemberRoles', 'editingMemberRoles', 'inviteRoles', 'invitationRows']) {
     assert.ok(Array.isArray(state[key]), `${key} must be an array at first render`);
   }
   assert.equal(state.selectedWs, '');

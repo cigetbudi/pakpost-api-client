@@ -33,6 +33,8 @@ test('Effective permission display relies on backend permissions, not role label
   assert.equal(groups.find(g=>g.id==='execution').items[0].enabled,true);
   assert.deepEqual(groups.find(g=>g.id==='other').items.map(p=>p.id),['future.permission']);
   assert.equal(WORKSPACE_PERMISSION_GROUPS.some(g=>g.items.some(p=>p.id==='environment.secret.read')),true);
+  assert.deepEqual(groupEffectivePermissions(['team.manage','future.permission']).find(g=>g.id==='other').items.map(p=>p.id),['future.permission']);
+  assert.equal(WORKSPACE_PERMISSION_GROUPS.some(g=>g.items.some(p=>p.id==='team.manage')),false);
 });
 test('UI shows backend effective permissions and preserves server-side role assignment',()=>{
   const app=readWorkbenchSource();

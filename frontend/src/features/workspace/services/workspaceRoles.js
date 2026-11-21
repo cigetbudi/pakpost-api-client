@@ -1,6 +1,6 @@
 export const WORKSPACE_ROLES = [
   { id:'TeamLead', label:'Team Lead', description:'Full workspace control' },
-  { id:'WorkspaceAdmin', label:'Workspace Admin', description:'Manage workspace, members and teams' },
+  { id:'WorkspaceAdmin', label:'Workspace Admin', description:'Manage workspace and members' },
   { id:'Developer', label:'Developer', description:'Create, edit and save shared requests' },
   { id:'QA', label:'QA / Tester', description:'Read and test; no Cloud save' },
   { id:'TechnicalWriter', label:'Technical Writer', description:'Read and test; no Cloud save' },

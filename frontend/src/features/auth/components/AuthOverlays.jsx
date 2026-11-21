@@ -27,7 +27,7 @@ export function AuthOverlays({ data, actions }) {
         <button type="button" className="pp-roles-button" onClick={()=>{setInviteToken('');setInviteAcceptError('')}}>Not now</button>
       </div>
     </Dialog>}
-    {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, teams and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}>
+    {authOpen && <Dialog title={authMode === 'login' ? 'Welcome back' : 'Create account'} subtitle="Sign in to manage your collections, members and workspaces. API testing stays open to everyone." onClose={()=>setAuthOpen(false)}>
       <form className="modal-form" onSubmit={submitAuth}>
         {authMode==='register' && <label>Display name<input required maxLength={120} placeholder="Your name" value={authForm.displayName} onChange={e=>setAuthForm(v=>({...v,displayName:e.target.value}))}/></label>}
         <label>Email address<input type="email" required autoComplete="email" value={authForm.email} placeholder="you@example.com" onChange={e=>setAuthForm(v=>({...v,email:e.target.value}))}/></label>

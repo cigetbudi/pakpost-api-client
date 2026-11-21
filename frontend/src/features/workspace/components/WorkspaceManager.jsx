@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers3, ArrowRight, Plus, ChevronRight, FolderClosed, LockKeyhole, Users, ShieldCheck, FolderPlus, Trash2, Mail, Search, Pencil } from 'lucide-react';
+import { Layers3, ArrowRight, Plus, ChevronRight, FolderClosed, LockKeyhole, ShieldCheck, FolderPlus, Trash2, Mail, Search, Pencil } from 'lucide-react';
 import { api } from '../../../services/httpClient.js';
 import { IconButton, Empty } from '../../../components/ui/WorkbenchPrimitives.jsx';
 import { WorkspaceRolePicker } from './WorkspaceRolePicker.jsx';
@@ -14,14 +14,14 @@ import { roleSelectionChanged } from '../services/workspaceRoleInsights.js';
 export function WorkspaceManager({ data, actions, refs }) {
   const { activeWorkspace, workspaces, canCreateWorkspace, newWs, token, busyAction } = data;
   const { selectedWs, wsTab, canEditCloud, newCollection, collections, selectedCol } = data;
-  const { savedRequests, canManageTeams, newTeam, teams, selectedTeam, activeTeam } = data;
-  const { newTeamMember, teamMembers, canManageMembers, showMemberAdd, inviteOpen, workspaceMemberStats } = data;
+  const { savedRequests } = data;
+  const { canManageMembers, showMemberAdd, inviteOpen, workspaceMemberStats } = data;
   const { newMember, newMemberRoles, assignableRoles, inviteEmail, inviteRoles, invitationBusy } = data;
   const { invitationRows, invitationError, memberSearch, memberRoleFilter, visibleWorkspaceMembers, me } = data;
   const { canAssignRoles, expandedMemberAccess, editingMemberId, editingMemberRoles } = data;
   const { setPage, doAction, setNewWs, loadWorkspaces, setSelectedWs, setNotice } = actions;
   const { setWsTab, setNewCollection, setCollections, setSelectedCol, loadSavedRequest, setSavedRequests } = actions;
-  const { setNewTeam, setTeams, setSelectedTeam, setNewTeamMember, setTeamMembers, setShowMemberAdd } = actions;
+  const { setShowMemberAdd } = actions;
   const { setInviteOpen, setNewMember, setNewMemberRoles, setMembers, inviteMember, setInviteEmail } = actions;
   const { setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess, setEditingMemberId } = actions;
   const { setEditingMemberRoles } = actions;
@@ -31,6 +31,8 @@ export function WorkspaceManager({ data, actions, refs }) {
   const [deleteBusy, setDeleteBusy] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState('');
   const isFounder = activeWorkspace?.ownerUserId === me?.id;
+  // Older clients may retain a Teams selection during a hot reload.
+  const activeWsTab = wsTab === 'members' ? 'members' : 'collections';
 
   const closeDeleteDialog = () => {
     if (deleteBusy) return;
@@ -81,7 +83,7 @@ export function WorkspaceManager({ data, actions, refs }) {
 
   return (
 <div className="pp-manager">
-          <div className="pp-manager-top"><div><span className="pp-manager-eyebrow"><Layers3 size={14}/> WORKSPACE MANAGEMENT</span><h2>{activeWorkspace?.name || 'Your workspaces'}</h2><p>Collections, teams and members are available after sign-in.</p></div><button className="pp-plain-btn" onClick={() => setPage('tester')}><ArrowRight size={15}/> Back to request tester</button></div>
+          <div className="pp-manager-top"><div><span className="pp-manager-eyebrow"><Layers3 size={14}/> WORKSPACE MANAGEMENT</span><h2>{activeWorkspace?.name || 'Your workspaces'}</h2><p>Manage shared collections, workspace members, and access roles after sign-in.</p></div><button className="pp-plain-btn" onClick={() => setPage('tester')}><ArrowRight size={15}/> Back to request tester</button></div>
           <div className="pp-manager-columns"><aside className="pp-manager-ws"><div className="pp-manager-label">YOUR WORKSPACES <span>{workspaces.length}</span></div>{canCreateWorkspace&&<form className="pp-manager-add" onSubmit={e => { e.preventDefault(); if(!newWs.trim()) return; doAction(async()=>{const w=await api('/api/workspaces','POST',{name:newWs.trim()},token);setNewWs('');await loadWorkspaces();setSelectedWs(w.id);setNotice('Workspace created.');}); }}><input placeholder="New workspace" maxLength={120} value={newWs} onChange={e=>setNewWs(e.target.value)}/><button title="Create workspace" disabled={busyAction}><Plus size={16}/></button></form>}{workspaces.map(w=><button className={`pp-manager-ws-row ${w.id === selectedWs ? 'active' : ''}`} key={w.id} onClick={()=>setSelectedWs(w.id)}><Layers3 size={17}/><span>{w.name}</span><ChevronRight size={15}/></button>)}</aside>
             <section className="pp-manager-details">{!activeWorkspace ? <Empty icon={FolderClosed} title="No workspace selected" description="Create a workspace on the left to start organizing your requests."/> : <>
               <div className="pp-manager-detail-title">
@@ -106,10 +108,9 @@ export function WorkspaceManager({ data, actions, refs }) {
                   <LockKeyhole size={15}/>
                 </div>
               </div>
-              <div className="pp-manager-tabs">{[['collections','Collections',FolderClosed],['teams','Teams',Users],['members','Members',ShieldCheck]].map(([id,label,Icon])=><button className={wsTab === id ? 'active':''} key={id} onClick={()=>setWsTab(id)}><Icon size={15}/>{label}</button>)}</div>
-              {wsTab === 'collections' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Collections</strong>{canEditCloud&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newCollection.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name:newCollection.trim()},token);setNewCollection('');setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));setNotice('Collection created');});}}><input placeholder="Collection name" maxLength={120} value={newCollection} onChange={e=>setNewCollection(e.target.value)}/><button title="Create collection" disabled={busyAction}><Plus size={16}/></button></form>}</div>{collections.map(c=><button className={`pp-manager-entry ${selectedCol === c.id ? 'active' : ''}`} key={c.id} onClick={()=>setSelectedCol(c.id)}><FolderClosed size={16}/><span>{c.name}</span><ChevronRight size={15}/></button>)}{!collections.length && <Empty icon={FolderPlus} title="No collections yet" description="Create your first collection above."/>}{selectedCol && <div className="pp-manager-saved"><h3>Saved requests</h3>{savedRequests.map(r=><div className="pp-manager-saved-row" key={r.id}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><button onClick={()=>loadSavedRequest(r)}><strong>{r.name}</strong><small>{r.url}</small></button>{canEditCloud&&<IconButton icon={Trash2} label="Delete request" disabled={busyAction} onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/${r.id}`,'DELETE',undefined,token);setSavedRequests(v=>v.filter(x=>x.id!==r.id));})}/>}</div>)}{!savedRequests.length && <p className="pp-muted-small">No saved requests in this collection.</p>}</div>}</div>}
-              {wsTab === 'teams' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Teams</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeam.trim())return;doAction(async()=>{const t=await api(`/api/workspaces/${selectedWs}/teams`,'POST',{name:newTeam.trim()},token);setNewTeam('');setTeams(await api(`/api/workspaces/${selectedWs}/teams`,'GET',undefined,token));setSelectedTeam(t.id);setNotice('Team created');});}}><input placeholder="Team name" maxLength={120} value={newTeam} onChange={e=>setNewTeam(e.target.value)}/><button title="Create team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teams.map(t=><button className={`pp-manager-entry ${selectedTeam===t.id?'active':''}`} key={t.id} onClick={()=>setSelectedTeam(t.id)}><Users size={16}/><span>{t.name}</span><ChevronRight size={15}/></button>)}{!teams.length && <Empty icon={Users} title="No teams yet" description="Create a team above to manage collaboration."/>}{activeTeam && <div className="pp-manager-saved"><div className="pp-manager-section-heading"><strong>{activeTeam.name} members</strong>{canManageTeams&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newTeamMember.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'POST',{email:newTeamMember.trim()},token);setNewTeamMember('');setTeamMembers(await api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`,'GET',undefined,token));setNotice('Member added to team');});}}><input type="email" placeholder="Member email" value={newTeamMember} onChange={e=>setNewTeamMember(e.target.value)}/><button title="Add to team" disabled={busyAction}><Plus size={16}/></button></form>}</div>{teamMembers.map(m=><div className="pp-manager-member" key={m.userId}><span>{m.displayName[0]}</span><div><strong>{m.displayName}</strong><small>{m.email}</small></div></div>)}<p className="pp-muted-small">A user must belong to this workspace before joining a team.</p></div>}</div>}
-              {wsTab === 'members' && <div className="pp-manager-section">
+              <div className="pp-manager-tabs">{[['collections','Collections',FolderClosed],['members','Members & Roles',ShieldCheck]].map(([id,label,Icon])=><button className={activeWsTab === id ? 'active':''} key={id} onClick={()=>setWsTab(id)}><Icon size={15}/>{label}</button>)}</div>
+              {activeWsTab === 'collections' && <div className="pp-manager-section"><div className="pp-manager-section-heading"><strong>Collections</strong>{canEditCloud&&<form className="pp-manager-add" onSubmit={e=>{e.preventDefault();if(!newCollection.trim())return;doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name:newCollection.trim()},token);setNewCollection('');setCollections(await api(`/api/workspaces/${selectedWs}/collections`,'GET',undefined,token));setNotice('Collection created');});}}><input placeholder="Collection name" maxLength={120} value={newCollection} onChange={e=>setNewCollection(e.target.value)}/><button title="Create collection" disabled={busyAction}><Plus size={16}/></button></form>}</div>{collections.map(c=><button className={`pp-manager-entry ${selectedCol === c.id ? 'active' : ''}`} key={c.id} onClick={()=>setSelectedCol(c.id)}><FolderClosed size={16}/><span>{c.name}</span><ChevronRight size={15}/></button>)}{!collections.length && <Empty icon={FolderPlus} title="No collections yet" description="Create your first collection above."/>}{selectedCol && <div className="pp-manager-saved"><h3>Saved requests</h3>{savedRequests.map(r=><div className="pp-manager-saved-row" key={r.id}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><button onClick={()=>loadSavedRequest(r)}><strong>{r.name}</strong><small>{r.url}</small></button>{canEditCloud&&<IconButton icon={Trash2} label="Delete request" disabled={busyAction} onClick={()=>doAction(async()=>{await api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/${r.id}`,'DELETE',undefined,token);setSavedRequests(v=>v.filter(x=>x.id!==r.id));})}/>}</div>)}{!savedRequests.length && <p className="pp-muted-small">No saved requests in this collection.</p>}</div>}</div>}
+              {activeWsTab === 'members' && <div className="pp-manager-section">
                 <div className="pp-roles-hero">
                   <div className="pp-roles-header">
                     <div><h3>Members & roles</h3><p>Roles apply only to <strong className="pp-roles-strong">{activeWorkspace?.name||'this workspace'}</strong>. Members can have multiple roles.</p></div>
@@ -216,8 +217,8 @@ export function WorkspaceManager({ data, actions, refs }) {
                 <h3 id="pp-workspace-delete-title">Delete workspace</h3>
                 <p id="pp-workspace-delete-description">
                   This permanently deletes <strong>{deleteTarget.name}</strong>, including its
-                  collections, nested folders, saved requests, environments, teams,
-                  memberships and invitations. This cannot be undone.
+                  collections, nested folders, saved requests, environments,
+                  memberships, invitations, and any legacy team data. This cannot be undone.
                 </p>
                 <form onSubmit={submitWorkspaceDeletion}>
                   <label htmlFor="pp-workspace-delete-confirmation">

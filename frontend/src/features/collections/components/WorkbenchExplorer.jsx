@@ -1,7 +1,7 @@
 import React, {useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Dialog} from '../../../components/ui/WorkbenchPrimitives.jsx';
-import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History, Users, Plus, Search, ChevronsUpDown, ChevronsDownUp, FileUp, X, ChevronDown, FolderClosed, ArrowRight } from 'lucide-react';
+import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History, Plus, Search, ChevronsUpDown, ChevronsDownUp, FileUp, X, ChevronDown, FolderClosed, ArrowRight } from 'lucide-react';
 import { RetroSelect } from '../../../components/ui/RetroSelect.jsx';
 import { EnvironmentExplorer } from '../../environments/components/EnvironmentExplorer.jsx';
 import { LocalCollectionsTree } from './LocalCollectionsTree.jsx';
@@ -23,7 +23,7 @@ import { statusTone } from '../../requests/services/responseExamples.js';
 export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   const { explorerTab, token, envScope, selectedWs, workspaces, environmentContext } = data;
   const { currentEnvironments, activeEnvId, activeWorkspace, selfMember, theme, openTabs } = data;
-  const { activeTabId, localEnvironments, localCollections, recent, teams, selectedTeam } = data;
+  const { activeTabId, localEnvironments, localCollections, recent } = data;
   const { collectionsScope, explorerSearch, collectionSort, busyAction, canEditCloud, creatingLocalCollection } = data;
   const { localCollectionName, storageScope, collections, visibleLocalCollections, localExpandAllSignal, revealLocalDraft } = data;
   const { visibleCollections, expandedCollections, selectedCol, workspaceRequestLists, WORKSPACE_DRAG, workspaceSorted } = data;
@@ -31,7 +31,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   const { setSidebarCollapsed, setSelectedWs, navigate, setAuthMode, setAuthOpen, setActiveEnvId, setExpandedCollections } = actions;
   const { persistEnvironment, createEnvironment, deleteEnvironment, duplicateEnvironment, openExportChoice, importEnvironmentFile } = actions;
   const { codePreviewRequest, buildCodeRequest, snapshot, importRequestsAndEnvironments, setNotice, loadRequest } = actions;
-  const { setSelectedTeam, setWsTab, setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport } = actions;
+  const { setExplorerSearch, setCollectionSort, expandOrCollapseAllCollections, openCollectionImport } = actions;
   const { setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest, openLocalExample, handleLocalMenu } = actions;
   const { moveLocalRequest, moveLocalFolder, moveLocalCollection, moveWorkspaceCollection,
     moveWorkspaceFolder, reorderWorkspaceRequest, selectTab, moveWorkspaceRequest, showWorkspaceMenu,
@@ -104,7 +104,7 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   return (
 <>
 <aside className="pp-explorer">
-        <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Collections' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : explorerTab === 'environments' ? 'Environments' : 'Teams'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
+        <div className="pp-explorer-title"><strong>{explorerTab === 'collections' ? 'Collections' : explorerTab === 'history' ? 'History' : explorerTab === 'code' ? 'Generate Code' : explorerTab === 'exchange' ? 'Import / Export' : 'Environments'}</strong><button title="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><PanelLeftClose size={16}/></button></div>
         {explorerTab === 'environments' ? <>
           {token&&envScope===STORAGE_WORKSPACE&&<div className="pp-compact-workspace"><Layers3 size={15}/><span>Workspace</span><RetroSelect ariaLabel="Switch environment workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/><button type="button" title="Manage workspace" aria-label="Manage workspace" onClick={()=>navigate('workspace')}><Settings2 size={15}/></button></div>}
           {!token&&<button className="pp-link-row pp-login-hint" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}><LockKeyhole size={14}/> Sign in to access Cloud environments <ChevronRight size={13}/></button>}
@@ -114,8 +114,6 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
             environments={localEnvironments} localCollections={localCollections} onImport={importRequestsAndEnvironments} onMessage={setNotice} authenticated={!!token} workspaceName={activeWorkspace?.name||''} onLogin={()=>{setAuthMode('login');setAuthOpen(true)}} theme={isDarkAppearance(theme)?'dark':'light'}/> : explorerTab === 'history' ? <>
           <div className="pp-side-subhead"><span>RECENT REQUESTS</span><span>{recent.length}</span></div>
           {recent.length ? <div className="pp-side-scroll">{recent.map((r, i) => <button key={`${i}-${r.url}`} className="pp-history-item" onClick={() => loadRequest(r)}><span className={`pp-http-label ${r.method.toLowerCase()}`}>{r.method}</span><span className="pp-history-main"><strong>{(() => { try { return new URL(r.url).pathname || '/'; } catch { return r.url; } })()}</strong><small>{r.url}</small></span><span className={r.status < 400 ? 'pp-history-ok' : 'pp-history-bad'}>{r.status}</span></button>)}</div> : <div className="pp-explorer-empty"><History size={23}/><strong>No history yet</strong><span>Requests you send during this session will appear here.</span></div>}
-        </> : explorerTab === 'teams' ? <>
-          {token ? <><div className="pp-side-subhead"><span>TEAMS · {activeWorkspace?.name || 'WORKSPACE'}</span></div><div className="pp-side-scroll">{teams.map(t => <button key={t.id} className={`pp-tree-row ${selectedTeam === t.id ? 'active' : ''}`} onClick={() => { setSelectedTeam(t.id); navigate('workspace'); setWsTab('teams'); }}><Users size={15}/><span>{t.name}</span></button>)}<button className="pp-add-side" onClick={() => { navigate('workspace'); setWsTab('teams'); }}><Plus size={15}/> Manage teams</button></div></> : <div className="pp-explorer-empty"><LockKeyhole size={22}/><strong>Teams are private</strong><span>Sign in to collaborate with other members.</span><button className="pp-small-primary" onClick={() => setAuthOpen(true)}>Sign in</button></div>}
         </> : <>
           {token&&collectionsScope===STORAGE_WORKSPACE&&<div className="pp-compact-workspace"><Layers3 size={15}/><span>Workspace</span><RetroSelect ariaLabel="Switch workspace" title="Switch workspace" value={selectedWs} onChange={setSelectedWs} options={workspaces.map(w=>({value:w.id,label:w.name}))}/><button type="button" title="Manage workspace" aria-label="Manage workspace" onClick={()=>navigate('workspace')}><Settings2 size={15}/></button></div>}
           <div className="pp-collections-toolbar">

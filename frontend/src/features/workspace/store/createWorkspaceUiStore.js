@@ -14,13 +14,9 @@ export function createWorkspaceUiStore() {
     setSelectedWs: (update) => set(s => ({ selectedWs: resolveUpdate(update, s.selectedWs) })),
     setMembers: (update) => set(s => ({ members: resolveUpdate(update, s.members) })),
     setMembersWorkspaceId: (update) => set(s => ({ membersWorkspaceId: resolveUpdate(update, s.membersWorkspaceId) })),
-    setTeams: (update) => set(s => ({ teams: resolveUpdate(update, s.teams) })),
     setWsTab: (update) => set(s => ({ wsTab: resolveUpdate(update, s.wsTab) })),
-    setSelectedTeam: (update) => set(s => ({ selectedTeam: resolveUpdate(update, s.selectedTeam) })),
-    setTeamMembers: (update) => set(s => ({ teamMembers: resolveUpdate(update, s.teamMembers) })),
     setNewWs: (update) => set(s => ({ newWs: resolveUpdate(update, s.newWs) })),
     setNewCollection: (update) => set(s => ({ newCollection: resolveUpdate(update, s.newCollection) })),
-    setNewTeam: (update) => set(s => ({ newTeam: resolveUpdate(update, s.newTeam) })),
     setNewMember: (update) => set(s => ({ newMember: resolveUpdate(update, s.newMember) })),
     setNewMemberRoles: (update) => set(s => ({ newMemberRoles: resolveUpdate(update, s.newMemberRoles) })),
     setEditingMemberId: (update) => set(s => ({ editingMemberId: resolveUpdate(update, s.editingMemberId) })),
@@ -36,7 +32,6 @@ export function createWorkspaceUiStore() {
     setInvitationBusy: (update) => set(s => ({ invitationBusy: resolveUpdate(update, s.invitationBusy) })),
     setExpandedMemberAccess: (update) => set(s => ({ expandedMemberAccess: resolveUpdate(update, s.expandedMemberAccess) })),
     setCanCreateWorkspace: (update) => set(s => ({ canCreateWorkspace: resolveUpdate(update, s.canCreateWorkspace) })),
-    setNewTeamMember: (update) => set(s => ({ newTeamMember: resolveUpdate(update, s.newTeamMember) })),
     resetWorkspaceUi: () => set(initialWorkspaceUiState()),
   }));
 }

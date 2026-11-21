@@ -6,10 +6,9 @@ export const WORKSPACE_PERMISSION_GROUPS = [
   {id:'workspace',label:'Workspace',items:[
     {id:'workspace.create',label:'Create workspaces'},
     {id:'workspace.manage',label:'Manage workspace'}]},
-  {id:'people',label:'People & teams',items:[
+  {id:'people',label:'Members & roles',items:[
     {id:'member.manage',label:'Manage members'},
-    {id:'role.assign',label:'Assign roles'},
-    {id:'team.manage',label:'Manage teams'}]},
+    {id:'role.assign',label:'Assign roles'}]},
   {id:'collections',label:'Collections',items:[
     {id:'collection.read',label:'View collections'},
     {id:'collection.write',label:'Edit shared collections'}]},
@@ -28,7 +27,9 @@ export function groupEffectivePermissions(permissions) {
     ...group,
     items:group.items.map(item=>({...item,enabled:allowed.has(item.id)})),
   }));
-  const unknown=[...allowed].filter(permission=>!known.has(permission)).sort();
+  // This legacy permission still exists on the backend for old team records,
+  // but is intentionally not displayed in the simplified workspace UI.
+  const unknown=[...allowed].filter(permission=>!known.has(permission)&&permission!=='team.manage').sort();
   if(unknown.length)grouped.push({id:'other',label:'Other permissions',items:unknown.map(id=>({id,label:id,enabled:true}))});
   return grouped;
 }

@@ -58,7 +58,7 @@ import { createEnvironmentWorkbenchStore } from '../../features/environments/sto
 import { useEnvironmentWorkbench } from '../../features/environments/store/useEnvironmentWorkbench.js';
 import { useScopedEnvironmentView } from '../../features/environments/hooks/useScopedEnvironmentView.js';
 import {
-  ArrowDownToLine, ArrowRight, Braces, AlertTriangle, FileUp, Variable, ChevronRight, Code2, Columns2, Copy, FileJson, History, Layers3, LayoutPanelTop, LogIn, LogOut, Save, Search, Send, Pencil, Settings2, ShieldCheck, Users, X, PanelLeftClose, PanelLeftOpen, Link2,
+  ArrowDownToLine, ArrowRight, Braces, AlertTriangle, FileUp, Variable, ChevronRight, Code2, Columns2, Copy, FileJson, History, Layers3, LayoutPanelTop, LogIn, LogOut, Save, Search, Send, Pencil, Settings2, ShieldCheck, X, PanelLeftClose, PanelLeftOpen, Link2,
 } from 'lucide-react';
 import {filterWorkspaceMembers,summarizeWorkspaceMembers} from '../../features/workspace/services/workspaceRoleInsights.js';
 import {canWorkspace,currentWorkspaceMember} from '../../features/workspace/services/workspaceRoles.js';
@@ -185,7 +185,7 @@ export function useWorkbenchController() {
   const [result, setResult] = useState(RECOVERED.result || null);
   const [recent, setRecent] = useState(CACHED?.recent || []);
   const [workspaceUiStore] = useState(createWorkspaceUiStore);
-  const { workspaces, setWorkspaces, selectedWs, setSelectedWs, members, setMembers, membersWorkspaceId, setMembersWorkspaceId, teams, setTeams, wsTab, setWsTab, selectedTeam, setSelectedTeam, teamMembers, setTeamMembers, newWs, setNewWs, newCollection, setNewCollection, newTeam, setNewTeam, newMember, setNewMember, newMemberRoles, setNewMemberRoles, editingMemberId, setEditingMemberId, editingMemberRoles, setEditingMemberRoles, memberSearch, setMemberSearch, memberRoleFilter, setMemberRoleFilter, showMemberAdd, setShowMemberAdd, inviteOpen, setInviteOpen, inviteEmail, setInviteEmail, inviteRoles, setInviteRoles, invitationRows, setInvitationRows, invitationError, setInvitationError, invitationBusy, setInvitationBusy, expandedMemberAccess, setExpandedMemberAccess, canCreateWorkspace, setCanCreateWorkspace, newTeamMember, setNewTeamMember } = useStore(workspaceUiStore);
+  const { workspaces, setWorkspaces, selectedWs, setSelectedWs, members, setMembers, membersWorkspaceId, setMembersWorkspaceId, wsTab, setWsTab, newWs, setNewWs, newCollection, setNewCollection, newMember, setNewMember, newMemberRoles, setNewMemberRoles, editingMemberId, setEditingMemberId, editingMemberRoles, setEditingMemberRoles, memberSearch, setMemberSearch, memberRoleFilter, setMemberRoleFilter, showMemberAdd, setShowMemberAdd, inviteOpen, setInviteOpen, inviteEmail, setInviteEmail, inviteRoles, setInviteRoles, invitationRows, setInvitationRows, invitationError, setInvitationError, invitationBusy, setInvitationBusy, expandedMemberAccess, setExpandedMemberAccess, canCreateWorkspace, setCanCreateWorkspace } = useStore(workspaceUiStore);
   const selectedWorkspaceRef=useRef(selectedWs);
   selectedWorkspaceRef.current=selectedWs;
   // Context selection & Cloud stale-response guards live with Environment state.
@@ -240,7 +240,9 @@ export function useWorkbenchController() {
   const [busyAction, setBusyAction] = useState(false);
   const [split, setSplit] = useState(() => CACHED?.split || localStorage.getItem('pakpost_split') || 'horizontal');
   const [splitPercent, setSplitPercent] = useState(56);
-  const [explorerTab, setExplorerTab] = useState(CACHED?.explorerTab === 'appearance' ? 'collections' : (CACHED?.explorerTab || 'collections'));
+  const [explorerTab, setExplorerTab] = useState(
+    ['collections','environments','history','code','exchange'].includes(CACHED?.explorerTab)
+      ? CACHED.explorerTab : 'collections');
   const [explorerSearch, setExplorerSearch] = useState('');
   const [rightWidth,setRightWidth] = useState(()=>Math.min(650,Math.max(280,Number(localStorage.getItem('pakpost_v14_right_width'))||340)));
   const resizingRight=useRef(false);
@@ -665,23 +667,21 @@ export function useWorkbenchController() {
   useEffect(()=>{let current=true;if(!token){setGoogleLinked(false);return;}
     api('/api/auth/google/status','GET',undefined,token).then(x=>{if(current)setGoogleLinked(!!x.connected)}).catch(()=>{if(current)setGoogleLinked(false)});
     return()=>{current=false};},[token]);
-  // Role editor state is scoped to the selected Workspace, never carried to another team.
+  // Role editor state is scoped to the selected Workspace.
   useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);setInviteOpen(false);setInviteEmail('');setInviteRoles(['Developer']);setInvitationRows([]);setInvitationError('');setMemberSearch('');setMemberRoleFilter('all');setShowMemberAdd(false);setExpandedMemberAccess('');},[selectedWs]);
   useEffect(() => {
-    if (!token || !selectedWs) { setCollections([]); setMembers([]); setMembersWorkspaceId(''); setTeams([]); return; }
+    if (!token || !selectedWs) { setCollections([]); setMembers([]); setMembersWorkspaceId(''); return; }
     let cancelled=false;
     const epoch=workspaceFetchEpoch.current;
-    // Show no stale workspace metadata while a different team is loading.
-    setCollections([]);setMembers([]);setMembersWorkspaceId('');setTeams([]);
+    // Show no stale metadata while another workspace is loading.
+    setCollections([]);setMembers([]);setMembersWorkspaceId('');
     Promise.all([
       api(`/api/workspaces/${selectedWs}/collections`, 'GET', undefined, token),
       api(`/api/workspaces/${selectedWs}/members`, 'GET', undefined, token),
-      api(`/api/workspaces/${selectedWs}/teams`, 'GET', undefined, token),
-    ]).then(([cols, mems, tms]) => {
+    ]).then(([cols, mems]) => {
       if(cancelled||epoch!==workspaceFetchEpoch.current)return;
-      setCollections(cols); setMembers(mems); setMembersWorkspaceId(selectedWs); setTeams(tms);
+      setCollections(cols); setMembers(mems); setMembersWorkspaceId(selectedWs);
       setSelectedCol(current => cols.some(x => x.id === current) ? current : cols[0]?.id || '');
-      setSelectedTeam(current => tms.some(x => x.id === current) ? current : tms[0]?.id || '');
     }).catch(e => {if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
     return()=>{cancelled=true;};
   }, [selectedWs, token]);
@@ -721,11 +721,6 @@ export function useWorkbenchController() {
         .finally(()=>workspaceRequestsPending.current.delete(key));
     }
   },[token,selectedWs,selectedCol,collections,explorerTab,collectionsScope,expandedCollections,workspaceRequestLists]);
-  useEffect(() => {
-    if (!token || !selectedWs || !selectedTeam) { setTeamMembers([]); return; }
-    api(`/api/workspaces/${selectedWs}/teams/${selectedTeam}/members`, 'GET', undefined, token)
-      .then(setTeamMembers).catch(e => setNotice(getMessage(e)));
-  }, [selectedWs, selectedTeam, token]);
   useEffect(() => {
     if (!token || !saveWs) { setSaveCols([]); return; }
     api(`/api/workspaces/${saveWs}/collections`, 'GET', undefined, token)
@@ -789,12 +784,10 @@ export function useWorkbenchController() {
   async function actOnInvitation(...args) { return invitationActions.actOnInvitation(...args); }
   async function acceptInvitation(...args) { return invitationActions.acceptInvitation(...args); }
 
-  const canManageTeams=canWorkspace(selfMember,'team.manage');
   const canAssignRoles=canWorkspace(selfMember,'role.assign');
   const assignableRoles=selfMember?.roles||[];
   const visibleWorkspaceMembers=filterWorkspaceMembers(membersWorkspaceId===selectedWs?members:[],{query:memberSearch,role:memberRoleFilter});
   const workspaceMemberStats=summarizeWorkspaceMembers(membersWorkspaceId===selectedWs?members:[]);
-  const activeTeam = teams.find(x => x.id === selectedTeam);
   const headerCount = rows.filter(x => x.key.trim()&&isEnabled(x)).length;
   const requestHeaderObject = () => Object.fromEntries(rows.filter(x => x.key.trim()&&isEnabled(x)).map(x => [x.key.trim(), x.value]));
   async function sendRequest(...args) { return requestActions.sendRequest(...args); }
@@ -932,14 +925,14 @@ export function useWorkbenchController() {
     setAuthOpen, setCommandIndex, setCommandOpen, setCommandQuery, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword,
     storageScope, theme, token, updateStorageScope, workspaces, page, settingsCategory, setSettingsCategory, sidebarCollapsed,
     rightWidth, WorkbenchNavigation, Code2, FileUp, History, Layers3, PanelLeftClose,
-    PanelLeftOpen, Users, Variable, endRightResize, explorerTab, resizeRight, resizingRight,
+    PanelLeftOpen, Variable, endRightResize, explorerTab, resizeRight, resizingRight,
     setPage, setRightWidth, setSidebarCollapsed, WorkbenchExplorer, environmentContext, selfMember, openTabs,
-    activeTabId, localEnvironments, localCollections, recent, teams, selectedTeam, collectionsScope,
+    activeTabId, localEnvironments, localCollections, recent, collectionsScope,
     explorerSearch, collectionSort, busyAction, canEditCloud, creatingLocalCollection, localCollectionName, collections,
     visibleLocalCollections, localExpandAllSignal, revealLocalDraft, visibleCollections, expandedCollections, selectedCol, workspaceRequestLists,
     WORKSPACE_DRAG, workspaceSorted, expandedWorkspaceExamples, setSelectedWs, setExpandedCollections, navigate, setAuthMode, persistEnvironment,
     createEnvironment, deleteEnvironment, duplicateEnvironment, openExportChoice, importEnvironmentFile, codePreviewRequest, buildCodeRequest,
-    snapshot, importRequestsAndEnvironments, setNotice, loadRequest, setSelectedTeam, setWsTab, setExplorerSearch,
+    snapshot, importRequestsAndEnvironments, setNotice, loadRequest, setWsTab, setExplorerSearch,
     setCollectionSort, expandOrCollapseAllCollections, openCollectionImport, setCreatingLocalCollection, createExplorerCollection, setLocalCollectionName, openLocalRequest,
     openLocalExample, handleLocalMenu, moveLocalRequest, moveLocalFolder, moveLocalCollection, moveWorkspaceCollection, selectTab, moveWorkspaceFolder, reorderWorkspaceRequest, moveWorkspaceRequest, showWorkspaceMenu, refreshCloudCollection, toggleWorkspaceCollectionById,
     createCollectionDraft, setExpandedWorkspaceExamples, loadSavedRequest, openWorkspaceExample, draftsRef, CodeSidebar, ImportExportSidebar,
@@ -962,12 +955,11 @@ export function useWorkbenchController() {
     setMethod, setOpenTabs, setParams, setPostScript, setPreScript, setReqTab, setResTab,
     setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump, setUrl, splitPercent,
     url, variableUi, WorkspaceManager, canCreateWorkspace, newWs, wsTab, newCollection,
-    savedRequests, canManageTeams, newTeam, activeTeam, newTeamMember, teamMembers, canManageMembers,
+    savedRequests, canManageMembers,
     showMemberAdd, inviteOpen, workspaceMemberStats, newMember, newMemberRoles, assignableRoles, inviteEmail,
     inviteRoles, invitationBusy, invitationRows, invitationError, memberSearch, memberRoleFilter, visibleWorkspaceMembers,
     canAssignRoles, expandedMemberAccess, editingMemberId, editingMemberRoles, doAction, setNewWs, loadWorkspaces,
-    setNewCollection, setCollections, setSelectedCol, setSavedRequests, setNewTeam, setTeams, setNewTeamMember,
-    setTeamMembers, setShowMemberAdd, setInviteOpen, setNewMember, setNewMemberRoles, setMembers, inviteMember,
+    setNewCollection, setCollections, setSelectedCol, setSavedRequests, setShowMemberAdd, setInviteOpen, setNewMember, setNewMemberRoles, setMembers, inviteMember,
     setInviteEmail, setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess, setEditingMemberId,
     setEditingMemberRoles, selectedWorkspaceRef, currentTokenRef, CommandPalette, commandIndex, commandOpen, commandQuery,
     visibleCommandItems, notice, createPortal, CollectionDialogs, ArrowDownToLine, Braces, CollectionVariablesEditor,
