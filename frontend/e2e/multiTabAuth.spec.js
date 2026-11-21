@@ -19,11 +19,14 @@ test('two tabs share server cookie and synchronize server-side logout',async({pa
     return reply({},404);
   });
   await page.goto('/');
-  await expect(page.getByRole('button',{name:'Sign out'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Account menu'})).toBeVisible();
   const second=await context.newPage();
   await second.goto('/');
-  await expect(second.getByRole('button',{name:'Sign out'})).toBeVisible();
+  await expect(second.getByRole('button',{name:'Account menu'})).toBeVisible();
   expect(await second.evaluate(()=>sessionStorage.getItem('pakpost_token'))).toBeNull();
-  await page.getByRole('button',{name:'Sign out'}).click();
+  await page.getByRole('button',{name:'Account menu'}).click();
+  await page.getByRole('menuitem',{name:'Sign out'}).click();
+  await expect(page.getByRole('alertdialog',{name:'Sign out of PakPost?'})).toBeVisible();
+  await page.getByRole('button',{name:'Yes, sign out'}).click();
   await expect(second.locator('.pp-top').getByRole('button',{name:'Sign in'})).toBeVisible();
 });

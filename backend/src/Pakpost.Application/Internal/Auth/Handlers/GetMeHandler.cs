@@ -11,6 +11,7 @@ public sealed class GetMeHandler(IUserRepository users) : IRequestHandler<GetMeQ
     public async ValueTask<UserProfile> Handle(GetMeQuery q, CancellationToken ct)
     {
         var user = await users.FindByIdAsync(q.UserId, ct) ?? throw AppException.Unauthorized();
+        if (user.IsDisabled) throw AppException.Unauthorized();
         return new(user.Id, user.Email, user.DisplayName);
     }
 }

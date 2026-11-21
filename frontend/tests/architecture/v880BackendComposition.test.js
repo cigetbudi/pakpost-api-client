@@ -19,7 +19,7 @@ test('cookie session auth defaults to server-side sessions and does not accept b
   const handler = read('backend/src/Pakpost.Api/Security/BrowserSessionAuthenticationHandler.cs');
   const sessions = read('backend/src/Pakpost.Api/Security/ServerSessionStore.cs');
   assert.match(auth, /Jwt:SigningKey/); // still used as the HMAC key for CSRF proofs
-  assert.match(auth, /DefaultAuthenticateScheme = BrowserSessionAuthenticationHandler\.Scheme/);
+  assert.match(auth, /DefaultAuthenticateScheme = BrowserSessionAuthenticationHandler\.SchemeName/);
   assert.doesNotMatch(auth,/AddJwtBearer\(/);
   assert.match(handler,/Request\.Cookies/);
   assert.match(sessions,/SHA256\.HashData/);

@@ -11,8 +11,10 @@ public sealed class UserSession
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset ExpiresAt { get; private set; }
     public DateTimeOffset? RevokedAt { get; private set; }
+    public string UserAgent { get; private set; } = "";
+    public string? AvatarUrl { get; private set; }
 
-    public UserSession(Guid userId, string tokenHash, string csrfHash, DateTimeOffset createdAt, DateTimeOffset expiresAt)
+    public UserSession(Guid userId, string tokenHash, string csrfHash, DateTimeOffset createdAt, DateTimeOffset expiresAt, string userAgent = "", string? avatarUrl = null)
     {
         Id = Guid.NewGuid();
         UserId = userId;
@@ -20,6 +22,8 @@ public sealed class UserSession
         CsrfHash = csrfHash;
         CreatedAt = createdAt;
         ExpiresAt = expiresAt;
+        UserAgent = userAgent;
+        AvatarUrl = avatarUrl;
     }
 
     public void Revoke(DateTimeOffset at) => RevokedAt ??= at;

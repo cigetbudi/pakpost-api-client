@@ -35,6 +35,15 @@ public sealed class GoogleIdentityVerifier(IConfiguration configuration) : IGoog
             throw AppException.Unauthorized("Invalid Google account email");
         var name = string.IsNullOrWhiteSpace(payload.Name) ? email.Split('@')[0] : payload.Name.Trim();
         if (name.Length > 120) name = name[..120];
-        return new GoogleIdentity(payload.Subject, email, name);
+        // Only accept a well-formed Google-hosted picture URL. Never allow
+        // arbitrary ID-token picture hosts to become browser image sources.
+        string? picture = null;
+        if (payload.Picture is { Length: > 0 and <= 2048 } raw &&
+            Uri.TryCreate(raw, UriKind.Absolute, out var url) &&
+            url.Scheme == Uri.UriSchemeHttps && string.IsNullOrEmpty(url.UserInfo) &&
+            (url.Host.Equals("googleusercontent.com", StringComparison.OrdinalIgnoreCase) ||
+             url.Host.EndsWith(".googleusercontent.com", StringComparison.OrdinalIgnoreCase)))
+            picture = raw;
+        return new GoogleIdentity(payload.Subject, email, name, picture);
     }
 }

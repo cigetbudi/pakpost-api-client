@@ -32,8 +32,10 @@ test('logout credentials are invalidated even if recovery clearing throws', () =
   assert.deepEqual(removed,['pakpost_token']);
   assert.doesNotThrow(()=>invalidateBrowserSession({removeItem:()=>{throw Error('blocked')}},()=>{throw Error('blocked')}));
   const app=readWorkbenchSource();
-  assert.match(app,/onClick=\{logout\}/);
-  assert.match(app,/aria-label="Sign out"/);
+  assert.match(app,/logout=\{logout\}/);
+  const profile=read('components/layout/ProfileMenu.jsx');
+  assert.match(profile,/aria-label="Account menu"/);
+  assert.match(profile,/Yes, sign out/);
   const handler=app.slice(app.indexOf('  function performLogout(broadcast) {'),app.indexOf('  const { requiresLogin,'));
   assert.ok(handler.indexOf('invalidateBrowserSession(')<handler.indexOf('planSignedOutWorkbench('));
   assert.ok(handler.indexOf("setToken('')")<handler.indexOf('planSignedOutWorkbench('));

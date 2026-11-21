@@ -23,6 +23,7 @@ public sealed class GoogleLoginHandler(
         {
             user = await users.FindByIdAsync(linked.UserId, ct)
             ?? throw AppException.Unauthorized("Linked account not found");
+            if (user.IsDisabled) throw AppException.Unauthorized("Account unavailable");
         }
         else
         {
@@ -39,6 +40,6 @@ public sealed class GoogleLoginHandler(
             await unitOfWork.SaveChangesAsync(ct);
         }
         var (jwt, expires) = tokens.CreateToken(user);
-        return new LoginResult(jwt, expires, new UserProfile(user.Id, user.Email, user.DisplayName));
+        return new LoginResult(jwt, expires, new UserProfile(user.Id, user.Email, user.DisplayName, google.AvatarUrl));
     }
 }

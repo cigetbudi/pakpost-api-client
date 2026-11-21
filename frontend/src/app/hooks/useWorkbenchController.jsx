@@ -123,6 +123,7 @@ export function useWorkbenchController() {
     })),
   }));
   const [page, setPage] = useState('tester');
+  const [settingsCategory,setSettingsCategory]=useState('appearance');
   const {consoleOpen, setConsoleOpen, consoleEvents} = useConsoleDrawer();
   const {runnerTarget, setRunnerTarget, runnerLoading, setRunnerLoading, runnerFetchId} = useRunnerDialogState();
   const [interceptorMode,setInterceptorMode]=useState(()=>readInterceptorMode(localStorage));
@@ -555,9 +556,11 @@ export function useWorkbenchController() {
     try {
       await api('/api/auth/logout','POST',{},currentTokenRef.current);
       performLogout(true);
+      return true;
     } catch (error) {
-      if (error?.status === 401) performLogout(true);
-      else setNotice(`Logout could not revoke the server session: ${getMessage(error)}. Try again.`);
+      if (error?.status === 401) {performLogout(true);return true;}
+      setNotice(`Logout could not revoke the server session: ${getMessage(error)}. Try again.`);
+      return false;
     }
   }
   function performLogout(broadcast) {
@@ -635,7 +638,8 @@ export function useWorkbenchController() {
     refresh(); // Cookie is shared by every tab; no token broadcast required.
     const visible=()=>{if(document.visibilityState==='visible')refresh();};
     document.addEventListener('visibilitychange',visible);
-    return()=>{active=false;sync.close();document.removeEventListener('visibilitychange',visible);
+    window.addEventListener('pakpost:browser-session-revoked',refresh);
+    return()=>{active=false;sync.close();document.removeEventListener('visibilitychange',visible);window.removeEventListener('pakpost:browser-session-revoked',refresh);
       if(authTabSyncRef.current===sync)authTabSyncRef.current=null;};
   },[]);
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
@@ -926,7 +930,7 @@ export function useWorkbenchController() {
     STORAGE_WORKSPACE, Search, Settings2, activeEnvId, activeWorkspace, currentEnvironments, envScope,
     googleLinked, isDarkAppearance, logout, me, openContext, selectedWs, setActiveEnvId,
     setAuthOpen, setCommandIndex, setCommandOpen, setCommandQuery, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword,
-    storageScope, theme, token, updateStorageScope, workspaces, page, sidebarCollapsed,
+    storageScope, theme, token, updateStorageScope, workspaces, page, settingsCategory, setSettingsCategory, sidebarCollapsed,
     rightWidth, WorkbenchNavigation, Code2, FileUp, History, Layers3, PanelLeftClose,
     PanelLeftOpen, Users, Variable, endRightResize, explorerTab, resizeRight, resizingRight,
     setPage, setRightWidth, setSidebarCollapsed, WorkbenchExplorer, environmentContext, selfMember, openTabs,

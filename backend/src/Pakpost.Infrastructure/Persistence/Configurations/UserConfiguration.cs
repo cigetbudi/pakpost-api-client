@@ -10,6 +10,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         b.Property(x=>x.Email).HasMaxLength(255).IsRequired();
         b.Property(x=>x.DisplayName).HasMaxLength(120).IsRequired();
         b.Property(x=>x.PasswordHash).HasMaxLength(255).IsRequired();
+        b.Property(x=>x.IsDisabled).HasDefaultValue(false);
         b.HasIndex(x=>x.Email).IsUnique();
     }
 }

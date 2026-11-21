@@ -336,6 +336,8 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("UserId").HasColumnType("uuid");
                     b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
                     b.Property<string>("CsrfHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+                    b.Property<string>("UserAgent").IsRequired().HasMaxLength(256).HasColumnType("character varying(256)");
+                    b.Property<string>("AvatarUrl").HasMaxLength(2048).HasColumnType("character varying(2048)");
                     b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone");
                     b.Property<DateTimeOffset>("ExpiresAt").HasColumnType("timestamp with time zone");
                     b.Property<DateTimeOffset?>("RevokedAt").HasColumnType("timestamp with time zone");
@@ -367,6 +369,10 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsSuperAdmin")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDisabled")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()

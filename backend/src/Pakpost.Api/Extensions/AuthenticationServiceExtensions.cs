@@ -19,10 +19,10 @@ public static class AuthenticationServiceExtensions
         services.AddHostedService<ExpiredSessionCleanupService>();
         services.AddAuthentication(options =>
         {
-            options.DefaultAuthenticateScheme = BrowserSessionAuthenticationHandler.Scheme;
-            options.DefaultChallengeScheme = BrowserSessionAuthenticationHandler.Scheme;
+            options.DefaultAuthenticateScheme = BrowserSessionAuthenticationHandler.SchemeName;
+            options.DefaultChallengeScheme = BrowserSessionAuthenticationHandler.SchemeName;
         }).AddScheme<AuthenticationSchemeOptions, BrowserSessionAuthenticationHandler>(
-            BrowserSessionAuthenticationHandler.Scheme, _ => { });
+            BrowserSessionAuthenticationHandler.SchemeName, _ => { });
 
         // No JWT bearer scheme is registered. A legacy JWT (including one that
         // remains in an old tab) cannot authenticate new cookie-protected APIs.

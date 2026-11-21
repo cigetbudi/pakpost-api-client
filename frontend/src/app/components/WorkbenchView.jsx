@@ -9,7 +9,7 @@ export function WorkbenchView({ model }) {
     activeWorkspace, currentEnvironments, envScope, googleLinked, isDarkAppearance, logout,
     me, openContext, selectedWs, setActiveEnvId, setAuthOpen, setCommandIndex,
     setCommandOpen, setCommandQuery, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, storageScope,
-    theme, token, updateStorageScope, workspaces, page, sidebarCollapsed,
+    theme, token, updateStorageScope, workspaces, page, settingsCategory, setSettingsCategory, sidebarCollapsed,
     rightWidth, WorkbenchNavigation, Code2, FileUp, History, Layers3,
     PanelLeftClose, PanelLeftOpen, Users, Variable, endRightResize, explorerTab,
     resizeRight, resizingRight, setPage, setRightWidth, setSidebarCollapsed, WorkbenchExplorer,
@@ -62,7 +62,8 @@ export function WorkbenchView({ model }) {
         envScope, googleLinked, isDarkAppearance, logout, me, openContext,
         selectedWs, setActiveEnvId, setAuthOpen, setCommandIndex, setCommandOpen, setCommandQuery,
         setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, storageScope, theme, token,
-        updateStorageScope, workspaces,}}/>
+        updateStorageScope, workspaces,
+        onOpenSecurity:()=>{setSettingsCategory('security');setPage('settings');},}}/>
 
     <div className={`pp-main-frame ${page==='settings'?'pp-view-settings':page==='workspace'?'pp-view-workspace':'pp-view-tester'} ${sidebarCollapsed?'pp-navigator-collapsed':''}`} style={{'--pp-context-panel-width':`${rightWidth}px`}}>
 <WorkbenchNavigation {...{        Code2, FileUp, History, Layers3, PanelLeftClose, PanelLeftOpen,
@@ -99,7 +100,7 @@ export function WorkbenchView({ model }) {
   }}
 />}
       <main className="pp-content">
-        {page==='settings'&&<WorkbenchSettings theme={theme} onThemeChange={setTheme} token={token} split={split} onSplitChange={setSplit} interceptorMode={interceptorMode} onInterceptorChange={setInterceptorMode} extensionStatus={extensionStatus} onCheckExtension={refreshExtensionStatus} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
+        {page==='settings'&&<WorkbenchSettings category={settingsCategory} onCategoryChange={setSettingsCategory} theme={theme} onThemeChange={setTheme} token={token} split={split} onSplitChange={setSplit} interceptorMode={interceptorMode} onInterceptorChange={setInterceptorMode} extensionStatus={extensionStatus} onCheckExtension={refreshExtensionStatus} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
         <RequestTabs store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} runnerLoading={runnerLoading} openRunnerForCurrentCollection={openRunnerForCurrentCollection} consoleOpen={consoleOpen} setConsoleOpen={setConsoleOpen} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[

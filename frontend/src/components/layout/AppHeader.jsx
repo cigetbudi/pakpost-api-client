@@ -1,3 +1,5 @@
+import {ProfileMenu} from './ProfileMenu.jsx';
+
 // Presentation-only composition: state, API calls and mutation stay in App until their controllers are extracted.
 // Each dependency is explicit so this component can be tested independently.
 export function AppHeader(props) {
@@ -6,7 +8,7 @@ export function AppHeader(props) {
     Search, Settings2, activeEnvId, activeWorkspace, currentEnvironments, envScope, googleLinked,
     isDarkAppearance, logout, me, openContext, selectedWs, setActiveEnvId, setAuthOpen,
     setCommandIndex, setCommandOpen, setCommandQuery, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, storageScope,
-    theme, token, updateStorageScope, workspaces,
+    theme, token, updateStorageScope, workspaces, onOpenSecurity,
   } = props;
   return <>
     <header className="pp-top">
@@ -22,7 +24,11 @@ export function AppHeader(props) {
           <button title="Manage environments" onClick={()=>openContext('environments')}><Settings2 size={16}/></button>
         </div>
         <span className="pp-connection"><span/> Local development</span>
-        {me ? <><button className="pp-profile" type="button" title={`Sign out · ${me.email}`} aria-label="Sign out" onClick={logout}><span>{me.displayName.slice(0, 1).toUpperCase()}</span><span className="pp-profile-name">{me.displayName}</span><LogOut size={14}/></button>{GOOGLE_CLIENT_ID&&!googleLinked && <button type="button" className="pp-google-link-top" title="Connect Google to your existing PakPost account" onClick={()=>{setGoogleLinkError('');setGoogleLinkPassword('');setGoogleLinkOpen(true);}}><Link2 size={14}/> Connect Google</button>}</> : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
+        {me ? <ProfileMenu me={me} logout={logout} onOpenSecurity={onOpenSecurity}
+          canLinkGoogle={!!GOOGLE_CLIENT_ID&&!googleLinked}
+          onConnectGoogle={()=>{setGoogleLinkError('');setGoogleLinkPassword('');setGoogleLinkOpen(true);}}/>
+          : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
+
       </div>
     </header>
   </>;

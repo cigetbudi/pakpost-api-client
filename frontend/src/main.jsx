@@ -46,4 +46,5 @@ import './styles/layers/realtime-conflicts.css';
 
 import './styles/layers/cloud-folder-polish.css';
 import './styles/layers/explorer-tree-alignment.css';
+import './styles/layers/account-security.css';
 import './styles/layers/workspace-founder-delete.css';

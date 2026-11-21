@@ -12,6 +12,8 @@ public sealed class UserSessionConfiguration : IEntityTypeConfiguration<UserSess
         b.HasKey(x => x.Id);
         b.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.CsrfHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.UserAgent).HasMaxLength(256).IsRequired();
+        b.Property(x => x.AvatarUrl).HasMaxLength(2048);
         b.HasIndex(x => x.TokenHash).IsUnique();
         b.HasIndex(x => x.UserId);
         b.HasIndex(x => x.ExpiresAt);

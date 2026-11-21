@@ -11,7 +11,7 @@ public sealed class BrowserSessionAuthenticationHandler(
     ServerSessionStore sessions, IWebHostEnvironment environment)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    public const string Scheme = "PakpostSession";
+    public const string SchemeName = "PakpostSession";
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -23,10 +23,11 @@ public sealed class BrowserSessionAuthenticationHandler(
         if (session is null) return AuthenticateResult.Fail("Session expired or revoked");
         Context.Items[typeof(BrowserSession)] = session;
         var claims = new[] { new Claim("sub", session.UserId.ToString()),
-            new Claim(ClaimTypes.NameIdentifier, session.UserId.ToString()) };
-        var identity = new ClaimsIdentity(claims, Scheme);
+            new Claim(ClaimTypes.NameIdentifier, session.UserId.ToString()),
+            new Claim("pakpost_session_id", session.Id.ToString()) };
+        var identity = new ClaimsIdentity(claims, SchemeName);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity),
-            new AuthenticationProperties { ExpiresUtc = session.ExpiresAt }, Scheme));
+            new AuthenticationProperties { ExpiresUtc = session.ExpiresAt }, SchemeName));
     }
 }
 

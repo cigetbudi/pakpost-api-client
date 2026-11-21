@@ -2,20 +2,23 @@ import React,{useState} from 'react';
 import {ArrowRight,Code2,FileUp,Info,Keyboard,LayoutPanelTop,Palette,ShieldCheck,Variable,Puzzle,Server,Globe2,RefreshCw,CheckCircle2,AlertCircle} from 'lucide-react';
 import {AppearanceSidebar} from './AppearanceSidebar';
 import {SystemHealthPanel} from './SystemHealthPanel';
+import {AccountSecurityPanel} from './AccountSecurityPanel.jsx';
 
 /** Full-workspace preferences; no extra router or UI dependencies. */
-export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,interceptorMode='proxy',onInterceptorChange=()=>{},extensionStatus={state:'unknown'},onCheckExtension=()=>{},onBack,onOpenEnvironments,onOpenImportExport,token=''}){
-  const [category,setCategory]=useState('appearance');
+export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,interceptorMode='proxy',onInterceptorChange=()=>{},extensionStatus={state:'unknown'},onCheckExtension=()=>{},onBack,onOpenEnvironments,onOpenImportExport,token='',category:categoryProp,onCategoryChange}){
+  const [localCategory,setLocalCategory]=useState('appearance');
+  const category=categoryProp??localCategory;
+  const chooseCategory=onCategoryChange??setLocalCategory;
   const categories=[
     ['appearance','Appearance',Palette],['layout','Request layout',LayoutPanelTop],
     ['interceptor','Interceptor',Puzzle],['shortcuts','Keyboard shortcuts',Keyboard],
     ['environments','Environments',Variable],['exchange','Import / Export',FileUp],
-    ['privacy','Privacy & proxy',ShieldCheck],['system','System Health',Server],['about','About Pakpost',Info]
+    ['privacy','Privacy & proxy',ShieldCheck],['security','Security & sessions',ShieldCheck],['system','System Health',Server],['about','About Pakpost',Info]
   ];
   return <div className="pp-settings-screen pp-settings-export">
     <header className="pp-settings-heading"><div><span>PAKPOST / PREFERENCES</span><h1>Settings</h1><p>Configure your API workbench. Preferences are stored in this browser.</p></div><button onClick={onBack}><ArrowRight size={15}/> Return to REST</button></header>
     <div className="pp-settings-inner"><nav aria-label="Settings categories" className="pp-settings-categories">
-      {categories.map(([id,name,Icon])=><button key={id} className={category===id?'selected':''} onClick={()=>setCategory(id)}><Icon size={17}/><span>{name}</span></button>)}
+      {categories.map(([id,name,Icon])=><button key={id} className={category===id?'selected':''} onClick={()=>chooseCategory(id)}><Icon size={17}/><span>{name}</span></button>)}
     </nav><section className="pp-settings-details">
       {category==='appearance'&&<><h2>Appearance</h2><p>Choose a theme for the entire workbench, including code editors.</p><AppearanceSidebar value={theme} onChange={onThemeChange}/></>}
       {category==='layout'&&<><h2>Request layout</h2><p>Choose how request and response share the available space.</p><div className="pp-settings-layouts"><button className={split==='horizontal'?'chosen':''} onClick={()=>onSplitChange('horizontal')}><LayoutPanelTop size={22}/>Stacked <small>Request above response</small></button><button className={split==='vertical'?'chosen':''} onClick={()=>onSplitChange('vertical')}><Code2 size={22}/>Side by side<small>Request left of response</small></button></div></>}
@@ -47,6 +50,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
       {category==='environments'&&<><h2>Environments</h2><p>Manage local and workspace variables, secrets, and export formats in the right explorer.</p><button className="pp-settings-export-link" onClick={onOpenEnvironments}><Variable size={17}/> Open Environments <ArrowRight size={15}/></button></>}
       {category==='exchange'&&<><h2>Import / Export</h2><p>Import requests from Postman, OpenAPI, Insomnia, Hoppscotch or cURL. Export collections and environments from their action menus.</p><button className="pp-settings-export-link" onClick={onOpenImportExport}><FileUp size={17}/> Open Import / Export <ArrowRight size={15}/></button></>}
       {category==='privacy'&&<><h2>Privacy & proxy</h2><p>Current request execution safeguards.</p><div className="pp-settings-privacy"><ShieldCheck size={20}/><div><strong>Interceptor isolation</strong><p>The Secure Proxy blocks private targets. Browser Extension requests destinations according to your extension popup policy (Allow All or Specified), but only approved Pakpost origins can control it. Credentials are not saved in the extension; redirects are disabled.</p></div></div></>}
+      {category==='security'&&<AccountSecurityPanel token={token}/>}
       {category==='system'&&<SystemHealthPanel token={token}/>}
       {category==='about'&&<><h2>About Pakpost</h2><p>Pakpost is an API workbench with local guest drafts and signed-in workspaces.</p><div className="pp-settings-privacy"><Info size={20}/><div><strong>Pakpost Workbench</strong><p>React/Vite with Bun, isolated QuickJS scripting and selectable HTTP interceptors.</p></div></div></>}
     </section></div>

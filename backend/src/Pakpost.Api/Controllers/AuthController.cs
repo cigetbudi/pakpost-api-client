@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Pakpost.Api.Extensions;
 using Pakpost.Api.Security;
+using Pakpost.Api.Realtime;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Pakpost.Api.Controllers;
 
@@ -19,7 +21,8 @@ public sealed record BrowserSessionResponse(bool Authenticated, UserProfile? Use
 [Route("api/auth")]
 [RequestTimeout("auth")]
 public sealed class AuthController(
-    ISender sender, ServerSessionStore sessions, IWebHostEnvironment environment) : ControllerBase
+    ISender sender, ServerSessionStore sessions, IWebHostEnvironment environment,
+    WorkspaceConnectionRegistry connections, IHubContext<WorkspaceHub> hub) : ControllerBase
 {
     private bool InsecureDeployment => !Request.IsHttps && !environment.IsDevelopment();
     private ActionResult<BrowserLoginResponse> HttpsRequired() =>
@@ -31,8 +34,10 @@ public sealed class AuthController(
         // The existing login handler still constructs an internal JWT, which is
         // deliberately discarded and never serialized to the browser.
         var name = BrowserSessionCookies.Name(Request, environment);
+        var old = await sessions.FindAsync(Request.Cookies[name], ct);
         await sessions.RevokeAsync(Request.Cookies[name], ct); // Rotate on every login.
-        var fresh = await sessions.CreateAsync(result.User.Id, ct);
+        if (old is not null) await connections.RevokeSessionAsync(hub, old.Id);
+        var fresh = await sessions.CreateAsync(result.User.Id, ct, Request.Headers.UserAgent.ToString(), result.User.AvatarUrl);
         Response.Cookies.Append(name, fresh.OpaqueToken, BrowserSessionCookies.Options(Request));
         return Ok(new BrowserLoginResponse(result.User, fresh.ExpiresAt, fresh.CsrfToken));
     }
@@ -71,14 +76,16 @@ public sealed class AuthController(
         var csrf = sessions.CsrfProof(raw!);
         if (!ServerSessionStore.VerifyCsrf(found, csrf))
             return Unauthorized();
-        return Ok(new BrowserSessionResponse(true, user, found.ExpiresAt, csrf));
+        return Ok(new BrowserSessionResponse(true, user with { AvatarUrl = found.AvatarUrl }, found.ExpiresAt, csrf));
     }
 
     [Authorize, HttpPost("logout")]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
         var name = BrowserSessionCookies.Name(Request, environment);
+        var current = CurrentSession();
         await sessions.RevokeAsync(Request.Cookies[name], ct);
+        if (current is not null) await connections.RevokeSessionAsync(hub, current.Id);
         Response.Cookies.Delete(name, BrowserSessionCookies.Options(Request));
         return NoContent();
     }
@@ -88,7 +95,40 @@ public sealed class AuthController(
     {
         var name = BrowserSessionCookies.Name(Request, environment);
         await sessions.RevokeAllAsync(User.GetUserId(), ct);
+        await connections.RevokeUserAsync(hub, User.GetUserId());
         Response.Cookies.Delete(name, BrowserSessionCookies.Options(Request));
+        return NoContent();
+    }
+
+    private BrowserSession? CurrentSession() =>
+        HttpContext.Items.TryGetValue(typeof(BrowserSession), out var value) ? value as BrowserSession : null;
+
+    [Authorize, HttpGet("sessions")]
+    public async Task<ActionResult<IReadOnlyList<BrowserSessionInfo>>> ActiveSessions(CancellationToken ct)
+    {
+        var current = CurrentSession();
+        if (current is null) return Unauthorized();
+        return Ok(await sessions.ListAsync(User.GetUserId(), current.Id, ct));
+    }
+
+    [Authorize, HttpPost("sessions/{sessionId:guid}/revoke")]
+    public async Task<IActionResult> RevokeSession(Guid sessionId, CancellationToken ct)
+    {
+        var affected = await sessions.RevokeOneAsync(User.GetUserId(), sessionId, ct);
+        if (affected == 0) return NotFound();
+        await connections.RevokeSessionAsync(hub, sessionId);
+        if (CurrentSession()?.Id == sessionId)
+            Response.Cookies.Delete(BrowserSessionCookies.Name(Request, environment), BrowserSessionCookies.Options(Request));
+        return NoContent();
+    }
+
+    [Authorize, HttpPost("sessions/revoke-others")]
+    public async Task<IActionResult> RevokeOthers(CancellationToken ct)
+    {
+        var current = CurrentSession();
+        if (current is null) return Unauthorized();
+        await sessions.RevokeOthersAsync(User.GetUserId(), current.Id, ct);
+        await connections.RevokeOtherSessionsAsync(hub, User.GetUserId(), current.Id);
         return NoContent();
     }
 
@@ -102,5 +142,8 @@ public sealed class AuthController(
 
     [Authorize, HttpGet("me")]
     public async Task<ActionResult<UserProfile>> Me(CancellationToken ct)
-        => Ok(await sender.Send(new GetMeQuery(User.GetUserId()), ct));
+    {
+        var user = await sender.Send(new GetMeQuery(User.GetUserId()), ct);
+        return Ok(user with { AvatarUrl = CurrentSession()?.AvatarUrl });
+    }
 }

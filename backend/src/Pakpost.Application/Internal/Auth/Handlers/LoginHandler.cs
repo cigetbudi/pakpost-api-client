@@ -13,7 +13,7 @@ public sealed class LoginHandler(IUserRepository users, IPasswordHasher password
     {
         var user = await users.FindByEmailAsync(cmd.Email.Trim().ToLowerInvariant(), ct);
         // Avoid account enumeration using identical messages.
-        if (user is null || !passwords.Verify(cmd.Password, user.PasswordHash))
+        if (user is null || user.IsDisabled || !passwords.Verify(cmd.Password, user.PasswordHash))
             throw AppException.Unauthorized("Invalid email or password");
         var (token, seconds) = tokens.CreateToken(user);
         return new(token, seconds, new(user.Id, user.Email, user.DisplayName));

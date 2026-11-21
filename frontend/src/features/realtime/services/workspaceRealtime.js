@@ -25,6 +25,14 @@ export async function connectWorkspaceRealtime({workspaceId,getToken,onEvent,onS
     try{await join()}catch{onStatus?.('offline')}
     onAccessChanged?.();
   });
+  hub.on('SessionRevoked',()=>{
+    if(disposed)return;
+    disposed=true; // Do not attempt reconnect with a revoked cookie.
+    if(timer){clearTimeout(timer);timer=null;}
+    onStatus?.('offline');
+    window.dispatchEvent(new Event('pakpost:browser-session-revoked'));
+    hub.stop().catch(()=>{});
+  });
   hub.on('WorkspaceChanged',event=>{
     if(!disposed && validWorkspaceEvent(event,workspaceId)) onEvent(event);
   });
