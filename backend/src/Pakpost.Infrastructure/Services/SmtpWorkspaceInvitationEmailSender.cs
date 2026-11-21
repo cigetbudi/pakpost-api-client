@@ -19,12 +19,7 @@ public sealed class SmtpWorkspaceInvitationEmailSender(IConfiguration configurat
             throw AppException.BadRequest("Email invitations are not configured on this PakPost server");
         var port=configuration.GetValue("Invitations:Smtp:Port",587);
         if(port is <1 or >65535)throw AppException.BadRequest("Invalid SMTP port");
-        using var message=new MailMessage(new MailAddress(from),new MailAddress(email))
-        {
-            Subject="You're invited to a PakPost workspace",
-            Body=$"You have been invited to the PakPost workspace '{workspaceName}'.\n\nOpen this one-time link to accept (expires in 7 days):\n{invitationUrl}\n\nIf you weren't expecting this, ignore this email.\n",
-            IsBodyHtml=false
-        };
+        using var message=WorkspaceInvitationEmailMessage.Create(from,email,workspaceName,invitationUrl);
         using var client=new SmtpClient(host,port)
         {
             EnableSsl=true, // Requires STARTTLS, typically port 587.

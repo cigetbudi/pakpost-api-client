@@ -15,4 +15,9 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.15" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15" />
   </ItemGroup>
+  <!-- Keep HTML and the PNG logo inside the assembly; no external image hosting is needed. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Services/EmailTemplates/WorkspaceInvitation.html" />
+    <EmbeddedResource Include="Services/EmailTemplates/pakpost-logo.png" />
+  </ItemGroup>
 </Project>
