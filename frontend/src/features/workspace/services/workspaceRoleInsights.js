@@ -4,7 +4,6 @@ import {WORKSPACE_ROLES,normalizeRoles} from './workspaceRoles.js';
 // remains authoritative; do not derive authorization from role names here.
 export const WORKSPACE_PERMISSION_GROUPS = [
   {id:'workspace',label:'Workspace',items:[
-    {id:'workspace.create',label:'Create workspaces'},
     {id:'workspace.manage',label:'Manage workspace'}]},
   {id:'people',label:'Members & roles',items:[
     {id:'member.manage',label:'Manage members'},
@@ -29,7 +28,7 @@ export function groupEffectivePermissions(permissions) {
   }));
   // This legacy permission still exists on the backend for old team records,
   // but is intentionally not displayed in the simplified workspace UI.
-  const unknown=[...allowed].filter(permission=>!known.has(permission)&&permission!=='team.manage').sort();
+  const unknown=[...allowed].filter(permission=>!known.has(permission)&&permission!=='team.manage'&&permission!=='workspace.create').sort();
   if(unknown.length)grouped.push({id:'other',label:'Other permissions',items:unknown.map(id=>({id,label:id,enabled:true}))});
   return grouped;
 }

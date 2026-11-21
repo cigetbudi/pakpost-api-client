@@ -49,4 +49,5 @@ import './styles/layers/explorer-tree-alignment.css';
 import './styles/layers/account-security.css';
 import './styles/layers/workspace-founder-delete.css';
 
+import './styles/layers/instance-administration.css';
 import './styles/layers/motion-system.css';

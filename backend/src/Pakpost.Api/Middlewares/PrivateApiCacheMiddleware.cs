@@ -8,7 +8,8 @@ public sealed class PrivateApiCacheMiddleware(RequestDelegate next)
 
         if (path.StartsWithSegments("/api/workspaces") ||
             path.StartsWithSegments("/api/auth") ||
-            path.StartsWithSegments("/api/invitations"))
+            path.StartsWithSegments("/api/invitations") ||
+            path.StartsWithSegments("/api/admin"))
         {
             context.Response.Headers.CacheControl = "no-store, private";
             context.Response.Headers.Pragma = "no-cache";

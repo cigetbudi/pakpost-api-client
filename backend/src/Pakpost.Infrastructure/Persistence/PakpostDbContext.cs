@@ -21,6 +21,7 @@ public sealed partial class PakpostDbContext(
     public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
     public DbSet<WorkspaceMemberRole> WorkspaceMemberRoles => Set<WorkspaceMemberRole>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
+    public DbSet<PlatformCreatorInvitation> PlatformCreatorInvitations => Set<PlatformCreatorInvitation>();
     public DbSet<Collection> Collections => Set<Collection>();
     public DbSet<CollectionFolder> CollectionFolders => Set<CollectionFolder>();
     public DbSet<SavedRequest> SavedRequests => Set<SavedRequest>();

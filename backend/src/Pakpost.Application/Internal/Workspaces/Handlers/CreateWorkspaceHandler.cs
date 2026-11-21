@@ -1,5 +1,6 @@
 using Mediator;
 using Pakpost.Application.Common.Exceptions;
+using Microsoft.Extensions.Configuration;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
 using Pakpost.Application.Internal.Workspaces.Commands;
@@ -11,6 +12,9 @@ namespace Pakpost.Application.Internal.Workspaces.Handlers;
 
 public sealed class CreateWorkspaceHandler(
     IWorkspaceRepository workspaces,
+    IUserRepository users,
+    IUserExternalIdentityRepository identities,
+    IConfiguration configuration,
     IUnitOfWork unitOfWork)
     : IRequestHandler<CreateWorkspaceCommand, WorkspaceDto>
 {
@@ -18,10 +22,11 @@ public sealed class CreateWorkspaceHandler(
         CreateWorkspaceCommand command,
         CancellationToken ct)
     {
-        if (!await WorkspacePermissions.CanCreateWorkspaceAsync(workspaces, command.ActorId, ct))
-        {
-            throw AppException.Forbidden("Only Team Lead can create another workspace");
-        }
+        var policy = WorkspaceDeploymentPolicy.From(configuration);
+        if (!await policy.CanCreateAsync(users, identities, command.ActorId, ct))
+            throw AppException.Forbidden(policy.IsPublic
+                ? "Sign in with a verified Google account to create a workspace"
+                : "An instance administrator must enable Workspace Creator for your account");
 
         var workspace = new Workspace(command.Name, command.ActorId);
 

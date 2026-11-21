@@ -1,5 +1,7 @@
 using Mediator;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using Pakpost.Application.Common.Security;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Internal.Workspaces.Commands;
@@ -13,6 +15,8 @@ namespace Pakpost.Application.Internal.Workspaces.Handlers;
 public sealed class AcceptWorkspaceInvitationHandler(
     IWorkspaceInvitationRepository invitations,
     IWorkspaceRepository workspaces,
+    IWorkspaceCapacity capacity,
+    IConfiguration configuration,
     IUserRepository users,
     IUserExternalIdentityRepository identities,
     IUnitOfWork unitOfWork,
@@ -41,6 +45,16 @@ public sealed class AcceptWorkspaceInvitationHandler(
                 "Sign in with a Google-verified PakPost account matching the invitation email");
         }
 
+        await using var transaction = await capacity.LockAsync(invitation.WorkspaceId, ct);
+        // Re-check under the lock: the invite may have been revoked or accepted concurrently.
+        if (!invitation.IsPending(DateTimeOffset.UtcNow))
+            throw AppException.Conflict("Invitation is no longer pending");
+
+        var policy = WorkspaceDeploymentPolicy.From(configuration);
+        if (policy.MaxMembers is int limit &&
+            await capacity.CountMembersAsync(invitation.WorkspaceId, ct) >= limit)
+            throw AppException.Conflict($"Workspace has reached its {limit}-person limit");
+
         var workspace = await workspaces.FindAsync(invitation.WorkspaceId, ct)
             ?? throw AppException.NotFound();
 
@@ -65,6 +79,7 @@ public sealed class AcceptWorkspaceInvitationHandler(
         invitation.Accept(DateTimeOffset.UtcNow);
 
         await unitOfWork.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         logger.LogInformation(
             "Workspace invitation accepted {InvitationId} {WorkspaceId}",

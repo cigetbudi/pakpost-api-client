@@ -88,6 +88,7 @@ import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation,
 import {isReadOnlyCloudTab, sandboxCacheTabIds,sandboxDocKey} from '../../features/requests/services/qaSandbox.js';
 import {applyFieldMerge} from '../../features/requests/services/requestVersionMerge.js';
 import {defaultStorageScope,allowedStorageScope,STORAGE_LOCAL,STORAGE_WORKSPACE,collectionImportSources,saveCloudCollections} from '../../features/import-export/services/storageScope';
+import {readWorkspaceViewPreference,saveWorkspaceViewPreference} from '../../features/workspace/services/workspaceViewPreference.js';
 import {MenuActionItem} from '../../components/ui/MenuActionItem';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from '../../features/settings/services/appearance';
 import { bodyFormat, languageFromMime, formatSource, resolveVars } from '../../features/requests/services/requestTools';
@@ -139,14 +140,14 @@ export function useWorkbenchController() {
   const authTabSyncRef=useRef(null);
   // Shared header storage context for both Collections and Environments.
   // The legacy cached envScope keeps existing users on their last chosen storage.
-  const [storageScope,setStorageScope] = useState(()=>allowedStorageScope(!!storedToken(),CACHED?.envScope || defaultStorageScope(!!storedToken())));
+  const [storageScope,setStorageScope] = useState(STORAGE_LOCAL); // Until /auth/session verifies the cookie, Cloud stays unavailable.
   const collectionsScope=storageScope;
   const envScope=storageScope;
   const [me, setMe] = useState(null);
   const currentUserRef=useRef(me);currentUserRef.current=me;
   const {
     authOpen, setAuthOpen, authMode, setAuthMode, authBusy, setAuthBusy,
-    authError, setAuthError, authForm, setAuthForm, googleLinkOpen, setGoogleLinkOpen,
+    authError, setAuthError, googleLinkOpen, setGoogleLinkOpen,
     googleLinkPassword, setGoogleLinkPassword, googleLinkError, setGoogleLinkError, googleLinked, setGoogleLinked,
     inviteToken, setInviteToken, acceptingInvite, setAcceptingInvite, inviteAcceptError, setInviteAcceptError,
   } = useAuthOverlayState();
@@ -188,6 +189,16 @@ export function useWorkbenchController() {
   const { workspaces, setWorkspaces, selectedWs, setSelectedWs, members, setMembers, membersWorkspaceId, setMembersWorkspaceId, wsTab, setWsTab, newWs, setNewWs, newCollection, setNewCollection, newMember, setNewMember, newMemberRoles, setNewMemberRoles, editingMemberId, setEditingMemberId, editingMemberRoles, setEditingMemberRoles, memberSearch, setMemberSearch, memberRoleFilter, setMemberRoleFilter, showMemberAdd, setShowMemberAdd, inviteOpen, setInviteOpen, inviteEmail, setInviteEmail, inviteRoles, setInviteRoles, invitationRows, setInvitationRows, invitationError, setInvitationError, invitationBusy, setInvitationBusy, expandedMemberAccess, setExpandedMemberAccess, canCreateWorkspace, setCanCreateWorkspace } = useStore(workspaceUiStore);
   const selectedWorkspaceRef=useRef(selectedWs);
   selectedWorkspaceRef.current=selectedWs;
+  // Persist only non-sensitive UI choices once a verified account is known.
+  // Never overwrite a Cloud preference during the initial guest/bootstrap frame.
+  useEffect(()=>{
+    if(token===BROWSER_SESSION&&me?.id)
+      saveWorkspaceViewPreference(localStorage,me.id,{scope:storageScope});
+  },[token,me?.id,storageScope]);
+  useEffect(()=>{
+    if(token===BROWSER_SESSION&&me?.id&&selectedWs&&workspaces.some(ws=>ws.id===selectedWs))
+      saveWorkspaceViewPreference(localStorage,me.id,{workspaceId:selectedWs});
+  },[token,me?.id,selectedWs,workspaces]);
   // Context selection & Cloud stale-response guards live with Environment state.
   const {
     cloudEnvironmentContext, environmentContext, cloudEnvironmentContextRef,
@@ -577,7 +588,7 @@ export function useWorkbenchController() {
     setWorkspaceCollectionDocs({});
     setToken('');setMe(null);setStorageScope(STORAGE_LOCAL);setPage('tester');
     setAuthOpen(false);setGoogleLinkOpen(false);setGoogleLinked(false);
-    setGoogleLinkPassword('');setAuthForm({displayName:'',email:'',password:''});
+    setGoogleLinkPassword('');
     setRecent([]);setCollections([]);setSavedRequests([]);setWorkspaceRequestLists({});
     setRemoteAlerts({});setConflictDialog(null);setVersionDialog(null);
     workspaceUiStore.getState().resetWorkspaceUi();
@@ -598,12 +609,13 @@ export function useWorkbenchController() {
     restoreDraft(planned.activeDraft);
     setNotice('Signed out. Your Local requests remain available.');
   }
-  const { requiresLogin, navigate, completeSignIn, submitAuth, submitGoogleAuth, submitGoogleLink, loadWorkspaces } = createAuthActions({
-    STORAGE_WORKSPACE, api, authBusy, authForm, authMode, currentTokenRef,
-    getMessage, googleLinkPassword, setAuthBusy, setAuthError, setAuthForm, setAuthMode,
+  const { requiresLogin, navigate, completeSignIn, submitGoogleAuth, submitGoogleLink, loadWorkspaces } = createAuthActions({
+    STORAGE_WORKSPACE, api, authBusy, currentTokenRef,
+    getMessage, googleLinkPassword, setAuthBusy, setAuthError, setAuthMode,
     setAuthOpen, setCanCreateWorkspace, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, setGoogleLinked,
     setMe, setNotice, setPage, setSelectedWs, setStorageScope, setToken,
-    setWorkspaceEnvironmentResult, setWorkspaces, token,
+    setWorkspaceEnvironmentResult, setWorkspaces, token, currentUserRef,
+    preferredWorkspaceId:userId=>readWorkspaceViewPreference(localStorage,userId).workspaceId,
     announceSession:()=>{authEpochRef.current += 1;setAuthSessionRevision(v=>v+1);authTabSyncRef.current?.announceSession();},
   });
   useEffect(()=>{
@@ -616,6 +628,8 @@ export function useWorkbenchController() {
         const result=await api('/api/auth/session','GET');
         if(!active || epoch!==authEpochRef.current)return;
         if(result?.authenticated && result.user && result.csrfToken){
+          const sameAccount=currentTokenRef.current===BROWSER_SESSION &&
+            currentUserRef.current?.id===result.user.id;
           const switchedAccount=currentTokenRef.current===BROWSER_SESSION &&
             currentUserRef.current?.id && currentUserRef.current.id!==result.user.id;
           if(switchedAccount)performLogout(false);
@@ -625,8 +639,17 @@ export function useWorkbenchController() {
           setToken(BROWSER_SESSION);
           setMe(result.user);
           setAuthOpen(false);
-          setStorageScope(scope=>allowedStorageScope(true,scope));
-          if(switchedAccount)loadWorkspaces(BROWSER_SESSION);
+          // Restore after verification, not from the unauthenticated startup state.
+          // A visibility/session refresh for the same user must NOT override a
+          // Local/Cloud switch they just made in this tab.
+          if(!sameAccount){
+            // The old workbench cache's envScope can be polluted by a brief
+            // unauthenticated startup. Default verified accounts to Cloud;
+            // only an explicit per-account preference can choose Local.
+            const preference=readWorkspaceViewPreference(localStorage,result.user.id);
+            setStorageScope(preference.scope);
+          }
+          if(switchedAccount)loadWorkspaces(BROWSER_SESSION,result.user.id);
         }else if(currentTokenRef.current){
           performLogout(false);
         }else setBrowserCsrf('');
@@ -968,8 +991,8 @@ export function useWorkbenchController() {
     documentationTarget, exportChoice, exportFormat, exportIncludeSecrets, readCollectionVariables, reloadCollectionVariables, resetCollectionVariableSession,
     saveCollectionVariableDefaults, saveDocumentation, sessionCollectionVariables, setCollectionVariablesTarget, setDocumentationTarget, setExportChoice, setExportFormat,
     setExportIncludeSecrets, AuthOverlays, inviteToken, inviteAcceptError, acceptingInvite, authOpen, authMode,
-    authForm, authError, authBusy, googleLinkOpen, googleLinkPassword, googleLinkError, setInviteToken,
-    setInviteAcceptError, acceptInvitation, setAuthForm, submitAuth, submitGoogleAuth, setAuthError, submitGoogleLink,
+    authError, authBusy, googleLinkOpen, googleLinkPassword, googleLinkError, setInviteToken,
+    setInviteAcceptError, acceptInvitation, submitGoogleAuth, setAuthError, submitGoogleLink,
     RequestDialogs, ImportDestinationPicker, RequestRevisionPanel, actionDialog, actionName, activeSource, applyMergedRevision,
     closeConfirmation, collectionImportBusy, collectionImportDestination, collectionImportError, collectionImportFile, collectionImportOpen, conflictDialog,
     exampleDescription, exampleName, executeActionDialog, reloadCloudConflict, restoreRequestRevision, saveCollection, saveCols,

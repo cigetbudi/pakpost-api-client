@@ -1,4 +1,5 @@
 using Mediator;
+using Microsoft.Extensions.Configuration;
 using Pakpost.Application.Common.Exceptions;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
@@ -13,6 +14,9 @@ namespace Pakpost.Application.Internal.Workspaces.Handlers;
 public sealed class AddWorkspaceMemberHandler(
     IWorkspaceRepository workspaces,
     IUserRepository users,
+    IWorkspaceInvitationRepository invitations,
+    IWorkspaceCapacity capacity,
+    IConfiguration configuration,
     IUnitOfWork unitOfWork)
     : IRequestHandler<AddWorkspaceMemberCommand, MemberDto>
 {
@@ -34,10 +38,19 @@ public sealed class AddWorkspaceMemberHandler(
         var user = await users.FindByEmailAsync(email, ct)
             ?? throw AppException.NotFound("User must sign in first");
 
+        await using var transaction = await capacity.LockAsync(command.WorkspaceId, ct);
         if (await workspaces.FindMemberAsync(command.WorkspaceId, user.Id, ct) is not null)
         {
             throw AppException.Conflict("Already a workspace member");
         }
+
+        if (await invitations.HasPendingAsync(command.WorkspaceId, email, DateTimeOffset.UtcNow, ct))
+            throw AppException.Conflict("A pending invitation already reserves this seat. Revoke it before adding the member directly.");
+
+        var policy = WorkspaceDeploymentPolicy.From(configuration);
+        if (policy.MaxMembers is int limit &&
+            await capacity.CountReservedSeatsAsync(command.WorkspaceId, DateTimeOffset.UtcNow, ct) >= limit)
+            throw AppException.Conflict($"Workspace has reached its {limit}-person limit (including pending invitations)");
 
         var legacyRole = roles.Contains(WorkspaceAccessRole.TeamLead) ||
             roles.Contains(WorkspaceAccessRole.WorkspaceAdmin)
@@ -51,6 +64,7 @@ public sealed class AddWorkspaceMemberHandler(
             roles));
 
         await unitOfWork.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return new MemberDto(
             user.Id,

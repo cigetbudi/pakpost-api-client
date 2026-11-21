@@ -29,7 +29,7 @@ public sealed class GoogleLoginHandler(
         {
             // Do not silently take over an email/password account by matching email.
             if (await users.FindByEmailAsync(google.Email, ct) is not null)
-                throw AppException.Conflict("This email already has a PakPost account. Sign in with password and use Connect Google.");
+                throw AppException.Conflict("A PakPost account with this email already exists but is not linked to Google. Ask the instance administrator about legacy account migration.");
 
             // Generate an unguessable local password so Google-only users cannot
             // authenticate with a blank/default password. A password reset flow is future work.
@@ -40,6 +40,6 @@ public sealed class GoogleLoginHandler(
             await unitOfWork.SaveChangesAsync(ct);
         }
         var (jwt, expires) = tokens.CreateToken(user);
-        return new LoginResult(jwt, expires, new UserProfile(user.Id, user.Email, user.DisplayName, google.AvatarUrl));
+        return new LoginResult(jwt, expires, new UserProfile(user.Id, user.Email, user.DisplayName, google.AvatarUrl, user.IsSuperAdmin));
     }
 }

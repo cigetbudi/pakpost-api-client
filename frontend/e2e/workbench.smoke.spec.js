@@ -38,7 +38,9 @@ test('the heavy editor chunk loads only after opening Scripts', async ({page}) =
 test('guest sign-in dialog opens without leaving the REST workbench', async ({page}) => {
   await page.goto('/');
   await page.locator('.pp-top').getByRole('button', {name: 'Sign in'}).click();
-  await expect(page.getByText('Welcome back', {exact: true})).toBeVisible();
-  await expect(page.getByLabel('Email address')).toBeVisible();
+  await expect(page.getByText('Sign in to PakPost', {exact: true})).toBeVisible();
+  await expect(page.getByText('New accounts are created automatically after Google verification.', {exact: false})).toBeVisible();
+  await expect(page.getByLabel('Email address')).toHaveCount(0);
+  await expect(page.locator('input[type="password"]')).toHaveCount(0);
   await expect(page.locator('#root .pp-app')).toBeVisible();
 });

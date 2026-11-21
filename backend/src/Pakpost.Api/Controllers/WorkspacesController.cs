@@ -5,6 +5,7 @@ using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.RateLimiting;
 using Pakpost.Api.Realtime;
 using Pakpost.Api.Extensions;
 using Pakpost.Domain.Enums;
@@ -27,7 +28,7 @@ public sealed class WorkspacesController(ISender sender,WorkspaceConnectionRegis
     public async Task<ActionResult<WorkspaceCapabilitiesDto>> Capabilities(CancellationToken ct)
         =>Ok(await sender.Send(new GetWorkspaceCapabilitiesQuery(User.GetUserId()),ct));
 
-    [HttpPost]
+    [HttpPost, EnableRateLimiting("auth")]
     public async Task<ActionResult<WorkspaceDto>> Create([FromBody] CreateWorkspaceRequest body, CancellationToken ct)
         => Ok(await sender.Send(new CreateWorkspaceCommand(User.GetUserId(), body.Name), ct));
 

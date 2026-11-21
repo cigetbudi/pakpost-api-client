@@ -11,6 +11,7 @@ public static class ExternalServiceExtensions
     {
         services.AddSingleton<IGoogleIdentityVerifier, GoogleIdentityVerifier>();
         services.AddScoped<IWorkspaceInvitationEmailSender, SmtpWorkspaceInvitationEmailSender>();
+        services.AddScoped<IPlatformCreatorInvitationEmailSender, SmtpPlatformCreatorInvitationEmailSender>();
         services.AddSingleton<IEnvironmentValueCipher, EnvironmentValueCipher>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddTransient<IHttpRequestRunner, SafeHttpRequestRunner>();

@@ -1,12 +1,14 @@
 import { BROWSER_SESSION, setBrowserCsrf } from '../../../services/httpClient.js';
+import {chooseWorkspaceId} from '../../workspace/services/workspaceViewPreference.js';
 // Feature controller. Actions execute with the current Workbench context supplied
 // by App; no global state, persistence middleware or extra network requests.
 export function createAuthActions(dependencies) {
   const {
-    STORAGE_WORKSPACE, announceSession, api, authBusy, authForm, authMode, currentTokenRef, getMessage,
-    googleLinkPassword, setAuthBusy, setAuthError, setAuthForm, setAuthMode, setAuthOpen, setCanCreateWorkspace,
+    STORAGE_WORKSPACE, announceSession, api, authBusy, currentTokenRef, getMessage,
+    googleLinkPassword, setAuthBusy, setAuthError, setAuthMode, setAuthOpen, setCanCreateWorkspace,
     setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, setGoogleLinked, setMe, setNotice, setPage,
     setSelectedWs, setStorageScope, setToken, setWorkspaceEnvironmentResult, setWorkspaces, token,
+    currentUserRef, preferredWorkspaceId,
   } = dependencies;
   function requiresLogin(target = 'workspace') {
     if (token) return true;
@@ -26,18 +28,8 @@ export function createAuthActions(dependencies) {
     if(currentTokenRef)currentTokenRef.current=BROWSER_SESSION;
     announceSession?.();
     setToken(BROWSER_SESSION);setStorageScope(STORAGE_WORKSPACE);setMe(data.user);setSelectedWs('');setWorkspaceEnvironmentResult({context:'',items:[]});setAuthOpen(false);
-    setAuthForm({ displayName: '', email: '', password: '' });
     setNotice(`Welcome, ${data.user.displayName}. You can now use workspaces.`);
     if(alreadySignedIn)loadWorkspaces(BROWSER_SESSION);
-  }
-  async function submitAuth(e) {
-    e.preventDefault(); setAuthBusy(true); setAuthError('');
-    try {
-      const path = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-      const payload = authMode === 'register' ? authForm : { email: authForm.email, password: authForm.password };
-      completeSignIn(await api(path, 'POST', payload));
-    } catch (e) { setAuthError(getMessage(e)); }
-    finally { setAuthBusy(false); }
   }
   async function submitGoogleAuth(credential) {
     if (authBusy) return;
@@ -55,16 +47,21 @@ export function createAuthActions(dependencies) {
     } catch(e) {setGoogleLinkError(getMessage(e));}
     finally {setAuthBusy(false);}
   }
-  async function loadWorkspaces(auth = token) {
+  async function loadWorkspaces(auth = token, userId = currentUserRef?.current?.id) {
     if (!auth) return;
     try {
       const data = await api('/api/workspaces', 'GET', undefined, auth);
-      // Logout or account switch may happen before this request resolves.
-      if(auth!==currentTokenRef.current)return;
+      // The cookie's marker is constant across accounts. Also guard by user ID
+      // so an old account's slow response cannot select its workspace later.
+      const stillCurrent=()=>auth===currentTokenRef.current &&
+        (!userId||currentUserRef?.current?.id===userId);
+      if(!stillCurrent())return;
       setWorkspaces(data);
-      api('/api/workspaces/capabilities','GET',undefined,auth).then(cap=>{if(auth===currentTokenRef.current)setCanCreateWorkspace(!!cap.canCreateWorkspace)}).catch(()=>setCanCreateWorkspace(false));
-      setSelectedWs(current => data.some(x => x.id === current) ? current : (data[0]?.id || ''));
-    } catch (e) { if(auth===currentTokenRef.current)setNotice(getMessage(e)); }
+      api('/api/workspaces/capabilities','GET',undefined,auth)
+        .then(cap=>{if(stillCurrent())setCanCreateWorkspace(!!cap.canCreateWorkspace)})
+        .catch(()=>{if(stillCurrent())setCanCreateWorkspace(false)});
+      setSelectedWs(current=>chooseWorkspaceId(data,current,preferredWorkspaceId?.(userId)));
+    } catch (e) { if(auth===currentTokenRef.current&&(!userId||currentUserRef?.current?.id===userId))setNotice(getMessage(e)); }
   }
-  return { requiresLogin, navigate, completeSignIn, submitAuth, submitGoogleAuth, submitGoogleLink, loadWorkspaces };
+  return { requiresLogin, navigate, completeSignIn, submitGoogleAuth, submitGoogleLink, loadWorkspaces };
 }

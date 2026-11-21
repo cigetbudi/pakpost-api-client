@@ -330,6 +330,25 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.ToTable("user_external_identities", "auth");
                 });
 
+            modelBuilder.Entity("Pakpost.Domain.Entities.PlatformCreatorInvitation", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
+                    b.Property<Guid>("InvitedByUserId").HasColumnType("uuid");
+                    b.Property<string>("Email").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)");
+                    b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+                    b.Property<DateTimeOffset>("CreatedAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset>("SentAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset>("ExpiresAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset?>("AcceptedAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset?>("RevokedAt").HasColumnType("timestamp with time zone");
+                    b.Property<int>("Version").IsConcurrencyToken().ValueGeneratedOnAdd().HasDefaultValue(1).HasColumnType("integer");
+                    b.HasKey("Id");
+                    b.HasIndex("TokenHash").IsUnique();
+                    b.HasIndex("Email", "ExpiresAt");
+                    b.HasIndex("InvitedByUserId");
+                    b.ToTable("platform_creator_invitations", "auth");
+                });
+
             modelBuilder.Entity("Pakpost.Domain.Entities.UserSession", b =>
                 {
                     b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
@@ -371,6 +390,10 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsDisabled")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("CanCreateWorkspaces")
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
@@ -608,6 +631,15 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.HasOne("Pakpost.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Pakpost.Domain.Entities.PlatformCreatorInvitation", b =>
+                {
+                    b.HasOne("Pakpost.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("InvitedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

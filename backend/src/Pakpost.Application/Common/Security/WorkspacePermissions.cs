@@ -21,7 +21,6 @@ public static class WorkspacePermissions
 
     private static readonly string[] All =
     [
-        WorkspaceCreate,
         WorkspaceManage,
         MemberManage,
         RoleAssign,
@@ -95,24 +94,6 @@ public static class WorkspacePermissions
     {
         return EffectivePermissions(RolesOf(member))
             .Contains(permission, StringComparer.Ordinal);
-    }
-
-    public static async Task<bool> CanCreateWorkspaceAsync(
-        IWorkspaceRepository workspaces,
-        Guid actorId,
-        CancellationToken ct)
-    {
-        foreach (var workspace in await workspaces.ListForUserAsync(actorId, ct))
-        {
-            var membership = await workspaces.FindMemberAsync(workspace.Id, actorId, ct);
-
-            if (membership is not null && Can(membership, WorkspaceCreate))
-            {
-                return true;
-            }
-        }
-
-        return !await workspaces.AnyWorkspaceAsync(ct);
     }
 
     public static async Task<WorkspaceMember> RequireMemberAsync(

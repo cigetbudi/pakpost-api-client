@@ -43,6 +43,7 @@ public static class PersistenceServiceExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserExternalIdentityRepository, UserExternalIdentityRepository>();
         services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+        services.AddScoped<IWorkspaceCapacity, WorkspaceCapacity>();
         services.AddScoped<IWorkspaceInvitationRepository, WorkspaceInvitationRepository>();
         services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<ICollectionFolderRepository, CollectionFolderRepository>();

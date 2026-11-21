@@ -1,0 +1,40 @@
+/* Compact instance administration. No layout animations on paged tables. */
+.pp-instance-admin{display:flex;flex-direction:column;gap:16px;max-width:900px}
+.pp-instance-admin-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.pp-instance-admin-heading h2{margin:0 0 5px}
+.pp-instance-admin-heading p{margin:0;color:var(--muted)}
+.pp-instance-admin-heading button,.pp-instance-admin-search button,.pp-instance-admin-user button,.pp-instance-admin-pagination button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap;transition:background-color 125ms ease,border-color 125ms ease}
+.pp-instance-admin button:disabled{cursor:not-allowed;opacity:.55}
+.pp-instance-admin button:not(:disabled):hover{background:var(--hover)}
+.pp-instance-admin-policy{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);background:var(--surface2);border-radius:8px}
+.pp-instance-admin-policy svg{color:var(--accent);flex-shrink:0}
+.pp-instance-admin-policy strong,.pp-instance-admin-policy small{display:block}
+.pp-instance-admin-policy small{margin-top:5px;line-height:1.5;color:var(--muted)}
+.pp-instance-admin-search{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:7px;padding:5px 6px 5px 11px;background:var(--surface)}
+.pp-instance-admin-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font:inherit}
+.pp-instance-admin-users{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.pp-instance-admin-user{display:flex;align-items:center;gap:12px;padding:13px;border-bottom:1px solid var(--border)}
+.pp-instance-admin-user:last-child{border-bottom:0}
+.pp-instance-admin-icon{display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex-shrink:0;border-radius:6px;background:var(--surface2);color:var(--accent)}
+.pp-instance-admin-user>div{min-width:0;flex:1}
+.pp-instance-admin-user strong,.pp-instance-admin-user small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-instance-admin-user small{font-size:11px;color:var(--muted);margin-top:3px}
+.pp-instance-admin-pagination{display:flex;align-items:center;justify-content:center;gap:12px}
+@media(max-width:700px){.pp-instance-admin-heading{flex-direction:column}.pp-instance-admin-user{flex-wrap:wrap}.pp-instance-admin-user button{margin-left:46px}}
+@media(prefers-reduced-motion:reduce){.pp-instance-admin button{transition:none!important}}
+.pp-instance-admin-empty{display:flex;flex-direction:column;gap:12px}
+.pp-instance-admin-invite-cta{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px;border:1px dashed var(--border);border-radius:8px;background:var(--surface2)}
+.pp-instance-admin-invite-cta strong,.pp-instance-admin-invite-cta small{display:block}
+.pp-instance-admin-invite-cta small{margin-top:5px;font-size:11px;line-height:1.6;color:var(--muted)}
+.pp-instance-admin-invite-cta button,.pp-instance-admin-invitation button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap;transition:background-color 125ms ease}
+.pp-instance-admin-invite-cta button:not(:disabled):hover,.pp-instance-admin-invitation button:not(:disabled):hover{background:var(--hover)}
+.pp-instance-admin-pending{display:flex;flex-direction:column;gap:10px}
+.pp-instance-admin-pending-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.pp-instance-admin-pending-head h3{font-size:14px;margin:0}
+.pp-instance-admin-pending-head small{color:var(--muted)}
+.pp-instance-admin-invitation{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:8px}
+.pp-instance-admin-invitation>div{min-width:0;flex:1}
+.pp-instance-admin-invitation strong,.pp-instance-admin-invitation small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-instance-admin-invitation small{font-size:11px;color:var(--muted);margin-top:4px}
+@media(max-width:700px){.pp-instance-admin-invite-cta{flex-wrap:wrap}.pp-instance-admin-invitation{flex-wrap:wrap}.pp-instance-admin-pending-head{align-items:flex-start;flex-direction:column}}
+@media(prefers-reduced-motion:reduce){.pp-instance-admin-invite-cta button,.pp-instance-admin-invitation button{transition:none!important}}

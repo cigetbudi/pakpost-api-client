@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.Timeouts;
+using Microsoft.Extensions.Configuration;
 using Pakpost.Application.Internal.Auth.Commands;
 using Pakpost.Application.Internal.Auth.DTOs;
 using Pakpost.Application.Internal.Auth.Queries;
@@ -22,7 +23,7 @@ public sealed record BrowserSessionResponse(bool Authenticated, UserProfile? Use
 [RequestTimeout("auth")]
 public sealed class AuthController(
     ISender sender, ServerSessionStore sessions, IWebHostEnvironment environment,
-    WorkspaceConnectionRegistry connections, IHubContext<WorkspaceHub> hub) : ControllerBase
+    WorkspaceConnectionRegistry connections, IHubContext<WorkspaceHub> hub, IConfiguration configuration) : ControllerBase
 {
     private bool InsecureDeployment => !Request.IsHttps && !environment.IsDevelopment();
     private ActionResult<BrowserLoginResponse> HttpsRequired() =>
@@ -42,16 +43,20 @@ public sealed class AuthController(
         return Ok(new BrowserLoginResponse(result.User, fresh.ExpiresAt, fresh.CsrfToken));
     }
 
+    // Legacy route kept as an explicit rejection for older clients.
+    // Google sign-in creates accounts on first use; password registration is disabled.
     [HttpPost("register"), AllowAnonymous, EnableRateLimiting("auth")]
-    public async Task<ActionResult<BrowserLoginResponse>> Register(RegisterCommand request, CancellationToken ct)
-    {
-        if (InsecureDeployment) return HttpsRequired();
-        return await EstablishSession(await sender.Send(request, ct), ct);
-    }
+    public IActionResult Register() => StatusCode(StatusCodes.Status410Gone,
+        new { message = "Password registration is disabled. Continue with Google." });
 
     [HttpPost("login"), AllowAnonymous, EnableRateLimiting("auth")]
     public async Task<ActionResult<BrowserLoginResponse>> Login(LoginCommand request, CancellationToken ct)
     {
+        // Only for migrating accounts created before Google-only sign-in.
+        // Never enable on an internet-facing deployment longer than needed.
+        if (!configuration.GetValue<bool>("Authentication:EnableLegacyPasswordLogin"))
+            return StatusCode(StatusCodes.Status410Gone,
+                new { message = "Password sign-in is disabled. Continue with Google." });
         if (InsecureDeployment) return HttpsRequired();
         return await EstablishSession(await sender.Send(request, ct), ct);
     }

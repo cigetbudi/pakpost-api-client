@@ -26,6 +26,17 @@ export function WorkspaceManager({ data, actions, refs }) {
   const { setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess, setEditingMemberId } = actions;
   const { setEditingMemberRoles } = actions;
   const { selectedWorkspaceRef, currentTokenRef } = refs;
+  const [maxSeats, setMaxSeats] = React.useState(null);
+  React.useEffect(() => {
+    if (!token) { setMaxSeats(null); return; }
+    let active = true;
+    api('/api/workspaces/capabilities', 'GET', undefined, token)
+      .then(cap => { if (active) setMaxSeats(Number.isInteger(cap.maxMembersPerWorkspace) ? cap.maxMembersPerWorkspace : null); })
+      .catch(() => { if (active) setMaxSeats(null); });
+    return () => { active = false; };
+  }, [token]);
+  const reservedSeats = workspaceMemberStats.count + pendingInvitations(invitationRows).length;
+  const atCapacity = maxSeats !== null && reservedSeats >= maxSeats;
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = React.useState('');
   const [deleteBusy, setDeleteBusy] = React.useState(false);
@@ -84,8 +95,8 @@ export function WorkspaceManager({ data, actions, refs }) {
   return (
 <div className="pp-manager">
           <div className="pp-manager-top"><div><span className="pp-manager-eyebrow"><Layers3 size={14}/> WORKSPACE MANAGEMENT</span><h2>{activeWorkspace?.name || 'Your workspaces'}</h2><p>Manage shared collections, workspace members, and access roles after sign-in.</p></div><button className="pp-plain-btn" onClick={() => setPage('tester')}><ArrowRight size={15}/> Back to request tester</button></div>
-          <div className="pp-manager-columns"><aside className="pp-manager-ws"><div className="pp-manager-label">YOUR WORKSPACES <span>{workspaces.length}</span></div>{canCreateWorkspace&&<form className="pp-manager-add" onSubmit={e => { e.preventDefault(); if(!newWs.trim()) return; doAction(async()=>{const w=await api('/api/workspaces','POST',{name:newWs.trim()},token);setNewWs('');await loadWorkspaces();setSelectedWs(w.id);setNotice('Workspace created.');}); }}><input placeholder="New workspace" maxLength={120} value={newWs} onChange={e=>setNewWs(e.target.value)}/><button title="Create workspace" disabled={busyAction}><Plus size={16}/></button></form>}{workspaces.map(w=><button className={`pp-manager-ws-row ${w.id === selectedWs ? 'active' : ''}`} key={w.id} onClick={()=>setSelectedWs(w.id)}><Layers3 size={17}/><span>{w.name}</span><ChevronRight size={15}/></button>)}</aside>
-            <section className="pp-manager-details">{!activeWorkspace ? <Empty icon={FolderClosed} title="No workspace selected" description="Create a workspace on the left to start organizing your requests."/> : <>
+          <div className="pp-manager-columns"><aside className="pp-manager-ws"><div className="pp-manager-label">YOUR WORKSPACES <span>{workspaces.length}</span></div>{!canCreateWorkspace&&<p className="pp-muted-small" style={{padding:'0 10px'}}>Workspace creation requires instance admin approval.</p>}{canCreateWorkspace&&<form className="pp-manager-add" onSubmit={e => { e.preventDefault(); if(!newWs.trim()) return; doAction(async()=>{const w=await api('/api/workspaces','POST',{name:newWs.trim()},token);setNewWs('');await loadWorkspaces();setSelectedWs(w.id);setNotice('Workspace created.');}); }}><input placeholder="New workspace" maxLength={120} value={newWs} onChange={e=>setNewWs(e.target.value)}/><button title="Create workspace" disabled={busyAction}><Plus size={16}/></button></form>}{workspaces.map(w=><button className={`pp-manager-ws-row ${w.id === selectedWs ? 'active' : ''}`} key={w.id} onClick={()=>setSelectedWs(w.id)}><Layers3 size={17}/><span>{w.name}</span><ChevronRight size={15}/></button>)}</aside>
+            <section className="pp-manager-details">{!activeWorkspace ? <Empty icon={FolderClosed} title="No workspace selected" description={canCreateWorkspace ? "Create a workspace on the left to start organizing your requests." : "Ask your instance administrator to enable Workspace Creator for your account."}/> : <>
               <div className="pp-manager-detail-title">
                 <span className="pp-manager-avatar"><Layers3 size={18}/></span>
                 <div><strong>{activeWorkspace.name}</strong><small>Private · Members only</small></div>
@@ -121,6 +132,7 @@ export function WorkspaceManager({ data, actions, refs }) {
                   </div>
                   <div className="pp-roles-stats" aria-label="Workspace member statistics">
                     <span className="pp-roles-stat"><strong>{workspaceMemberStats.count}</strong> members</span>
+                    {maxSeats !== null && <span className="pp-roles-stat"><strong>{Math.min(reservedSeats, maxSeats)} / {maxSeats}</strong> seats used <small>(includes pending invites)</small></span>}
                     {workspaceMemberStats.roles.filter(role=>role.count>0).map(role=><span className="pp-roles-stat" key={role.id}><strong>{role.count}</strong> {role.label}</span>)}
                   </div>
                 </div>
@@ -143,7 +155,7 @@ export function WorkspaceManager({ data, actions, refs }) {
                   <input id="pp-invite-email" type="email" autoFocus required maxLength={254} placeholder="teammate@company.com" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/>
                   <div className="pp-rbac-heading">Roles to assign when invitation is accepted</div>
                   <WorkspaceRolePicker value={inviteRoles} onChange={setInviteRoles} actorRoles={assignableRoles} disabled={invitationBusy}/>
-                  <p className="pp-roles-add-help">Invitation lasts 7 days. The recipient must sign in with a Google-verified email matching this invitation.</p>
+                  <p className="pp-roles-add-help">Invitation lasts 7 days. The recipient must sign in with a Google-verified email matching this invitation.{atCapacity ? ' This workspace has reached the Public 10-seat limit.' : ''}</p>
                   <div className="pp-roles-add-actions"><button type="button" className="pp-roles-button" onClick={()=>setInviteOpen(false)}>Cancel</button><button type="submit" className="pp-roles-button primary" disabled={invitationBusy||!inviteEmail.trim()||!inviteRoles.length}><Mail size={14}/> {invitationBusy?'Sending…':'Send invitation'}</button></div>
                 </form>}
                 {canManageMembers&&<section className="pp-invitations" aria-label="Workspace invitations">

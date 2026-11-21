@@ -12,6 +12,6 @@ public sealed class GetMeHandler(IUserRepository users) : IRequestHandler<GetMeQ
     {
         var user = await users.FindByIdAsync(q.UserId, ct) ?? throw AppException.Unauthorized();
         if (user.IsDisabled) throw AppException.Unauthorized();
-        return new(user.Id, user.Email, user.DisplayName);
+        return new(user.Id, user.Email, user.DisplayName, null, user.IsSuperAdmin);
     }
 }

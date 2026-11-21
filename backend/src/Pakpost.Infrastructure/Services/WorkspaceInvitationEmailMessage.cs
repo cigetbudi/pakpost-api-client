@@ -35,7 +35,7 @@ public static class WorkspaceInvitationEmailMessage
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceName);
         ArgumentException.ThrowIfNullOrWhiteSpace(invitationUrl);
 
-        // InvitationTokens.Link already enforces this policy; keep the MIME builder safe independently.
+        // Invitation URL generation already enforces this policy; keep the MIME builder safe independently.
         if (!Uri.TryCreate(invitationUrl, UriKind.Absolute, out var link) ||
             (link.Scheme != Uri.UriSchemeHttps && !(link.Scheme == Uri.UriSchemeHttp && link.IsLoopback)) ||
             !string.IsNullOrEmpty(link.UserInfo))

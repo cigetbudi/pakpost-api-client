@@ -18,6 +18,7 @@
   <!-- Keep HTML and the PNG logo inside the assembly; no external image hosting is needed. -->
   <ItemGroup>
     <EmbeddedResource Include="Services/EmailTemplates/WorkspaceInvitation.html" />
+    <EmbeddedResource Include="Services/EmailTemplates/PlatformCreatorInvitation.html" />
     <EmbeddedResource Include="Services/EmailTemplates/pakpost-logo.png" />
   </ItemGroup>
 </Project>

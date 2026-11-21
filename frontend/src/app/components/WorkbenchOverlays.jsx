@@ -1,4 +1,5 @@
 import React from 'react';
+import { PlatformCreatorInvitationOverlay } from '../../features/auth/components/PlatformCreatorInvitationOverlay.jsx';
 
 /** Dialogs, menus and transient overlays owned by the Workbench. */
 export function WorkbenchOverlays({ model }) {
@@ -12,10 +13,10 @@ export function WorkbenchOverlays({ model }) {
     exportChoice, exportFormat, exportIncludeSecrets, readCollectionVariables, reloadCollectionVariables, resetCollectionVariableSession,
     saveCollectionVariableDefaults, saveDocumentation, selfMember, sessionCollectionVariables, setCollectionVariablesTarget, setDocumentationTarget,
     setExportChoice, setExportFormat, setExportIncludeSecrets, AuthOverlays, inviteToken, inviteAcceptError,
-    me, token, acceptingInvite, googleLinked, authOpen, authMode,
-    authForm, authError, authBusy, googleLinkOpen, googleLinkPassword, googleLinkError,
-    setInviteToken, setInviteAcceptError, acceptInvitation, setAuthMode, setAuthOpen, setAuthForm,
-    submitAuth, submitGoogleAuth, setAuthError, setGoogleLinkOpen, setGoogleLinkPassword, submitGoogleLink,
+    me, token, acceptingInvite, googleLinked, authOpen, authMode, loadWorkspaces,
+    authError, authBusy, googleLinkOpen, googleLinkPassword, googleLinkError,
+    setInviteToken, setInviteAcceptError, acceptInvitation, setAuthMode, setAuthOpen,
+    submitGoogleAuth, setAuthError, setGoogleLinkOpen, setGoogleLinkPassword, submitGoogleLink,
     setGoogleLinkError, RequestDialogs, FileUp, ImportDestinationPicker, RequestRevisionPanel, RetroSelect,
     Save, actionDialog, actionName, activeSource, activeTabId, activeWorkspace,
     applyMergedRevision, busyAction, canEditCloud, closeConfirmation, collectionImportBusy, collectionImportDestination,
@@ -42,15 +43,19 @@ export function WorkbenchOverlays({ model }) {
         setDocumentationTarget, setExportChoice, setExportFormat, setExportIncludeSecrets,}}/>    <AuthOverlays
   data={{
     inviteToken, inviteAcceptError, me, token, acceptingInvite,
-    googleLinked, authOpen, authMode, authForm, authError,
+    googleLinked, authOpen, authMode, authError,
     authBusy, googleLinkOpen, googleLinkPassword, googleLinkError,
   }}
   actions={{
     setInviteToken, setInviteAcceptError, acceptInvitation, setAuthMode, setAuthOpen,
-    setAuthForm, submitAuth, submitGoogleAuth, setAuthError, setGoogleLinkOpen,
+    submitGoogleAuth, setAuthError, setGoogleLinkOpen,
     setGoogleLinkPassword, submitGoogleLink, setGoogleLinkError,
   }}
 />
+<PlatformCreatorInvitationOverlay {...{
+  token, me, authOpen, workspaceInviteToken: inviteToken, setAuthOpen, api,
+  onAccepted: loadWorkspaces, setNotice,
+}}/>
 <RequestDialogs {...{        Dialog, FileUp, ImportDestinationPicker, RequestRevisionPanel, RetroSelect, Save,
         Suspense, actionDialog, actionName, activeSource, activeTabId, activeWorkspace,
         applyMergedRevision, busyAction, canEditCloud, closeConfirmation, collectionImportBusy, collectionImportDestination,

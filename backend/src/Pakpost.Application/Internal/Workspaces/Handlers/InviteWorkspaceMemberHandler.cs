@@ -14,6 +14,7 @@ namespace Pakpost.Application.Internal.Workspaces.Handlers;
 public sealed class InviteWorkspaceMemberHandler(
     IWorkspaceRepository workspaces,
     IWorkspaceInvitationRepository invitations,
+    IWorkspaceCapacity capacity,
     IUserRepository users,
     IWorkspaceInvitationEmailSender emailSender,
     IConfiguration configuration,
@@ -46,16 +47,16 @@ public sealed class InviteWorkspaceMemberHandler(
             throw AppException.Conflict("User already belongs to this workspace");
         }
 
+        var policy = WorkspaceDeploymentPolicy.From(configuration);
+        await using var transaction = await capacity.LockAsync(command.WorkspaceId, ct);
         var now = DateTimeOffset.UtcNow;
+        if (policy.MaxMembers is int limit &&
+            await capacity.CountReservedSeatsAsync(command.WorkspaceId, now, ct) >= limit)
+            throw AppException.Conflict($"Workspace has reached its {limit}-person limit (including pending invitations)");
 
         if (await invitations.HasPendingAsync(command.WorkspaceId, address, now, ct))
         {
             throw AppException.Conflict("A pending invitation already exists for this email");
-        }
-
-        if (await invitations.CountPendingAsync(command.WorkspaceId, now, ct) >= 100)
-        {
-            throw AppException.Conflict("Workspace has too many pending invitations");
         }
 
         var token = InvitationTokens.Generate();
@@ -72,6 +73,7 @@ public sealed class InviteWorkspaceMemberHandler(
 
         invitations.Add(invitation);
         await unitOfWork.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         logger.LogInformation(
             "Workspace invitation created {InvitationId} {WorkspaceId}",

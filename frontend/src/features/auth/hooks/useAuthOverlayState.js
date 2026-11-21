@@ -6,7 +6,6 @@ export function useAuthOverlayState() {
   const [authMode, setAuthMode] = useState('login');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [authForm, setAuthForm] = useState({ displayName: '', email: '', password: '' });
   const [googleLinkOpen, setGoogleLinkOpen] = useState(false);
   const [googleLinkPassword, setGoogleLinkPassword] = useState('');
   const [googleLinkError, setGoogleLinkError] = useState('');
@@ -17,7 +16,7 @@ export function useAuthOverlayState() {
 
   return {
     authOpen, setAuthOpen, authMode, setAuthMode, authBusy, setAuthBusy,
-    authError, setAuthError, authForm, setAuthForm, googleLinkOpen, setGoogleLinkOpen,
+    authError, setAuthError, googleLinkOpen, setGoogleLinkOpen,
     googleLinkPassword, setGoogleLinkPassword, googleLinkError, setGoogleLinkError, googleLinked, setGoogleLinked,
     inviteToken, setInviteToken, acceptingInvite, setAcceptingInvite, inviteAcceptError, setInviteAcceptError,
   };
