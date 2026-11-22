@@ -1,0 +1,17 @@
+{
+    email {$PAKPOST_ACME_EMAIL}
+}
+
+# :80 for localhost HTTP; pakpost-name.duckdns.org for VPS automatic HTTPS.
+{$PAKPOST_SITE_ADDRESS} {
+    encode zstd gzip
+
+    @pakpost_api path /api /api/* /hubs /hubs/* /health /health/*
+    handle @pakpost_api {
+        reverse_proxy backend:8080
+    }
+
+    handle {
+        reverse_proxy frontend:8080
+    }
+}

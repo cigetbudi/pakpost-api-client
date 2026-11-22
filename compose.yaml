@@ -1,0 +1,147 @@
+name: ${COMPOSE_PROJECT_NAME:-pakpost}
+
+# One public origin (Caddy), two private application containers.
+# Root .env is used for Compose interpolation; it is never mounted wholesale.
+services:
+  backend:
+    image: pakpost/backend:local
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    environment: &pakpost_backend_env
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: "8080"
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "false"
+      TZ: Asia/Jakarta
+      ConnectionStrings__Postgres: ${POSTGRES_CONNECTION_STRING:?Set POSTGRES_CONNECTION_STRING in root .env}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in root .env}
+      Jwt__Issuer: ${JWT_ISSUER:-pakpost}
+      Jwt__Audience: ${JWT_AUDIENCE:-pakpost-client}
+      WorkspaceEncryption__MasterKey: ${WORKSPACE_MASTER_KEY:?Set WORKSPACE_MASTER_KEY in root .env}
+      WorkspaceEncryption__MasterKeyId: ${WORKSPACE_MASTER_KEY_ID:-master-v1}
+      EnvironmentEncryption__Key: ${ENVIRONMENT_ENCRYPTION_KEY:?Set ENVIRONMENT_ENCRYPTION_KEY in root .env}
+      Google__ClientId: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in root .env}
+      Invitations__FrontendBaseUrl: ${PAKPOST_PUBLIC_URL:?Set PAKPOST_PUBLIC_URL in root .env}
+      Invitations__Smtp__Host: ${SMTP_HOST:-smtp.gmail.com}
+      Invitations__Smtp__Port: ${SMTP_PORT:-587}
+      Invitations__Smtp__From: ${SMTP_FROM:?Set SMTP_FROM in root .env}
+      Invitations__Smtp__Username: ${SMTP_USERNAME:?Set SMTP_USERNAME in root .env}
+      Invitations__Smtp__Password: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in root .env}
+      Pakpost__DeploymentMode: ${PAKPOST_DEPLOYMENT_MODE:-SelfHosted}
+      Authentication__EnableLegacyPasswordLogin: "false"
+      # Only Caddy at the static, private bridge address may forward the original scheme.
+      # Without this, production Secure HttpOnly session cookies won't work.
+      ForwardedHeaders__KnownProxies__0: ${PAKPOST_CADDY_IP:-172.30.77.10}
+      Cors__AllowedOrigins__0: ${PAKPOST_PUBLIC_URL:?Set PAKPOST_PUBLIC_URL in root .env}
+      Proxy__AllowPrivateNetworks: ${PROXY_ALLOW_PRIVATE_NETWORKS:-false}
+      Proxy__AllowedPorts__0: "80"
+      Proxy__AllowedPorts__1: "443"
+      Database__ConnectTimeoutSeconds: ${DB_CONNECT_TIMEOUT_SECONDS:-15}
+      Database__CommandTimeoutSeconds: ${DB_COMMAND_TIMEOUT_SECONDS:-30}
+      Database__MaxPoolSize: ${DB_MAX_POOL_SIZE:-30}
+      Database__HealthTimeoutSeconds: ${DB_HEALTH_TIMEOUT_SECONDS:-4}
+      RequestTimeout__DefaultSeconds: ${REQUEST_TIMEOUT_DEFAULT_SECONDS:-90}
+      RequestTimeout__AuthSeconds: ${REQUEST_TIMEOUT_AUTH_SECONDS:-30}
+      RequestTimeout__ProxySeconds: ${REQUEST_TIMEOUT_PROXY_SECONDS:-25}
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    networks:
+      - app
+
+  frontend:
+    image: pakpost/frontend:local
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        # Public browser client ID, NOT a Google client secret.
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in root .env}
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      NODE_ENV: production
+    expose:
+      - "8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    networks:
+      - app
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    environment:
+      PAKPOST_SITE_ADDRESS: ${PAKPOST_SITE_ADDRESS:-:80}
+      PAKPOST_ACME_EMAIL: ${PAKPOST_ACME_EMAIL:-admin@example.com}
+    ports:
+      - "${PAKPOST_BIND_HOST:-127.0.0.1}:${PAKPOST_HTTP_PORT:-8080}:80"
+      - "${PAKPOST_BIND_HOST:-127.0.0.1}:${PAKPOST_HTTPS_PORT:-8443}:443/tcp"
+      - "${PAKPOST_BIND_HOST:-127.0.0.1}:${PAKPOST_HTTPS_PORT:-8443}:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      app:
+        ipv4_address: ${PAKPOST_CADDY_IP:-172.30.77.10}
+
+  # On-demand EF Core migrator. NEVER started by ordinary `docker compose up`.
+  # Review pending SQL and take a Neon backup before invoking this profile.
+  migration:
+    profiles:
+      - migration
+    build:
+      context: .
+      dockerfile: docker/migration.Dockerfile
+    environment: *pakpost_backend_env
+    networks:
+      - app
+
+  # Optional: enable on VPS with `docker compose --profile duckdns up -d`.
+  # Only updates the DuckDNS A record; Caddy handles HTTPS certificates itself.
+  duckdns:
+    image: lscr.io/linuxserver/duckdns:latest
+    profiles:
+      - duckdns
+    restart: unless-stopped
+    environment:
+      SUBDOMAINS: ${DUCKDNS_SUBDOMAIN:-your-subdomain}
+      TOKEN: ${DUCKDNS_TOKEN:-}
+      UPDATE_IP: ipv4
+      LOG_FILE: "false"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - dns-updates
+
+networks:
+  app:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${PAKPOST_DOCKER_SUBNET:-172.30.77.0/24}
+  # Domain update container cannot directly reach backend/front-end private network.
+  dns-updates:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

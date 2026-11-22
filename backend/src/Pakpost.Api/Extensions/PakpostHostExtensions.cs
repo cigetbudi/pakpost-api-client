@@ -19,11 +19,13 @@ public static class PakpostHostExtensions
             options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
         });
 
-        // Trust X-Forwarded-Proto only from configured reverse-proxy IP addresses.
+        // Resolve the actual client IP for per-IP rate limiting, and HTTPS for
+        // secure cookie issuance. ONLY trust explicitly configured proxy IPs.
         // Do NOT enable blanket forwarded-header trust on a public interface.
         builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {
-            options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.ForwardLimit = 1;
             foreach (var entry in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
                 if (IPAddress.TryParse(entry, out var ip)) options.KnownProxies.Add(ip);
         });

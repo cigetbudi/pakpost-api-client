@@ -16,6 +16,7 @@ PakPost adalah REST API client berbasis web untuk mengirim request, mengelola Co
 8. [Deployment dan keamanan](#8-deployment-dan-keamanan)
 9. [Maintenance enkripsi](#9-maintenance-enkripsi)
 10. [Troubleshooting](#10-troubleshooting)
+11. [Docker Compose: localhost, VPS & DuckDNS](#11-docker-compose-localhost-vps--duckdns)
 
 ## 1. Persyaratan dan struktur proyek
 
@@ -344,3 +345,143 @@ Operasi ini mentransaksikan rewrap DEK; tidak mengubah `EnvironmentEncryption__K
 ---
 
 Dokumentasi ini adalah **sumber tunggal** instalasi dan penggunaan PakPost. File implementasi, migration EF Core, konfigurasi, dan test tetap berada di folder masing-masing; catatan fase/refactor/performance historis tidak disimpan sebagai dokumentasi pengguna.
+
+
+## 11. Docker Compose: localhost, VPS & DuckDNS
+
+PakPost bisa dijalankan menggunakan **satu `.env` di root** dan satu domain publik. Service yang selalu aktif adalah:
+
+- **Caddy** (`caddy:2-alpine`): HTTPS otomatis, reverse proxy `/api`, `/hubs` (termasuk WebSocket SignalR), dan frontend. Hanya Caddy membuka port di host.
+- **Frontend** (`gcr.io/distroless/nodejs24-debian13:nonroot`): file hasil Vite build disajikan oleh server statis Node tanpa shell.
+- **Backend** (`mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra`): ASP.NET Core 10 non-root, ICU + timezone database.
+- **NeonDB**: tetap remote. Tidak ada container PostgreSQL yang akan menghapus/mengganti database lama.
+- **Opsional**: profil `duckdns` (update IP) dan `migration` (EF Core sekali jalan via SDK; tidak aktif secara default).
+
+Aplikasi browser dan API memakai **origin yang sama**. Contohnya `https://myproject.duckdns.org/` untuk UI, `https://myproject.duckdns.org/api/...` untuk backend, dan `wss://myproject.duckdns.org/hubs/workspace` untuk SignalR. Konfigurasi proxy Vite hanya dipakai saat `bun run dev`, bukan ketika Docker production.
+
+### 11.1. Persiapan umum
+
+Di root repo:
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+Edit `.env` dan isi Neon connection string, **Google Web Client ID**, `JWT_SIGNING_KEY`, `WORKSPACE_MASTER_KEY`, `ENVIRONMENT_ENCRYPTION_KEY`, serta SMTP. Gunakan **kunci enkripsi lama** bila PakPost sudah punya data! Jangan membuat master key/environment key baru ketika memindahkan aplikasi ke VPS, karena data terenkripsi lama bisa tidak terbaca. Kunci baru hanya untuk instalasi benar-benar baru.
+
+`.env` root adalah input Docker Compose. `.env` backend/frontend lama masih boleh dipakai untuk development non-Docker, tetapi Compose **tidak memakainya**. Hanya variabel terpilih yang diinjeksikan ke backend; **frontend tidak menerima password database, key enkripsi, SMTP password, atau DuckDNS token**. `GOOGLE_CLIENT_ID` di-embed pada saat Vite build, karena memang merupakan client ID publik, bukan client secret.
+
+Verifikasi file Compose tanpa mencetak credential ke terminal:
+
+```bash
+docker compose config --quiet
+```
+
+> `docker compose config` **tanpa `--quiet`** mencetak environment backend termasuk credential; jangan paste outputnya ke issue/chat. Jangan commit `.env`, backup key, atau file database.
+
+### 11.2. Jalankan di localhost (HTTP, hanya testing)
+
+Contoh `.env.example` sudah memakai konfigurasi lokal:
+
+```dotenv
+PAKPOST_SITE_ADDRESS=:80
+PAKPOST_PUBLIC_URL=http://localhost:8080
+PAKPOST_BIND_HOST=127.0.0.1
+PAKPOST_HTTP_PORT=8080
+PAKPOST_HTTPS_PORT=8443
+ASPNETCORE_ENVIRONMENT=Development
+```
+
+Pastikan Google Cloud Console memasukkan `http://localhost:8080` ke *Authorized JavaScript origins* untuk OAuth Web Client ID tersebut, lalu:
+
+```bash
+docker compose build
+docker compose up -d
+docker compose ps
+docker compose logs --tail=80 backend caddy
+```
+
+Buka `http://localhost:8080` dan cek `http://localhost:8080/health/ready`. Karena HTTP ini hanya untuk local development, cookie `pakpost_dev_session` dipakai; **jangan publish HTTP Development ke internet**.
+
+Kalau ingin menghentikan aplikasi (tanpa menghapus data Caddy):
+
+```bash
+docker compose down
+```
+
+Jangan gunakan `down -v` kecuali memang ingin menghapus state/sertifikat Caddy; database Neon tetap remote, tetapi penghapusan volume Caddy memaksa permintaan sertifikat baru.
+
+### 11.3. Deploy di VPS menggunakan DuckDNS + HTTPS
+
+1. Daftarkan subdomain di [duckdns.org](https://www.duckdns.org/), misalnya `myproject.duckdns.org`, lalu simpan token DuckDNS secara rahasia. Subdomain **tanpa** `.duckdns.org` di `DUCKDNS_SUBDOMAIN`.
+2. Pastikan VPS punya **IP publik**, DNS mengarah ke VPS, port **80/tcp dan 443/tcp** tidak dipakai service lain, serta firewall provider/UFW mengizinkan keduanya. `443/udp` opsional untuk HTTP/3. Tidak perlu Caddy DNS challenge/plugin untuk satu subdomain DuckDNS biasa; Caddy bisa memakai HTTP/TLS-ALPN challenge dengan port publik.
+3. Ubah variabel root `.env` menjadi seperti contoh berikut (gunakan subdomain sebenarnya, bukan teks contoh):
+
+```dotenv
+PAKPOST_SITE_ADDRESS=myproject.duckdns.org
+PAKPOST_PUBLIC_URL=https://myproject.duckdns.org
+PAKPOST_BIND_HOST=0.0.0.0
+PAKPOST_HTTP_PORT=80
+PAKPOST_HTTPS_PORT=443
+PAKPOST_ACME_EMAIL=operator@example.com
+ASPNETCORE_ENVIRONMENT=Production
+PAKPOST_DEPLOYMENT_MODE=SelfHosted
+DUCKDNS_SUBDOMAIN=myproject
+DUCKDNS_TOKEN=YOUR_DUCKDNS_TOKEN
+```
+
+4. Tambahkan `https://myproject.duckdns.org` sebagai **Authorized JavaScript origin** pada Google Cloud Console. Google Sign-In memakai GIS credential, jadi jangan menambah redirect URI yang tidak digunakan aplikasinya.
+5. Jalankan `docker compose --profile duckdns up -d --build`, lalu periksa `docker compose ps`, `docker compose logs --tail=100 caddy backend duckdns`, dan akses `https://myproject.duckdns.org`. Gunakan `docker compose --profile duckdns logs --tail=50 duckdns` bila IP belum berubah.
+
+DuckDNS updater hanya memperbarui alamat IP (A record). **Caddy otomatis mengurus sertifikat HTTPS** dan menyimpannya di volume `caddy_data`. Tanpa updater, DuckDNS bisa diatur manual bila IP VPS statis. Untuk VPS produksi, pastikan `ASPNETCORE_ENVIRONMENT=Production` dan **jangan** mengganti `PAKPOST_SITE_ADDRESS` menjadi `:80`.
+
+**Penting untuk Auth Cookie:** Compose memakai bridge network dan IP Caddy statis (`PAKPOST_CADDY_IP=172.30.77.10`). Backend hanya memercayai `X-Forwarded-Proto` dan `X-Forwarded-For` dari alamat Caddy tersebut (untuk cookie HTTPS dan rate limit IP client). Kalau subnet `PAKPOST_DOCKER_SUBNET=172.30.77.0/24` bentrok dengan VPN/jaringan VPS, ubah **kedua variabel subnet dan IP Caddy bersama-sama** sebelum start. Jangan mengaktifkan blanket trust `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`.
+
+### 11.4. Migration database dari Docker (opsional, sekali jalan)
+
+Jika database Neon **sudah dimigrasi** seperti instalasi PakPost yang berjalan sekarang, tidak perlu menjalankan migration ulang hanya karena pindah host. Untuk DB kosong atau ketika ada migration baru, backup dan review SQL dulu. Container migrator memakai SDK .NET 10 **hanya saat dipanggil**, sedangkan runtime backend tetap Chiseled Extra:
+
+```bash
+# List migration dan status pending tanpa mengubah database
+docker compose --profile migration run --rm migration migrations list \
+  --project src/Pakpost.Infrastructure/Pakpost.Infrastructure.csproj \
+  --startup-project src/Pakpost.Api/Pakpost.Api.csproj \
+  --context PakpostDbContext
+
+# Preview SQL idempotent (review output sebelum apply)
+docker compose --profile migration run --rm migration migrations script --idempotent \
+  --project src/Pakpost.Infrastructure/Pakpost.Infrastructure.csproj \
+  --startup-project src/Pakpost.Api/Pakpost.Api.csproj \
+  --context PakpostDbContext > pakpost-migrations.sql
+
+# Apply HANYA setelah SQL direview dan backup selesai
+docker compose --profile migration run --rm migration database update \
+  --project src/Pakpost.Infrastructure/Pakpost.Infrastructure.csproj \
+  --startup-project src/Pakpost.Api/Pakpost.Api.csproj \
+  --context PakpostDbContext
+```
+
+`pakpost-migrations.sql` sudah termasuk `.gitignore`. Jangan menjalankan migrator otomatis setiap backend restart; operasi perubahan skema harus eksplisit dan terpisah.
+
+### 11.5. Testing, troubleshooting, dan update
+
+Server statis FE bisa diuji tanpa Docker menggunakan Node 22+:
+
+```bash
+node --test docker/tests/static-server.test.mjs
+```
+
+Untuk memperbarui versi aplikasi:
+
+```bash
+git pull
+docker compose build --pull
+docker compose up -d
+```
+
+Untuk deployment DuckDNS yang memakai profil, gunakan `docker compose --profile duckdns up -d --build` agar updater tetap dikelola bersama aplikasi. **Jangan rotate encryption key** saat redeploy.
+
+Jika `502 Bad Gateway`, lihat `docker compose logs backend frontend caddy`. Jika login Google tidak muncul, cek `GOOGLE_CLIENT_ID`, domain di Google Console, lalu **rebuild frontend** (client ID dibenamkan saat build). Jika browser tidak menyimpan cookie di HTTPS, cek `PAKPOST_CADDY_IP`, `PAKPOST_DOCKER_SUBNET`, hostname DuckDNS, dan `X-Forwarded-Proto`; pastikan hanya port Caddy yang dipublikasikan. Jika sertifikat gagal diterbitkan, cek DNS A record, firewall 80/443, port yang bentrok, dan log Caddy.
+
+Infrastruktur VPS tetap membutuhkan backup DB Neon, backup enkripsi, patch image keamanan, firewall/outbound controls, dan pengujian realtime/session yang sebenarnya sebelum layanan dibuka ke publik. `Public` mode memberi pendaftaran Google dan Workspace creation lebih terbuka; jangan mengaktifkannya tanpa review proteksi abuse/rate limit.
