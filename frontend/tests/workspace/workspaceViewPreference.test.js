@@ -53,8 +53,10 @@ test('first verified cookie session defaults to Cloud regardless of guest startu
   assert.equal(readWorkspaceViewPreference(storage,'','workspace').workspaceId,'');
   const source=readFileSync(new URL('../../src/app/hooks/useWorkbenchController.jsx',import.meta.url),'utf8');
   assert.match(source,/useState\(STORAGE_LOCAL\); \/\/ Until \/auth\/session verifies/);
-  assert.match(source,/if\(!sameAccount\)/);
-  assert.match(source,/readWorkspaceViewPreference\(localStorage,result\.user\.id\)/);
+  const bootstrap=readFileSync(new URL('../../src/features/auth/hooks/useBrowserSessionBootstrap.js',import.meta.url),'utf8');
+  assert.match(source,/useBrowserSessionBootstrap/);
+  assert.match(bootstrap,/if\(!sameAccount\)/);
+  assert.match(bootstrap,/readWorkspaceViewPreference\(localStorage,result\.user\.id\)/);
   assert.doesNotMatch(source,/setStorageScope\(scope=>allowedStorageScope\(true,scope\)\)/);
 });
 

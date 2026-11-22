@@ -66,7 +66,7 @@ test('First-click F2 and Delete survive active-tab transition; modal Enter submi
 test('Both folder and request rename block Enter and disable submission for unchanged/duplicate name',()=>{
   const tree=read('../../src/features/collections/components/CloudFolderTree.jsx');
   const dialogs=read('../../src/features/requests/components/RequestDialogs.jsx');
-  const controller=read('../../src/features/collections/controllers/createCollectionActions.js');
+  const controller=read('../../src/features/collections/controllers/createCollectionDialogActions.js');
   assert.match(tree,/disabled=\{busy\|\|!!folderNameError\}/);
   assert.match(tree,/if\(!editing\|\|cloudFolderNameError\(folders,editing\)\)return/);
   assert.match(dialogs,/disabled=\{busyAction\|\|!!renameError\}/);

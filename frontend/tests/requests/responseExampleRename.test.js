@@ -63,6 +63,8 @@ test('Local example tree has nested visual order and local/Neon menus include re
   assert.match(tree,/pp-local-request pp-explorer-tree-request/);
   assert.match(tree,/pp-tree-example pp-explorer-tree-example/);
   assert.match(app,/\['renameExample','Rename example'\],\['deleteExample','Delete example'\]/);
-  assert.match(app,/async function renameSavedExample\(/);
-  assert.match(app,/synchronizeSavedExamples\(scope,workspaceId,collectionId,requestId,examples\)/);
+  const examples=readFileSync(new URL('../../src/features/collections/controllers/createCollectionExampleActions.js',import.meta.url),'utf8');
+  assert.match(app,/createCollectionActions/);
+  assert.match(examples,/async function renameSavedExample\(/);
+  assert.match(examples,/synchronizeSavedExamples\(scope,workspaceId,collectionId,requestId,examples\)/);
 });

@@ -37,8 +37,7 @@ public static class PakpostHostExtensions
         services.AddApplication();
         services.AddMediatorServices();
         services.AddInfrastructure(configuration);
-        // Registration name is retained for compatibility; this uses server-side cookies.
-        services.AddJwtAuthentication(configuration);
+        services.AddBrowserSessionAuthentication(configuration);
         services.AddWorkbenchWebServices(configuration);
         services.AddPakpostHealthChecks();
         services.AddPakpostRequestTimeouts(configuration);

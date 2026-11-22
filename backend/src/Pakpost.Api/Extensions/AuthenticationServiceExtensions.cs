@@ -6,9 +6,8 @@ namespace Pakpost.Api.Extensions;
 
 public static class AuthenticationServiceExtensions
 {
-    // Kept as a source-compatible registration name; the authenticated browser
-    // scheme is now opaque server sessions, not JWT bearer authentication.
-    public static IServiceCollection AddJwtAuthentication(
+    // Opaque server-side session cookies are the only browser auth scheme.
+    public static IServiceCollection AddBrowserSessionAuthentication(
         this IServiceCollection services, IConfiguration configuration)
     {
         var signingKey = configuration["Jwt:SigningKey"];

@@ -55,6 +55,8 @@ test('API startup delegates transport policies to focused middleware and extensi
   const host = read('backend/src/Pakpost.Api/Extensions/PakpostHostExtensions.cs');
   const pipeline = read('backend/src/Pakpost.Api/Extensions/PakpostApplicationExtensions.cs');
   const services = read('backend/src/Pakpost.Api/Extensions/WorkbenchWebServiceExtensions.cs');
+  const limits = read('backend/src/Pakpost.Api/Extensions/PakpostRateLimitingExtensions.cs');
+  const cors = read('backend/src/Pakpost.Api/Extensions/PakpostCorsExtensions.cs');
   const proxy = read('backend/src/Pakpost.Api/Middlewares/ProxyConcurrencyMiddleware.cs');
   const cache = read('backend/src/Pakpost.Api/Middlewares/PrivateApiCacheMiddleware.cs');
 
@@ -62,9 +64,11 @@ test('API startup delegates transport policies to focused middleware and extensi
   assert.match(host, /AddWorkbenchWebServices\(configuration\)/);
   assert.match(pipeline, /UseMiddleware<ProxyConcurrencyMiddleware>\(\)/);
   assert.match(pipeline, /UseMiddleware<PrivateApiCacheMiddleware>\(\)/);
-  assert.match(services, /PermitLimit = 30/);
-  assert.match(services, /PermitLimit = 10/);
-  assert.match(services, /"http:\/\/localhost:5173"/);
+  assert.match(services, /AddPakpostRateLimiting\(\)/);
+  assert.match(limits, /PermitLimit = 30/);
+  assert.match(limits, /PermitLimit = 10/);
+  assert.match(services, /AddPakpostCors\(configuration\)/);
+  assert.match(cors, /"http:\/\/localhost:5173"/);
   assert.match(proxy, /Math\.Clamp\(/);
   assert.match(proxy, /_slots\.Wait\(0\)/);
   assert.match(proxy, /_slots\.Release\(\)/);

@@ -70,7 +70,7 @@ test('local drag-drop never depends on Cloud revision; Cloud move does adopt ret
   assert.match(cloud,/targetFolderId/);
 });
 test('Cloud collection duplication uses atomic import with per-request native folder paths',()=>{
-  const source=read('../../src/features/collections/controllers/createCollectionActions.js');
+  const source=read('../../src/features/collections/controllers/createWorkspaceCollectionMenuActions.js');
   const copy=source.slice(source.indexOf("if(action==='duplicateCollection')"),source.indexOf("if(action==='duplicateRequest')"));
   assert.match(copy,/`\$\{base\}\/import`/);
   assert.match(copy,/folderPath:folderPathForId/);

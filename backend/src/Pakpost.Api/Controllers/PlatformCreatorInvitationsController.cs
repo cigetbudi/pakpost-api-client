@@ -1,12 +1,10 @@
-using System.Net.Mail;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Pakpost.Api.Extensions;
+using Pakpost.Api.Security;
 using Pakpost.Application.Common.Interfaces;
 using Pakpost.Application.Common.Security;
 using Pakpost.Domain.Entities;
@@ -34,34 +32,6 @@ public sealed class PlatformCreatorInvitationsController(
         await db.Users.AsNoTracking().AnyAsync(u => u.Id == User.GetUserId() &&
             u.IsSuperAdmin && !u.IsDisabled, ct);
 
-    private static string? NormalizeEmail(string? raw)
-    {
-        var email = raw?.Trim();
-        if (string.IsNullOrWhiteSpace(email) || email.Length > 254 ||
-            email.Contains('\r') || email.Contains('\n') ||
-            !MailAddress.TryCreate(email, out var parsed) ||
-            !string.Equals(parsed.Address, email, StringComparison.OrdinalIgnoreCase)) return null;
-        return email.ToLowerInvariant();
-    }
-
-    private static string NewToken() =>
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-    private static string Hash(string token) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
-
-    private string BuildLink(string token)
-    {
-        var baseUrl = configuration["Invitations:FrontendBaseUrl"];
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var url) ||
-            (url.Scheme != Uri.UriSchemeHttps && !(url.Scheme == Uri.UriSchemeHttp && url.IsLoopback)) ||
-            !string.IsNullOrEmpty(url.UserInfo) ||
-            !string.IsNullOrEmpty(url.Query) || !string.IsNullOrEmpty(url.Fragment))
-            throw new InvalidOperationException("Configure Invitations:FrontendBaseUrl to the PakPost HTTPS frontend URL");
-        return new Uri(url, $"?creatorInvite={Uri.EscapeDataString(token)}").ToString();
-    }
-
     private static CreatorInvitationDto ToDto(PlatformCreatorInvitation i) =>
         new(i.Id, i.Email, i.SentAt, i.ExpiresAt);
 
@@ -84,7 +54,7 @@ public sealed class PlatformCreatorInvitationsController(
     {
         if (!await IsAdministrator(ct)) return Forbid();
         if (!IsSelfHosted) return BadRequest(new { message = "Creator invitations are only available in Self-Hosted mode" });
-        var email = NormalizeEmail(request.Email);
+        var email = PlatformCreatorInvitationTokens.NormalizeEmail(request.Email);
         if (email is null) return BadRequest(new { message = "Enter a valid email address" });
         if (await db.Users.AsNoTracking().AnyAsync(u => u.Email == email, ct))
             return Conflict(new { message = "This user already exists. Use Grant creator instead." });
@@ -93,9 +63,9 @@ public sealed class PlatformCreatorInvitationsController(
             i.AcceptedAt == null && i.RevokedAt == null && i.ExpiresAt > now, ct))
             return Conflict(new { message = "An invitation is already pending for this email. Use Resend." });
 
-        var token = NewToken();
-        var link = BuildLink(token);
-        var invite = new PlatformCreatorInvitation(User.GetUserId(), email, Hash(token), now);
+        var token = PlatformCreatorInvitationTokens.NewToken();
+        var link = PlatformCreatorInvitationTokens.BuildLink(token, configuration);
+        var invite = new PlatformCreatorInvitation(User.GetUserId(), email, PlatformCreatorInvitationTokens.Hash(token), now);
         // If SMTP fails, the DB insert is rolled back. No secret is returned in the API.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.PlatformCreatorInvitations.Add(invite);
@@ -115,10 +85,10 @@ public sealed class PlatformCreatorInvitationsController(
         if (invite is null || !invite.IsPending(now)) return NotFound();
         if (await db.Users.AsNoTracking().AnyAsync(u => u.Email == invite.Email, ct))
             return Conflict(new { message = "User has already registered. Grant creator from the user list." });
-        var token = NewToken();
-        var link = BuildLink(token);
+        var token = PlatformCreatorInvitationTokens.NewToken();
+        var link = PlatformCreatorInvitationTokens.BuildLink(token, configuration);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        invite.Resend(Hash(token), now); // old link becomes invalid after commit
+        invite.Resend(PlatformCreatorInvitationTokens.Hash(token), now); // old link becomes invalid after commit
         await db.SaveChangesAsync(ct);
         await emailSender.SendAsync(invite.Email, link, ct);
         await transaction.CommitAsync(ct);
@@ -144,7 +114,7 @@ public sealed class PlatformCreatorInvitationsController(
         if (!IsSelfHosted) return BadRequest(new { message = "Creator invitations are not required in Public mode" });
         if (request.Token is null || !Regex.IsMatch(request.Token, "^[A-Za-z0-9_-]{43}$"))
             return BadRequest(new { message = "Invalid or expired invitation" });
-        var hash = Hash(request.Token);
+        var hash = PlatformCreatorInvitationTokens.Hash(request.Token);
         var now = DateTimeOffset.UtcNow;
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);

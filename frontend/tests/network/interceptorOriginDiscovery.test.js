@@ -46,6 +46,8 @@ test('extension requests permissions only after review and a user click',()=>{
   assert.match(popup,/api\.permissions\.request\(\{origins:patterns\}\)/);
   assert.match(popup,/SETTINGS\.allowedDestinations=\[\.\.\.new Set/);
   assert.match(content,/PAKPOST_DISCOVER_HOSTS/);
-  assert.match(app,/DISCOVER_HOSTS_REQUEST/);
-  assert.match(app,/discoverApiDestinations/);
+  const lifecycle=file('../../src/features/requests/hooks/useInterceptorLifecycle.js');
+  assert.match(app,/useInterceptorLifecycle/);
+  assert.match(lifecycle,/DISCOVER_HOSTS_REQUEST/);
+  assert.match(lifecycle,/discoverApiDestinations/);
 });

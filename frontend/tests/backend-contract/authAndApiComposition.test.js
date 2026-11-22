@@ -11,7 +11,7 @@ test('API Program delegates mediator and session authentication to composition e
   assert.match(startup, /services\.AddApplication\(\)/);
   assert.match(startup, /services\.AddMediatorServices\(\)/);
   assert.match(startup, /services\.AddInfrastructure\(configuration\)/);
-  assert.match(startup, /services\.AddJwtAuthentication\(configuration\)/);
+  assert.match(startup, /services\.AddBrowserSessionAuthentication\(configuration\)/);
   assert.doesNotMatch(program, /AddJwtBearer\(|AddMediator\(\(/);
 });
 

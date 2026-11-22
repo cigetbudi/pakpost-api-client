@@ -6,7 +6,7 @@ import {getWorkspaceRequests,workspaceRequestsPath} from '../../src/features/col
 const read=relative=>readFileSync(new URL(relative,import.meta.url),'utf8');
 
 test('Explorer fetches only request index while preserving full list for export and runner',()=>{
-  const workbench=read('../../src/app/hooks/useWorkbenchController.jsx');
+  const workbench=read('../../src/features/collections/hooks/useCloudCollectionLifecycle.js');
   const controller=read('../../../backend/src/Pakpost.Api/Controllers/SavedRequestsController.cs');
   assert.match(workbench,/collections\/\$\{selectedCol\}\/requests\/index/);
   assert.match(workbench,/collections\/\$\{col\.id\}\/requests\/index/);
@@ -17,11 +17,11 @@ test('Explorer fetches only request index while preserving full list for export 
 });
 
 test('opening an indexed request hydrates detail and ignores stale workspace responses',()=>{
-  const source=read('../../src/app/hooks/useWorkbenchController.jsx');
+  const source=read('../../src/features/collections/controllers/createCloudRequestOpenActions.js');
   assert.match(source,/if \(!item\?\.isIndex\).*tabActions\.loadSavedRequest\(item\)/);
   assert.match(source,/requests\/\$\{item\.id\}`,'GET'/);
   assert.match(source,/selection!==cloudOpenEpoch\.current/);
-  const actions=read('../../src/features/collections/controllers/createCollectionActions.js');
+  const actions=read('../../src/features/collections/controllers/createCollectionDialogActions.js');
   assert.match(actions,/item\.isIndex\s*\?await api\(`/);
 });
 

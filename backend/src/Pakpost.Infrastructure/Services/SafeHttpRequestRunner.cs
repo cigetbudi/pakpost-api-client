@@ -37,7 +37,7 @@ public sealed class SafeHttpRequestRunner(IConfiguration configuration,IHostEnvi
             {
                 var endpoint=context.DnsEndPoint;
                 IPAddress[] ips=await Dns.GetHostAddressesAsync(endpoint.Host,cancel);
-                var chosen=ips.FirstOrDefault(ip=>allowPrivate || IsPublic(ip));
+                var chosen=ips.FirstOrDefault(ip=>allowPrivate || ProxyAddressPolicy.IsPublic(ip));
                 if(chosen is null) throw new HttpRequestException("Destination resolves only to blocked/private IP addresses");
                 var socket=new Socket(chosen.AddressFamily,SocketType.Stream,ProtocolType.Tcp);
                 try { await socket.ConnectAsync(new IPEndPoint(chosen,endpoint.Port),cancel);return new NetworkStream(socket,ownsSocket:true); }
@@ -49,7 +49,7 @@ public sealed class SafeHttpRequestRunner(IConfiguration configuration,IHostEnvi
         using(var request=new HttpRequestMessage(new HttpMethod(method),uri))
         {
             if(method is not "GET" and not "HEAD")
-                request.Content=CreateContent(command,mode,body);
+                request.Content=ProxyRequestBodyFactory.Create(command,mode,body);
             if(command.Headers is not null)
                 foreach(var header in command.Headers)
                 {
@@ -104,90 +104,5 @@ public sealed class SafeHttpRequestRunner(IConfiguration configuration,IHostEnvi
             catch(HttpRequestException ex)
             {throw AppException.BadRequest("Target request failed: "+ex.Message);}
         }
-    }
-    private static HttpContent? CreateContent(SendHttpRequestCommand command,string mode,string raw)
-    {
-        switch(mode)
-        {
-            case "none":return null;
-            case "urlencoded":
-                return new FormUrlEncodedContent((command.FormFields??[]).Where(f=>!string.IsNullOrWhiteSpace(f.Key))
-                    .Select(f=>new KeyValuePair<string,string>(f.Key,f.Value??"")));
-            case "multipart":
-            {
-                var content=new MultipartFormDataContent();
-                long total=0;
-                foreach(var field in command.FormFields??[])
-                {
-                    if(string.IsNullOrWhiteSpace(field.Key))continue;
-                    if(field.Key.Length>200)throw AppException.BadRequest("Form field name is too long");
-                    if(field.Base64 is not null)
-                    {
-                        byte[] bytes;
-                        try{bytes=Convert.FromBase64String(field.Base64);}
-                        catch(FormatException){throw AppException.BadRequest("Invalid multipart file base64");}
-                        total+=bytes.Length;
-                        if(total>5_242_880)throw AppException.BadRequest("Multipart body exceeds 5 MB");
-                        var file=new ByteArrayContent(bytes);
-                        if(!string.IsNullOrWhiteSpace(field.ContentType))file.Headers.ContentType=System.Net.Http.Headers.MediaTypeHeaderValue.Parse(field.ContentType);
-                        content.Add(file,field.Key,System.IO.Path.GetFileName(field.FileName??"upload.bin"));
-                    }
-                    else
-                    {
-                        total+=Encoding.UTF8.GetByteCount(field.Value??"");
-                        if(total>5_242_880)throw AppException.BadRequest("Multipart body exceeds 5 MB");
-                        content.Add(new StringContent(field.Value??"",Encoding.UTF8),field.Key);
-                    }
-                }
-                return content;
-            }
-            case "binary":
-            {
-                byte[] bytes;
-                try{bytes=Convert.FromBase64String(command.FileBase64??"");}
-                catch(FormatException){throw AppException.BadRequest("Invalid binary base64");}
-                if(bytes.Length>5_242_880)throw AppException.BadRequest("Binary body exceeds 5 MB");
-                var file=new ByteArrayContent(bytes);
-                file.Headers.ContentType=System.Net.Http.Headers.MediaTypeHeaderValue.Parse(command.ContentType??"application/octet-stream");
-                return file;
-            }
-            default:
-            {
-                if(string.IsNullOrEmpty(raw))return null;
-                var content=new ByteArrayContent(Encoding.UTF8.GetBytes(raw));
-                if(!string.IsNullOrWhiteSpace(command.ContentType))
-                    content.Headers.ContentType=System.Net.Http.Headers.MediaTypeHeaderValue.Parse(command.ContentType);
-                return content;
-            }
-        }
-    }
-    private static bool IsPublic(IPAddress ip)
-    {
-        if(ip.IsIPv4MappedToIPv6) ip=ip.MapToIPv4();
-        if(IPAddress.IsLoopback(ip))return false;
-        var b=ip.GetAddressBytes();
-        if(ip.AddressFamily==AddressFamily.InterNetwork)
-        {
-            int a=b[0],c=b[1];
-            return a!=0 && a!=10 && a!=127 && a!=169 && a!=192 && a!=198 &&
-                   a!=224 && a!=240 && a<224 &&
-                   !(a==172 && c>=16 && c<=31) &&
-                   !(a==100 && c>=64 && c<=127) &&
-                   !(a==192 && c==168) &&
-                   !(a==192 && c==0) &&
-                   !(a==203 && c==0 && b[2]==113);
-        }
-        if(ip.AddressFamily==AddressFamily.InterNetworkV6)
-        {
-            // Only IPv6 global-unicast 2000::/3; reject tunnels and documentation addresses.
-            // Do not trust IPv6 translation/tunneling as a way to access non-public IPv4.
-            if((b[0]&0xe0)!=0x20 || ip.IsIPv6LinkLocal || ip.IsIPv6Multicast || ip.IsIPv6SiteLocal)
-                return false;
-            if(b[0]==0x20 && b[1]==0x02) return false; // 2002::/16 6to4 (embedded IPv4)
-            if(b[0]==0x20 && b[1]==0x01 && b[2]==0x00 && b[3]==0x00) return false; // 2001::/32 Teredo
-            if(b[0]==0x20 && b[1]==0x01 && b[2]==0x0d && b[3]==0xb8) return false; // documentation
-            return true;
-        }
-        return false;
     }
 }

@@ -5,6 +5,13 @@ import { readFileSync } from 'node:fs';
 export const WORKBENCH_MODULES = Object.freeze([
   'App.jsx',
   'app/hooks/useWorkbenchController.jsx',
+  'app/hooks/useWorkbenchKeyboardShortcuts.js',
+  'app/hooks/useWorkbenchMenuDismissal.js',
+  'features/requests/hooks/useRequestTabSession.js',
+  'features/requests/hooks/useRequestAuthorizationFields.js',
+  'features/requests/hooks/useRequestDraftRecovery.js',
+  'features/collections/hooks/useCollectionDialogState.js',
+  'features/workspace/hooks/useWorkspaceViewPreferencePersistence.js',
   'app/components/DeferredFeatures.jsx',
   'features/console/hooks/useConsoleDrawer.js',
   'features/settings/hooks/useWorkbenchTheme.js',

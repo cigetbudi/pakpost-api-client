@@ -1,5 +1,12 @@
+import { createCloudRequestOpenActions } from '../../features/collections/controllers/createCloudRequestOpenActions.js';
+import { useCollectionDialogState } from '../../features/collections/hooks/useCollectionDialogState.js';
+import { useRequestAuthorizationFields } from '../../features/requests/hooks/useRequestAuthorizationFields.js';
+import { useRequestTabSession } from '../../features/requests/hooks/useRequestTabSession.js';
+import { useWorkspaceViewPreferencePersistence } from '../../features/workspace/hooks/useWorkspaceViewPreferencePersistence.js';
+import { useWorkbenchMenuDismissal } from './useWorkbenchMenuDismissal.js';
+import { useRequestDraftRecovery } from '../../features/requests/hooks/useRequestDraftRecovery.js';
+import { useWorkbenchKeyboardShortcuts } from './useWorkbenchKeyboardShortcuts.js';
 import { createCommandPaletteItems, filterCommandPaletteItems } from '../services/commandPaletteItems.js';
-import {CLOUD_SERVER_PAGING_THRESHOLD} from '../../features/collections/services/cloudRenderBudget.js';
 import { useEnvironmentDataLifecycle } from '../../features/environments/hooks/useEnvironmentDataLifecycle.js';
 import { useWorkbenchPreferencesPersistence } from './useWorkbenchPreferencesPersistence.js';
 import { useCommandPaletteState } from './useCommandPaletteState.js';
@@ -15,14 +22,18 @@ import { useRunnerDialogState } from '../../features/collections/hooks/useRunner
  * coordinate per-workbench state and never persist secret Zustand state.
  */
 import { useRequestDraftEditor } from '../../features/requests/hooks/useRequestDraftEditor.js';
+import { useInterceptorLifecycle } from '../../features/requests/hooks/useInterceptorLifecycle.js';
 import { useAuthOverlayState } from '../../features/auth/hooks/useAuthOverlayState.js';
+import { useBrowserSessionBootstrap } from '../../features/auth/hooks/useBrowserSessionBootstrap.js';
 import { useCollectionSessionState } from '../../features/collections/hooks/useCollectionSessionState.js';
+import { useCloudCollectionLifecycle } from '../../features/collections/hooks/useCloudCollectionLifecycle.js';
 import { createRealtimeActions } from '../../features/realtime/controllers/createRealtimeActions.js';
 import { createRequestHistoryActions } from '../../features/requests/controllers/createRequestHistoryActions.js';
 import { createRequestTabActions } from '../../features/requests/controllers/createRequestTabActions.js';
 import { createCollectionActions } from '../../features/collections/controllers/createCollectionActions.js';
 import { createCollectionRunnerActions } from '../../features/collections/controllers/createCollectionRunnerActions.js';
 import { createInvitationActions } from '../../features/workspace/controllers/createInvitationActions.js';
+import { useWorkspaceInvitationListing } from '../../features/workspace/hooks/useWorkspaceInvitationListing.js';
 import { createRequestExecutionActions } from '../../features/requests/controllers/createRequestExecutionActions.js';
 import { createDocumentationActions } from '../../features/collections/controllers/documentationActions.js';
 import { createEnvironmentActions } from '../../features/environments/controllers/environmentActions.js';
@@ -41,11 +52,10 @@ import { reconcileRequestTabs, synchronizeWorkspaceChanges } from '../../feature
 import { executeWorkbenchRequest } from '../../features/requests/services/executeWorkbenchRequest.js';
 import { buildRequestCommand, buildRedactedCodeRequest, buildRequestPreview } from '../../features/requests/services/requestCommand.js';
 import { invalidateBrowserSession, planSignedOutWorkbench } from '../../features/auth/services/logoutWorkbench.js';
-import { createAuthTabSync } from '../../features/auth/services/authTabSync.js';
 import { useWorkspaceRealtimeLifecycle } from '../../features/realtime/hooks/useWorkspaceRealtimeLifecycle.js';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
-import { api, BROWSER_SESSION, getBrowserCsrf, setBrowserCsrf } from '../../services/httpClient.js';
+import { api, setBrowserCsrf } from '../../services/httpClient.js';
 import { prettyJson, initialLocalEnvs } from '../../utils/workbenchHelpers.js';
 import { Dialog } from '../../components/ui/WorkbenchPrimitives.jsx';
 import { ResponsePane } from '../../components/workbench/ResponsePane.jsx';
@@ -68,7 +78,7 @@ import {canWorkspace,currentWorkspaceMember} from '../../features/workspace/serv
 import { KeyValueEditor } from '../../features/requests/components/KeyValueEditor';
 import { DocumentationEditor } from '../../features/collections/components/DocumentationEditor';
 import { isEnabled, encodeStoredHeaders, decodeStoredHeaders } from '../../features/requests/services/requestMetadata';
-import {readWorkspaceCollectionDocs,writeWorkspaceCollectionDocs,clearWorkspaceCollectionDocs,workspaceDocKey} from '../../features/collections/services/documentationStore';
+import {clearWorkspaceCollectionDocs,workspaceDocKey} from '../../features/collections/services/documentationStore';
 import { RetroSelect } from '../../components/ui/RetroSelect';
 import { ImportDestinationPicker } from '../../components/ui/ImportDestinationPicker';
 import { VariableUrlInput } from '../../features/requests/components/VariableUrlInput';
@@ -78,27 +88,26 @@ import {sessionEnvironmentKey,readableEnvironmentValues,applySessionOverrides,se
 import { readEnvironmentSelections, writeEnvironmentSelections } from '../../features/environments/services/environmentContext.js';
 import { FastTooltip } from '../../components/ui/FastTooltip';
 import {sortCollectionRoots} from '../../features/collections/services/collectionSort';
-import {isWorkspaceCollectionOpen, toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from '../../features/collections/services/collectionExpansion';
+import {toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from '../../features/collections/services/collectionExpansion';
 import { blankDraft, parseCurl, isCurl, parseImportText } from '../../features/import-export/services/importExport';
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from '../../features/environments/services/environmentImport';
-import { clearWorkbenchCache, readWorkbenchCache, writeWorkbenchCache } from '../../features/workspace/services/workspaceCache';
+import { clearWorkbenchCache, readWorkbenchCache } from '../../features/workspace/services/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from '../../features/collections/services/localCollections';
 import {planTabClose} from '../../features/requests/services/tabActions';
 import {applyLocalAction,updateLocalRequest,createLocalSavedRequest} from '../../features/collections/services/localCollectionActions';
 import {stripJsonComments,hasJsonComments} from '../../features/requests/services/jsonComments';
 import {findBoundTab} from '../../features/requests/services/sourceTabs';
 import {freshRequest, pendingSource, requestFingerprint, needsCloseConfirmation, tabSaved} from '../../features/requests/services/draftLifecycle';
-import {isReadOnlyCloudTab, sandboxCacheTabIds,sandboxDocKey} from '../../features/requests/services/qaSandbox.js';
+import {isReadOnlyCloudTab,sandboxDocKey} from '../../features/requests/services/qaSandbox.js';
 import {applyFieldMerge} from '../../features/requests/services/requestVersionMerge.js';
 import {defaultStorageScope,allowedStorageScope,STORAGE_LOCAL,STORAGE_WORKSPACE,collectionImportSources,saveCloudCollections} from '../../features/import-export/services/storageScope';
-import {readWorkspaceViewPreference,saveWorkspaceViewPreference} from '../../features/workspace/services/workspaceViewPreference.js';
+import {readWorkspaceViewPreference} from '../../features/workspace/services/workspaceViewPreference.js';
 import {MenuActionItem} from '../../components/ui/MenuActionItem';
 import { isDarkAppearance, normalizeAppearance, readAppearance } from '../../features/settings/services/appearance';
 import { bodyFormat, languageFromMime, formatSource, resolveVars } from '../../features/requests/services/requestTools';
 import {createResponseExample,exampleToResult,renameResponseExample,sanitizeResponseExamples,statusTone,suggestExampleName,upsertResponseExample} from '../../features/requests/services/responseExamples';
 import {AUTH_OPTIONS} from '../../features/requests/services/authorization';
-import {readInterceptorMode,writeInterceptorMode,probeExtension,dispatchRequest,EXTENSION_CHANNEL} from '../../features/requests/services/interceptorClient';
-import {discoverApiDestinations} from '../../features/requests/services/interceptorDiscovery';
+import {readInterceptorMode,dispatchRequest} from '../../features/requests/services/interceptorClient';
 import {appendConsoleEvent, subscribeConsoleEvents, clearConsoleEvents} from '../../features/console/services/pakpostConsoleStore.js';
 import {collectionVariableKey, readCollectionVariables, writeCollectionVariables, resetCollectionVariables, savedCollectionVariableMap, validateCollectionVariableRows, resolvedScriptVariables} from '../../features/collections/services/collectionVariableSession.js';
 import { TextEditor, WorkbenchSettings, CodeSidebar, ImportExportSidebar, PakpostConsole, CollectionRunner, WorkspaceManager, CollectionVariablesEditor, RequestRevisionPanel, RequestBody, ScriptEditor } from '../components/DeferredFeatures.jsx';
@@ -192,16 +201,9 @@ export function useWorkbenchController() {
   const { workspaces, setWorkspaces, selectedWs, setSelectedWs, members, setMembers, membersWorkspaceId, setMembersWorkspaceId, wsTab, setWsTab, newWs, setNewWs, newCollection, setNewCollection, newMember, setNewMember, newMemberRoles, setNewMemberRoles, editingMemberId, setEditingMemberId, editingMemberRoles, setEditingMemberRoles, memberSearch, setMemberSearch, memberRoleFilter, setMemberRoleFilter, showMemberAdd, setShowMemberAdd, inviteOpen, setInviteOpen, inviteEmail, setInviteEmail, inviteRoles, setInviteRoles, invitationRows, setInvitationRows, invitationError, setInvitationError, invitationBusy, setInvitationBusy, expandedMemberAccess, setExpandedMemberAccess, canCreateWorkspace, setCanCreateWorkspace } = useStore(workspaceUiStore);
   const selectedWorkspaceRef=useRef(selectedWs);
   selectedWorkspaceRef.current=selectedWs;
-  // Persist only non-sensitive UI choices once a verified account is known.
-  // Never overwrite a Cloud preference during the initial guest/bootstrap frame.
-  useEffect(()=>{
-    if(token===BROWSER_SESSION&&me?.id)
-      saveWorkspaceViewPreference(localStorage,me.id,{scope:storageScope});
-  },[token,me?.id,storageScope]);
-  useEffect(()=>{
-    if(token===BROWSER_SESSION&&me?.id&&selectedWs&&workspaces.some(ws=>ws.id===selectedWs))
-      saveWorkspaceViewPreference(localStorage,me.id,{workspaceId:selectedWs});
-  },[token,me?.id,selectedWs,workspaces]);
+  useWorkspaceViewPreferencePersistence({
+    token, me, storageScope, selectedWs, workspaces, storage: localStorage,
+  });
   // Context selection & Cloud stale-response guards live with Environment state.
   const {
     cloudEnvironmentContext, environmentContext, cloudEnvironmentContextRef,
@@ -225,33 +227,24 @@ export function useWorkbenchController() {
     expandedWorkspaceExamples, setExpandedWorkspaceExamples,
     localExpandAllSignal, setLocalExpandAllSignal, revealLocalDraft, setRevealLocalDraft,
     workspaceRequestLists, setWorkspaceRequestLists } = useCollectionWorkbench(collectionStore);
-  const [creatingLocalCollection, setCreatingLocalCollection] = useState(false);
-  const [collectionImportOpen,setCollectionImportOpen] = useState(false);
-  const [collectionImportFile,setCollectionImportFile] = useState(null);
-  const [collectionImportDestination,setCollectionImportDestination] = useState(()=>defaultStorageScope(!!storedToken()));
-  const [collectionImportError,setCollectionImportError] = useState('');
-  const [collectionImportBusy,setCollectionImportBusy] = useState(false);
-  const [localCollectionName, setLocalCollectionName] = useState('');
-  const selectedColRef=useRef(selectedCol);selectedColRef.current=selectedCol;
-  const [saveOpen, setSaveOpen] = useState(false);
-  const [saveExampleOpen, setSaveExampleOpen] = useState(false);
-  const [exampleName, setExampleName] = useState('');
-  const [exampleDescription, setExampleDescription] = useState('');
-  const [saveScope,setSaveScope] = useState('local');
-  const [saveLocalCollection,setSaveLocalCollection] = useState('');
-  const [actionDialog,setActionDialog] = useState(null);
-  const [actionName,setActionName] = useState('');
-  const [workspaceMenu,setWorkspaceMenu] = useState(null);
-  const [documentationTarget,setDocumentationTarget]=useState(null);
-  const [docBusy,setDocBusy]=useState(false);
-  const [workspaceCollectionDocs,setWorkspaceCollectionDocs]=useState(()=>readWorkspaceCollectionDocs(localStorage));
-  const [workspaceSorted,setWorkspaceSorted]=useState(()=>{try{return JSON.parse(localStorage.getItem('pakpost_workspace_sort')||'{}')}catch{return {}}});
-  const tabDragRef=useRef(null);
-  const [saveName, setSaveName] = useState('New request');
-  const [saveWs, setSaveWs] = useState('');
-  const [saveCollection, setSaveCollection] = useState('');
-  const [saveCols, setSaveCols] = useState([]);
-  const [busyAction, setBusyAction] = useState(false);
+  const {
+    creatingLocalCollection, setCreatingLocalCollection, collectionImportOpen, setCollectionImportOpen,
+    collectionImportFile, setCollectionImportFile, collectionImportDestination, setCollectionImportDestination,
+    collectionImportError, setCollectionImportError, collectionImportBusy, setCollectionImportBusy,
+    localCollectionName, setLocalCollectionName, selectedColRef, saveOpen, setSaveOpen,
+    saveExampleOpen, setSaveExampleOpen, exampleName, setExampleName,
+    exampleDescription, setExampleDescription, saveScope, setSaveScope,
+    saveLocalCollection, setSaveLocalCollection, actionDialog, setActionDialog,
+    actionName, setActionName, workspaceMenu, setWorkspaceMenu,
+    documentationTarget, setDocumentationTarget, docBusy, setDocBusy,
+    workspaceCollectionDocs, setWorkspaceCollectionDocs, workspaceSorted, setWorkspaceSorted,
+    tabDragRef, saveName, setSaveName, saveWs, setSaveWs, saveCollection, setSaveCollection,
+    saveCols, setSaveCols, busyAction, setBusyAction,
+  } = useCollectionDialogState({
+    initialImportScope: () => defaultStorageScope(!!storedToken()),
+    storage: localStorage,
+  });
+  selectedColRef.current = selectedCol;
   const { split, setSplit, splitPercent, setSplitPercent, panesRef, draggingRef,
     onSplitterMove, onSplitterEnd } = useRequestSplitLayout({cachedSplit: CACHED?.split});
   const { explorerTab, setExplorerTab, explorerSearch, setExplorerSearch,
@@ -271,78 +264,42 @@ export function useWorkbenchController() {
     setWorkspaceRequestLists({});
     setRemoteAlerts({});setConflictDialog(null);setVersionDialog(null);
   },[selectedWs,token]);
-  const [params, setParams] = useState(RECOVERED.params || [{ ...EMPTY_HEADER }]);
-  const [authType, setAuthType] = useState(RECOVERED.authType || 'none');
-  const [bearerToken, setBearerToken] = useState(RECOVERED.bearerToken || '');
-  const [basicUsername,setBasicUsername] = useState(RECOVERED.basicUsername||'');
-  const [basicPassword,setBasicPassword] = useState(RECOVERED.basicPassword||'');
-  const [apiKeyName,setApiKeyName] = useState(RECOVERED.apiKeyName||'X-API-Key');
-  const [apiKeyValue,setApiKeyValue] = useState(RECOVERED.apiKeyValue||'');
-  const [apiKeyIn,setApiKeyIn] = useState(RECOVERED.apiKeyIn||'header');
-  const openTabs = useStore(requestWorkbenchStore, s => s.openTabs);
-  const setOpenTabs = useStore(requestWorkbenchStore, s => s.setOpenTabs);
-  const openTabsRef=useRef(openTabs);openTabsRef.current=openTabs;
-  const [remoteAlerts,setRemoteAlerts]=useState({});
-  const [conflictDialog,setConflictDialog]=useState(null);
-  const [versionDialog,setVersionDialog]=useState(null);
-  const [realtimeStatus,setRealtimeStatus]=useState('offline');
-  const realtimeHandlerRef=useRef(null);
-  const realtimeQueueRef=useRef([]);
-  const realtimeTimerRef=useRef(null);
-  const [tabMenu, setTabMenu] = useState(null);
-  const [editingRequestName, setEditingRequestName] = useState(false);
-  const requestNameInputRef = useRef(null);
-  const originalRequestNameRef = useRef('');
-  const cancelledRequestNameRef = useRef(false);
-  const [closeConfirmation, setCloseConfirmation] = useState(null);
-  const activeTabId = useStore(requestWorkbenchStore, s => s.activeTabId);
-  const setActiveTabId = useStore(requestWorkbenchStore, s => s.setActiveTabId);
-  const activeTabRef = useRef(CACHED?.activeTabId || 't1');
-  const tabSequence = useRef(Math.max(1,...(CACHED?.openTabs || []).map(t=>Number(String(t.id).replace(/^t/,'')) || 0)));
-  const draftsRef = useRef(CACHED?.drafts || {});
-  useEffect(() => {
-    if (!editingRequestName || page !== 'tester') return;
-    const input=requestNameInputRef.current;
-    if (input) { input.focus(); input.select(); }
-  }, [editingRequestName, activeTabId, page]);
+  const {
+    params, setParams, authType, setAuthType, bearerToken, setBearerToken,
+    basicUsername, setBasicUsername, basicPassword, setBasicPassword,
+    apiKeyName, setApiKeyName, apiKeyValue, setApiKeyValue,
+    apiKeyIn, setApiKeyIn, currentAuth,
+  } = useRequestAuthorizationFields(RECOVERED, EMPTY_HEADER);
+  const {
+    openTabs, setOpenTabs, openTabsRef, remoteAlerts, setRemoteAlerts,
+    conflictDialog, setConflictDialog, versionDialog, setVersionDialog,
+    realtimeStatus, setRealtimeStatus, realtimeHandlerRef, realtimeQueueRef,
+    realtimeTimerRef, tabMenu, setTabMenu, editingRequestName, setEditingRequestName,
+    requestNameInputRef, originalRequestNameRef, cancelledRequestNameRef,
+    closeConfirmation, setCloseConfirmation, activeTabId, setActiveTabId,
+    activeTabRef, tabSequence, draftsRef,
+  } = useRequestTabSession({ requestWorkbenchStore, cached: CACHED, page });
   function beginRequestRename(...args) { return tabActions.beginRequestRename(...args); }
   function setCurrentRequestName(...args) { return tabActions.setCurrentRequestName(...args); }
   function finishRequestRename(...args) { return tabActions.finishRequestRename(...args); }
   function cancelRequestRename(...args) { return tabActions.cancelRequestRename(...args); }
 
-  const currentAuth=()=>({authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn});
   function snapshot(...args) { return tabActions.snapshot(...args); }
   const snapshotRef=useRef(snapshot);snapshotRef.current=snapshot;
   function restoreDraft(...args) { return tabActions.restoreDraft(...args); }
   function stashActive(...args) { return tabActions.stashActive(...args); }
   useWorkbenchPreferencesPersistence({localCollections,workspaceCollectionDocs,collectionSort,rightWidth});
 
-  useEffect(()=>{
-    if(!tabMenu)return;
-    const dismiss=e=>{if(!e.target.closest?.('.pp-tab-context'))setTabMenu(null)};
-    const escape=e=>{if(e.key==='Escape')setTabMenu(null)};
-    const resized=()=>setTabMenu(null);
-    window.addEventListener('pointerdown',dismiss);window.addEventListener('keydown',escape);window.addEventListener('resize',resized);
-    return ()=>{window.removeEventListener('pointerdown',dismiss);window.removeEventListener('keydown',escape);window.removeEventListener('resize',resized)};
-  },[tabMenu]);
-  useEffect(()=>{if(!workspaceMenu)return;
-    const click=e=>{if(!e.target.closest?.('.pp-collection-popup'))setWorkspaceMenu(null)};
-    const key=e=>{if(e.key==='Escape')setWorkspaceMenu(null)};
-    window.addEventListener('pointerdown',click);window.addEventListener('keydown',key);
-    return ()=>{window.removeEventListener('pointerdown',click);window.removeEventListener('keydown',key)};
-  },[workspaceMenu]);
+  useWorkbenchMenuDismissal({ tabMenu, setTabMenu, workspaceMenu, setWorkspaceMenu });
   useEffect(()=>{try{localStorage.setItem('pakpost_workspace_sort',JSON.stringify(workspaceSorted))}catch{}},[workspaceSorted]);
-  // Persist drafts for refresh recovery (debounced, plus a beforeunload flush).
-  useEffect(()=>{
-    const persist=()=>writeWorkbenchCache({openTabs,activeTabId:activeTabRef.current,
-      drafts:draftsRef.current,active:snapshot(),recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,
-      // Cloud requests are RAM-only for ALL roles, not only QA/Writer.
-      sandboxTabIds:sandboxCacheTabIds(openTabs,selectedWs,membersWorkspaceId===selectedWs&&canWorkspace(currentWorkspaceMember(members,me),'collection.write'))});
-    const timer=setTimeout(persist,600);
-    window.addEventListener('beforeunload',persist);
-    return ()=>{clearTimeout(timer);window.removeEventListener('beforeunload',persist)};
-  },[method,url,rows,body,documentation,format,formFields,binaryFile,preScript,postScript,responseExamples,scriptLog,scriptTests,scriptError,scriptDiagnostic,
-    reqTab,resTab,result,params,authType,bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,openTabs,activeTabId,recent,split,explorerTab,sidebarCollapsed,activeEnvId,envScope,selectedWs,members,membersWorkspaceId,me]);
+  useRequestDraftRecovery({
+    openTabs, activeTabRef, draftsRef, snapshot, recent, split, explorerTab, sidebarCollapsed,
+    activeEnvId, envScope, selectedWs, membersWorkspaceId, members, me,
+    method, url, rows, body, documentation, format, formFields, binaryFile,
+    preScript, postScript, responseExamples, scriptLog, scriptTests, scriptError,
+    scriptDiagnostic, reqTab, resTab, result, params, authType, bearerToken,
+    basicUsername, basicPassword, apiKeyName, apiKeyValue, apiKeyIn, activeTabId,
+  });
   function adoptSavedRevision(...args) { return realtimeActions.adoptSavedRevision(...args); }
   // Draft reconciliation is isolated from SignalR, without touching dirty tabs.
   function reconcileCloudRequests(...args) { return realtimeActions.reconcileCloudRequests(...args); }
@@ -387,17 +344,8 @@ export function useWorkbenchController() {
   function openLocalRequest(...args) { cloudOpenEpoch.current++; return collectionActions.openLocalRequest(...args); }
   function previewSavedExample(...args) { return collectionActions.previewSavedExample(...args); }
   function openLocalExample(...args) { cloudOpenEpoch.current++; return collectionActions.openLocalExample(...args); }
-  async function openWorkspaceExample(request,collectionId,example) {
-    const selection=++cloudOpenEpoch.current;
-    if(!request?.isIndex)return collectionActions.openWorkspaceExample(request,collectionId,example);
-    const workspaceId=selectedWs,auth=token;
-    try {
-      const full=await api(`/api/workspaces/${workspaceId}/collections/${collectionId}/requests/${request.id}`,'GET',undefined,auth);
-      if(currentTokenRef.current!==auth||selectedWorkspaceRef.current!==workspaceId||selection!==cloudOpenEpoch.current)return;
-      return collectionActions.openWorkspaceExample(full,collectionId,example);
-    } catch(error) {
-      if(currentTokenRef.current===auth&&selection===cloudOpenEpoch.current)setNotice(`Cannot open response example: ${getMessage(error)}`);
-    }
+  async function openWorkspaceExample(...args) {
+    return cloudRequestOpenActions.openWorkspaceExample(...args);
   }
   function downloadJson(...args) { return collectionActions.downloadJson(...args); }
   function updateLocal(...args) { return collectionActions.updateLocal(...args); }
@@ -438,25 +386,8 @@ export function useWorkbenchController() {
   function performTabAction(...args) { return tabActions.performTabAction(...args); }
   function showTabContext(...args) { return tabActions.showTabContext(...args); }
   function selectTabFromDraft(...args) { return tabActions.selectTabFromDraft(...args); }
-  async function loadSavedRequest(item) {
-    const selection=++cloudOpenEpoch.current;
-    if (!item?.isIndex) { tabActions.loadSavedRequest(item); return true; }
-    const workspaceId=selectedWs;
-    const collectionId=item.collectionId||selectedCol;
-    const auth=token;
-    const existing=openTabs.find(tab=>tab.source?.scope==='workspace'
-      &&tab.source.workspaceId===workspaceId&&tab.source.collectionId===collectionId
-      &&tab.source.requestId===item.id);
-    if (existing) { tabActions.selectTab(existing.id); return true; }
-    try {
-      const full=await api(`/api/workspaces/${workspaceId}/collections/${collectionId}/requests/${item.id}`,'GET',undefined,auth);
-      if (currentTokenRef.current!==auth||selectedWorkspaceRef.current!==workspaceId||selection!==cloudOpenEpoch.current)return false;
-      tabActions.loadSavedRequest(full);
-      return true;
-    } catch(error) {
-      if(currentTokenRef.current===auth&&selection===cloudOpenEpoch.current)setNotice(`Cannot open Cloud request: ${getMessage(error)}`);
-      return false;
-    }
+  async function loadSavedRequest(...args) {
+    return cloudRequestOpenActions.loadSavedRequest(...args);
   }
   async function resetSandboxRequest(...args) { return tabActions.resetSandboxRequest(...args); }
 
@@ -602,55 +533,11 @@ export function useWorkbenchController() {
     preferredWorkspaceId:userId=>readWorkspaceViewPreference(localStorage,userId).workspaceId,
     announceSession:()=>{authEpochRef.current += 1;setAuthSessionRevision(v=>v+1);authTabSyncRef.current?.announceSession();},
   });
-  useEffect(()=>{
-    // Purge credentials written by pre-cookie versions of PakPost.
-    try{sessionStorage.removeItem('pakpost_token');}catch{}
-    let active=true;
-    const refresh=async()=>{
-      const epoch=authEpochRef.current;
-      try {
-        const result=await api('/api/auth/session','GET');
-        if(!active || epoch!==authEpochRef.current)return;
-        if(result?.authenticated && result.user && result.csrfToken){
-          const sameAccount=currentTokenRef.current===BROWSER_SESSION &&
-            currentUserRef.current?.id===result.user.id;
-          const switchedAccount=currentTokenRef.current===BROWSER_SESSION &&
-            currentUserRef.current?.id && currentUserRef.current.id!==result.user.id;
-          if(switchedAccount)performLogout(false);
-          if(result.csrfToken!==getBrowserCsrf())setAuthSessionRevision(v=>v+1);
-          setBrowserCsrf(result.csrfToken);
-          currentTokenRef.current=BROWSER_SESSION;
-          setToken(BROWSER_SESSION);
-          setMe(result.user);
-          setAuthOpen(false);
-          // Restore after verification, not from the unauthenticated startup state.
-          // A visibility/session refresh for the same user must NOT override a
-          // Local/Cloud switch they just made in this tab.
-          if(!sameAccount){
-            // The old workbench cache's envScope can be polluted by a brief
-            // unauthenticated startup. Default verified accounts to Cloud;
-            // only an explicit per-account preference can choose Local.
-            const preference=readWorkspaceViewPreference(localStorage,result.user.id);
-            setStorageScope(preference.scope);
-          }
-          if(switchedAccount)loadWorkspaces(BROWSER_SESSION,result.user.id);
-        }else if(currentTokenRef.current){
-          performLogout(false);
-        }else setBrowserCsrf('');
-      }catch{
-        // Network errors must NOT silently sign an active user out.
-        // Initial startup stays in guest mode until a successful check.
-      }
-    };
-    const sync=createAuthTabSync({onSessionChanged:refresh});
-    authTabSyncRef.current=sync;
-    refresh(); // Cookie is shared by every tab; no token broadcast required.
-    const visible=()=>{if(document.visibilityState==='visible')refresh();};
-    document.addEventListener('visibilitychange',visible);
-    window.addEventListener('pakpost:browser-session-revoked',refresh);
-    return()=>{active=false;sync.close();document.removeEventListener('visibilitychange',visible);window.removeEventListener('pakpost:browser-session-revoked',refresh);
-      if(authTabSyncRef.current===sync)authTabSyncRef.current=null;};
-  },[]);
+  useBrowserSessionBootstrap({
+    api, authEpochRef, authTabSyncRef, currentTokenRef, currentUserRef,
+    performLogout, loadWorkspaces, setAuthOpen, setAuthSessionRevision,
+    setMe, setStorageScope, setToken,
+  });
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
   useWorkspaceRealtimeLifecycle({
     enabled: collectionsScope===STORAGE_WORKSPACE,
@@ -674,119 +561,33 @@ export function useWorkbenchController() {
   useEffect(()=>{let current=true;if(!token){setGoogleLinked(false);return;}
     api('/api/auth/google/status','GET',undefined,token).then(x=>{if(current)setGoogleLinked(!!x.connected)}).catch(()=>{if(current)setGoogleLinked(false)});
     return()=>{current=false};},[token]);
-  // Role editor state is scoped to the selected Workspace.
-  useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);setInviteOpen(false);setInviteEmail('');setInviteRoles(['Developer']);setInvitationRows([]);setInvitationError('');setMemberSearch('');setMemberRoleFilter('all');setShowMemberAdd(false);setExpandedMemberAccess('');},[selectedWs]);
-  useEffect(() => {
-    if (!token || !selectedWs) { setCollections([]); setMembers([]); setMembersWorkspaceId(''); return; }
-    let cancelled=false;
-    const epoch=workspaceFetchEpoch.current;
-    // Show no stale metadata while another workspace is loading.
-    setCollections([]);setMembers([]);setMembersWorkspaceId('');
-    Promise.all([
-      api(`/api/workspaces/${selectedWs}/collections`, 'GET', undefined, token),
-      api(`/api/workspaces/${selectedWs}/members`, 'GET', undefined, token),
-    ]).then(([cols, mems]) => {
-      if(cancelled||epoch!==workspaceFetchEpoch.current)return;
-      setCollections(cols); setMembers(mems); setMembersWorkspaceId(selectedWs);
-      setSelectedCol(current => cols.some(x => x.id === current) ? current : cols[0]?.id || '');
-    }).catch(e => {if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
-    return()=>{cancelled=true;};
-  }, [selectedWs, token]);
-  useEffect(() => {
-    if (!token || !selectedWs || !selectedCol) { setSavedRequests([]); return; }
-    let cancelled=false;
-    const key=workspaceCollectionKey(selectedWs,selectedCol);
-    const epoch=workspaceFetchEpoch.current;
-    // Large Collection indices are paged by CloudFolderTree instead of being
-    // preloaded in full. Keep full list API for export and Collection Runner.
-    if(!collections.some(col=>col.id===selectedCol)){setSavedRequests([]);return;}
-    if(Number(collections.find(col=>col.id===selectedCol)?.requestCount)>CLOUD_SERVER_PAGING_THRESHOLD){
-      setSavedRequests([]);return;
-    }
-    setSavedRequests(workspaceRequestLists[key]||[]);
-    api(`/api/workspaces/${selectedWs}/collections/${selectedCol}/requests/index`, 'GET', undefined, token)
-      .then(items=>{if(cancelled||epoch!==workspaceFetchEpoch.current)return;setSavedRequests(items);setWorkspaceRequestLists(old=>({...old,[key]:items}));})
-      .catch(e=>{if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
-    return ()=>{cancelled=true;};
-  }, [selectedWs, selectedCol, token, collections]);
-  // Fetch children for *every* expanded Neon collection, not only the selected one.
-  // Fetch at most four new lists per render to avoid flooding the backend on Expand all.
-  useEffect(()=>{
-    if(!token||!selectedWs||explorerTab!=='collections'||collectionsScope!==STORAGE_WORKSPACE)return;
-    const next=collections.filter(col=>col.id!==selectedCol
-      && Number(col.requestCount)<=CLOUD_SERVER_PAGING_THRESHOLD
-      && isWorkspaceCollectionOpen(expandedCollections,selectedWs,col.id,selectedCol)
-      && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,col.id))
-      && !workspaceRequestsPending.current.has(workspaceCollectionKey(selectedWs,col.id))).slice(0,4);
-    for(const col of next){
-      const key=workspaceCollectionKey(selectedWs,col.id);
-      workspaceRequestsPending.current.add(key);
-      const epoch=workspaceFetchEpoch.current;
-      api(`/api/workspaces/${selectedWs}/collections/${col.id}/requests/index`,'GET',undefined,token)
-        .then(items=>{if(epoch===workspaceFetchEpoch.current)setWorkspaceRequestLists(old=>({...old,[key]:items}));})
-        .catch(e=>{if(epoch!==workspaceFetchEpoch.current)return;setNotice(`Cannot load ${col.name}: ${getMessage(e)}`);setWorkspaceRequestLists(old=>({...old,[key]:[]}));})
-        .finally(()=>workspaceRequestsPending.current.delete(key));
-    }
-  },[token,selectedWs,selectedCol,collections,explorerTab,collectionsScope,expandedCollections,workspaceRequestLists]);
-  useEffect(() => {
-    if (!token || !saveWs) { setSaveCols([]); return; }
-    api(`/api/workspaces/${saveWs}/collections`, 'GET', undefined, token)
-      .then(cols => { setSaveCols(cols); setSaveCollection(c => cols.some(x => x.id === c) ? c : cols[0]?.id || ''); })
-      .catch(e => setNotice(getMessage(e)));
-  }, [saveWs, token]);
+  useCloudCollectionLifecycle({
+    STORAGE_WORKSPACE, api, collections, collectionsScope, expandedCollections,
+    explorerTab, getMessage, membersWorkspaceId, saveWs, selectedCol, selectedWs,
+    setCollections, setEditingMemberId, setEditingMemberRoles, setExpandedMemberAccess,
+    setInvitationError, setInvitationRows, setInviteEmail, setInviteOpen, setInviteRoles,
+    setMemberRoleFilter, setMemberSearch, setMembers, setMembersWorkspaceId,
+    setNewMemberRoles, setNotice, setSaveCollection, setSaveCols, setSavedRequests,
+    setSelectedCol, setShowMemberAdd, setWorkspaceRequestLists, token,
+    workspaceCollectionKey, workspaceFetchEpoch, workspaceRequestLists,
+    workspaceRequestsPending,
+  });
+  useWorkbenchKeyboardShortcuts({
+    page, loading, busyAction, saveOpen, saveExampleOpen, actionDialog,
+    documentationTarget, saveCurrent: () => saveCurrent(), sendRequest,
+  });
 
-  useEffect(() => {
-    const onKeyboard = e => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        if(page === 'tester' && !busyAction && !saveOpen && !saveExampleOpen && !actionDialog && !documentationTarget)saveCurrent();
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && page === 'tester') {
-        e.preventDefault();
-        if (!loading) sendRequest();
-      }
-    };
-    window.addEventListener('keydown', onKeyboard);
-    return () => window.removeEventListener('keydown', onKeyboard);
-  }, [page, loading, method, url, rows, body, documentation, params, authType, bearerToken,basicUsername,basicPassword,apiKeyName,apiKeyValue,apiKeyIn,format,formFields,activeEnvId,localEnvironments,workspaceEnvironments,preScript,postScript,responseExamples,openTabs,localCollections,token,selectedWs,selectedCol,busyAction,saveOpen,saveExampleOpen,actionDialog,documentationTarget]);
-
-  useEffect(()=>{writeInterceptorMode(localStorage,interceptorMode)},[interceptorMode]);
-  async function refreshExtensionStatus(){
-    setExtensionStatus({state:'checking',version:''});
-    try{const info=await probeExtension();setExtensionStatus({state:'connected',version:String(info?.version||'')});}
-    catch{setExtensionStatus({state:'disconnected',version:''});}
-  }
-  useEffect(()=>{if(interceptorMode==='extension')refreshExtensionStatus();},[interceptorMode]);
-
-  // User-invoked extension discovery: only scheme/host/port are exposed (no paths,
-  // headers, tokens, or environment contents). The extension still prompts for permission.
-  useEffect(()=>{
-    const onDiscover=event=>{
-      if(event.source!==window||event.origin!==window.location.origin)return;
-      const data=event.data;
-      if(data?.channel!==EXTENSION_CHANNEL||data?.type!=='DISCOVER_HOSTS_REQUEST'||typeof data.id!=='string'||data.id.length>100)return;
-      const origins=discoverApiDestinations({
-        url,openTabs,drafts:draftsRef.current,localCollections,workspaceRequestLists,
-        localEnvironments,workspaceEnvironments
-      });
-      window.postMessage({channel:EXTENSION_CHANNEL,type:'DISCOVER_HOSTS_RESPONSE',id:data.id,origins},window.location.origin);
-    };
-    window.addEventListener('message',onDiscover);
-    return ()=>window.removeEventListener('message',onDiscover);
-  },[url,openTabs,localCollections,workspaceRequestLists,localEnvironments,workspaceEnvironments]);
+  const { refreshExtensionStatus } = useInterceptorLifecycle({
+    draftsRef, interceptorMode, localCollections, localEnvironments, openTabs,
+    setExtensionStatus, url, workspaceEnvironments, workspaceRequestLists,
+  });
 
   const activeWorkspace = workspaces.find(x => x.id === selectedWs);
   const canManageMembers=canWorkspace(selfMember,'member.manage');
-  useEffect(()=>{
-    let active=true;
-    if(!token||!selectedWs||!canManageMembers){setInvitationRows([]);return;}
-    const workspaceId=selectedWs;
-    api(`/api/workspaces/${workspaceId}/invitations`,'GET',undefined,token)
-      .then(data=>{if(active&&workspaceId===selectedWorkspaceRef.current)setInvitationRows(data)})
-      .catch(e=>{if(active&&workspaceId===selectedWorkspaceRef.current)setInvitationError(getMessage(e))});
-    return()=>{active=false};
-  },[token,selectedWs,canManageMembers]);
+  useWorkspaceInvitationListing({
+    api, canManageMembers, getMessage, selectedWorkspaceRef, selectedWs,
+    setInvitationError, setInvitationRows, token,
+  });
   async function inviteMember(...args) { return invitationActions.inviteMember(...args); }
   async function actOnInvitation(...args) { return invitationActions.actOnInvitation(...args); }
   async function acceptInvitation(...args) { return invitationActions.acceptInvitation(...args); }
@@ -870,6 +671,12 @@ export function useWorkbenchController() {
     setSelectedCol, setSidebarCollapsed, setWorkspaceCollectionDocs, setWorkspaceMenu, setWorkspaceRequestLists, setWorkspaceSorted,
     snapshot, storageScope, toLocalCollection, toggleWorkspaceCollection, token, url,
     validateLibrary, workspaceCollectionKey, workspaceDocKey, workspaceRequestLists,
+  });
+  // Both collection and tab actions are ready: the helpers only run on user events.
+  const cloudRequestOpenActions = createCloudRequestOpenActions({
+    api, cloudOpenEpoch, currentTokenRef, selectedWorkspaceRef,
+    selectedWs, selectedCol, token, openTabs, tabActions, collectionActions,
+    setNotice, getMessage,
   });
   // Runner operations use the same Workbench state as the old inline handlers.
   const runnerActions = createCollectionRunnerActions({
