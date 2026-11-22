@@ -62,9 +62,9 @@ test('corrupt cyclic Cloud folder rows never cause infinite recursion or hide al
   assert.ok(tree.folders.some(x=>x.requests.some(r=>r.id==='r')));
 });
 test('local drag-drop never depends on Cloud revision; Cloud move does adopt returned revision',()=>{
-  const source=read('../../src/features/collections/controllers/createCollectionActions.js');
+  const source=read('../../src/features/collections/controllers/createCollectionMoveActions.js');
   const local=source.slice(source.indexOf('function moveLocalRequest('),source.indexOf('async function moveWorkspaceRequest('));
-  const cloud=source.slice(source.indexOf('async function moveWorkspaceRequest('),source.indexOf('function showWorkspaceMenu('));
+  const cloud=source.slice(source.indexOf('async function moveWorkspaceRequest('));
   assert.doesNotMatch(local,/saved\.revision/);
   assert.match(cloud,/revision:saved\.revision/);
   assert.match(cloud,/targetFolderId/);

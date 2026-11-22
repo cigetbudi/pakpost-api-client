@@ -3,6 +3,8 @@ import {CLOUD_SERVER_PAGING_THRESHOLD} from '../../features/collections/services
 import { useEnvironmentDataLifecycle } from '../../features/environments/hooks/useEnvironmentDataLifecycle.js';
 import { useWorkbenchPreferencesPersistence } from './useWorkbenchPreferencesPersistence.js';
 import { useCommandPaletteState } from './useCommandPaletteState.js';
+import { useExplorerPanelLayout } from './useExplorerPanelLayout.js';
+import { useRequestSplitLayout } from './useRequestSplitLayout.js';
 import { useWorkbenchTheme } from '../../features/settings/hooks/useWorkbenchTheme.js';
 import { useConsoleDrawer } from '../../features/console/hooks/useConsoleDrawer.js';
 import { useRunnerDialogState } from '../../features/collections/hooks/useRunnerDialogState.js';
@@ -250,15 +252,15 @@ export function useWorkbenchController() {
   const [saveCollection, setSaveCollection] = useState('');
   const [saveCols, setSaveCols] = useState([]);
   const [busyAction, setBusyAction] = useState(false);
-  const [split, setSplit] = useState(() => CACHED?.split || localStorage.getItem('pakpost_split') || 'horizontal');
-  const [splitPercent, setSplitPercent] = useState(56);
-  const [explorerTab, setExplorerTab] = useState(
-    ['collections','environments','history','code','exchange'].includes(CACHED?.explorerTab)
-      ? CACHED.explorerTab : 'collections');
-  const [explorerSearch, setExplorerSearch] = useState('');
-  const [rightWidth,setRightWidth] = useState(()=>Math.min(650,Math.max(280,Number(localStorage.getItem('pakpost_v14_right_width'))||340)));
-  const resizingRight=useRef(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(CACHED?.sidebarCollapsed || false);
+  const { split, setSplit, splitPercent, setSplitPercent, panesRef, draggingRef,
+    onSplitterMove, onSplitterEnd } = useRequestSplitLayout({cachedSplit: CACHED?.split});
+  const { explorerTab, setExplorerTab, explorerSearch, setExplorerSearch,
+    rightWidth, setRightWidth, resizingRight, sidebarCollapsed, setSidebarCollapsed,
+    openContext, resizeRight, endRightResize } = useExplorerPanelLayout({
+      cachedExplorerTab: CACHED?.explorerTab,
+      cachedSidebarCollapsed: CACHED?.sidebarCollapsed,
+      setPage,
+    });
   const workspaceRequestsPending = useRef(new Set());
   const workspaceFetchEpoch = useRef(0);
   const cloudOpenEpoch = useRef(0);
@@ -298,8 +300,6 @@ export function useWorkbenchController() {
   const activeTabRef = useRef(CACHED?.activeTabId || 't1');
   const tabSequence = useRef(Math.max(1,...(CACHED?.openTabs || []).map(t=>Number(String(t.id).replace(/^t/,'')) || 0)));
   const draftsRef = useRef(CACHED?.drafts || {});
-  const panesRef = useRef(null);
-  const draggingRef = useRef(false);
   useEffect(() => {
     if (!editingRequestName || page !== 'tester') return;
     const input=requestNameInputRef.current;
@@ -316,9 +316,6 @@ export function useWorkbenchController() {
   function restoreDraft(...args) { return tabActions.restoreDraft(...args); }
   function stashActive(...args) { return tabActions.stashActive(...args); }
   useWorkbenchPreferencesPersistence({localCollections,workspaceCollectionDocs,collectionSort,rightWidth});
-  function openContext(view){setExplorerTab(view);setSidebarCollapsed(false);setPage('tester');}
-  function resizeRight(event){if(!resizingRight.current)return;setRightWidth(Math.max(280,Math.min(650,window.innerWidth-event.clientX-4)));}
-  function endRightResize(event){if(resizingRight.current){resizingRight.current=false;try{event.currentTarget.releasePointerCapture(event.pointerId)}catch{}}}
 
   useEffect(()=>{
     if(!tabMenu)return;
@@ -441,20 +438,6 @@ export function useWorkbenchController() {
   function performTabAction(...args) { return tabActions.performTabAction(...args); }
   function showTabContext(...args) { return tabActions.showTabContext(...args); }
   function selectTabFromDraft(...args) { return tabActions.selectTabFromDraft(...args); }
-  useEffect(() => { localStorage.setItem('pakpost_split', split); setSplitPercent(50); }, [split]);
-  function onSplitterMove(e) {
-    if (!draggingRef.current || !panesRef.current) return;
-    const bounds = panesRef.current.getBoundingClientRect();
-    const isSideBySide = split === 'vertical' && window.matchMedia('(min-width: 981px)').matches;
-    const val = isSideBySide
-      ? ((e.clientX - bounds.left) / bounds.width) * 100
-      : ((e.clientY - bounds.top) / bounds.height) * 100;
-    setSplitPercent(Math.min(78, Math.max(22, val)));
-  }
-  function onSplitterEnd(e) {
-    draggingRef.current = false;
-    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-  }
   async function loadSavedRequest(item) {
     const selection=++cloudOpenEpoch.current;
     if (!item?.isIndex) { tabActions.loadSavedRequest(item); return true; }

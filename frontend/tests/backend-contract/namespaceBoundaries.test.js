@@ -52,13 +52,16 @@ test('Application references import their relocated feature types', () => {
 
 test('API startup delegates transport policies to focused middleware and extensions', () => {
   const program = read('backend/src/Pakpost.Api/Program.cs');
+  const host = read('backend/src/Pakpost.Api/Extensions/PakpostHostExtensions.cs');
+  const pipeline = read('backend/src/Pakpost.Api/Extensions/PakpostApplicationExtensions.cs');
   const services = read('backend/src/Pakpost.Api/Extensions/WorkbenchWebServiceExtensions.cs');
   const proxy = read('backend/src/Pakpost.Api/Middlewares/ProxyConcurrencyMiddleware.cs');
   const cache = read('backend/src/Pakpost.Api/Middlewares/PrivateApiCacheMiddleware.cs');
 
-  assert.match(program, /AddWorkbenchWebServices\(builder\.Configuration\)/);
-  assert.match(program, /UseMiddleware<ProxyConcurrencyMiddleware>\(\)/);
-  assert.match(program, /UseMiddleware<PrivateApiCacheMiddleware>\(\)/);
+  assert.match(program, /AddPakpostServices\(builder\.Configuration\)/);
+  assert.match(host, /AddWorkbenchWebServices\(configuration\)/);
+  assert.match(pipeline, /UseMiddleware<ProxyConcurrencyMiddleware>\(\)/);
+  assert.match(pipeline, /UseMiddleware<PrivateApiCacheMiddleware>\(\)/);
   assert.match(services, /PermitLimit = 30/);
   assert.match(services, /PermitLimit = 10/);
   assert.match(services, /"http:\/\/localhost:5173"/);

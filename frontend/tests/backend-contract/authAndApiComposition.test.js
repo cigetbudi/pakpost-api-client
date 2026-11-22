@@ -4,12 +4,14 @@ import { readFileSync } from 'node:fs';
 
 const read = relative => readFileSync(new URL(`../../../${relative}`, import.meta.url), 'utf8');
 
-test('API Program delegates Mediator and JWT setup to focused extensions', () => {
+test('API Program delegates mediator and session authentication to composition extensions', () => {
   const program = read('backend/src/Pakpost.Api/Program.cs');
-  assert.match(program, /builder\.Services\.AddApplication\(\)/);
-  assert.match(program, /builder\.Services\.AddMediatorServices\(\)/);
-  assert.match(program, /builder\.Services\.AddInfrastructure\(builder\.Configuration\)/);
-  assert.match(program, /builder\.Services\.AddJwtAuthentication\(builder\.Configuration\)/);
+  const startup = read('backend/src/Pakpost.Api/Extensions/PakpostHostExtensions.cs');
+  assert.match(program, /builder\.Services\.AddPakpostServices\(builder\.Configuration\)/);
+  assert.match(startup, /services\.AddApplication\(\)/);
+  assert.match(startup, /services\.AddMediatorServices\(\)/);
+  assert.match(startup, /services\.AddInfrastructure\(configuration\)/);
+  assert.match(startup, /services\.AddJwtAuthentication\(configuration\)/);
   assert.doesNotMatch(program, /AddJwtBearer\(|AddMediator\(\(/);
 });
 

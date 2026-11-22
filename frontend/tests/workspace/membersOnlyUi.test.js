@@ -21,8 +21,10 @@ test('REST navigation and Workspace Management offer Collections and Members & R
 
 test('Workbench no longer fetches Teams or retains team-only UI state', () => {
   const controller = read('src/app/hooks/useWorkbenchController.jsx');
+  const explorerLayout = read('src/app/hooks/useExplorerPanelLayout.js');
   assert.doesNotMatch(controller, /api\(`\/api\/workspaces\/\$\{selectedWs\}\/teams/);
-  assert.match(controller, /\['collections','environments','history','code','exchange'\]\.includes\(CACHED\?\.explorerTab\)/);
+  assert.match(controller, /useExplorerPanelLayout\(/);
+  assert.match(explorerLayout, /'collections', 'environments', 'history', 'code', 'exchange'/);
   const state = initialWorkspaceUiState();
   for (const key of ['teams','selectedTeam','teamMembers','newTeam','newTeamMember']) {
     assert.equal(key in state, false, `retired team-only UI key: ${key}`);
