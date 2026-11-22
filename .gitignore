@@ -105,6 +105,7 @@ logs/
 *.pid.lock
 pakpost-migrations.sql
 **/pakpost-migrations.sql
+.pakpost-last-backup*
 
 # IMPORTANT: Keep these versioned in Git:
 # - pakpost-backend/**/Data/Migrations/*.cs (EF Core migrations)
