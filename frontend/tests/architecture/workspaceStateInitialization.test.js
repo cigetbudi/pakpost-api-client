@@ -41,7 +41,7 @@ test('Zustand state is memory-only, scoped per App and cleared on logout', () =>
   assert.match(store, /resolveUpdate\(update, s\.members\)/);
   assert.doesNotMatch(store, /\bpersist\(/);
   assert.match(app, /useState\(createWorkspaceUiStore\)/);
-  assert.match(app, /workspaceUiStore\.getState\(\)\.resetWorkspaceUi\(\)/);
+  assert.match(read('features/auth/controllers/createWorkbenchLogoutActions.js'), /workspaceUiStore\.getState\(\)\.resetWorkspaceUi\(\)/);
   for (const key of ['token', 'password', 'bearerToken', 'apiKeyValue', 'sessionEnvironmentOverlays']) {
     assert.ok(!(key in initialWorkspaceUiState()), `${key} must never live in workspace UI state`);
   }
@@ -51,8 +51,10 @@ test('Workspace, Explorer, and authentication are separated from App orchestrati
   assert.match(app, /<WorkbenchExplorer\s/);
   assert.match(app, /<WorkspaceManager\s/);
   assert.match(app, /<AuthOverlays\s/);
-  assert.match(manager, /<WorkspaceRolePicker/);
-  assert.match(manager, /members\/\$\{m\.userId\}\/roles/);
+  const members = read('features/workspace/components/WorkspaceMembersSection.jsx');
+  assert.match(manager, /<WorkspaceMembersSection/);
+  assert.match(members, /<WorkspaceRolePicker/);
+  assert.match(members, /members\/\$\{m\.userId\}\/roles/);
   assert.match(explorer, /<LocalCollectionsTree/);
   assert.match(explorer, /<EnvironmentExplorer/);
   assert.match(auth, /<GoogleSignInButton/);
@@ -67,7 +69,7 @@ test('Workspace page is lazy-loaded, while optional tools remain deferred', () =
 });
 
 test('all new components have resolvable local imports', () => {
-  for (const name of ['features/workspace/components/WorkspaceManager.jsx', 'features/collections/components/WorkbenchExplorer.jsx', 'features/auth/components/AuthOverlays.jsx', 'features/workspace/store/createWorkspaceUiStore.js']) {
+  for (const name of ['features/workspace/components/WorkspaceManager.jsx', 'features/workspace/components/WorkspaceMembersSection.jsx', 'features/workspace/components/WorkspaceDeletionDialog.jsx', 'features/collections/components/WorkbenchExplorer.jsx', 'features/auth/components/AuthOverlays.jsx', 'features/workspace/store/createWorkspaceUiStore.js']) {
     const source = read(name);
     const parent = dirname(resolve(src, name));
     for (const [, importPath] of source.matchAll(/\bfrom\s+['"](\.[^'"]+)['"]/g)) {

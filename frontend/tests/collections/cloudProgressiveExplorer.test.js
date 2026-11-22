@@ -35,10 +35,10 @@ test('search is case-insensitive and sorting does not mutate original request or
 });
 
 test('progressive view preserves existing interaction paths and renders closed collections lazily',()=>{
-  const cloud=read('../../src/features/collections/components/CloudFolderTree.jsx');
+  const cloud=(read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const rows=read('../../src/features/collections/components/CloudRequestRows.jsx');
   const explorer=read('../../src/features/collections/components/WorkbenchExplorer.jsx');
-  const local=read('../../src/features/collections/components/LocalCollectionsTree.jsx');
+  const local=(read('../../src/features/collections/components/LocalCollectionsTree.jsx')+'\n'+read('../../src/features/collections/components/LocalCollectionBranch.jsx'));
   const workbench=read('../../src/app/hooks/useWorkbenchController.jsx');
   assert.match(cloud,/open && node && renderNode\(node\)/);
   assert.match(cloud,/useMemo\(\(\) => open \? makeCloudFolderTree\(folders,paged\?\[\]:requests\) : null/);
@@ -53,7 +53,7 @@ test('progressive view preserves existing interaction paths and renders closed c
   assert.match(workbench,/useVisibleWorkbenchCollections\(/);
   assert.match(selector,/const visibleCollections = useMemo/);
   assert.match(workbench,/createCommandPaletteItems\(/);
-  assert.match(local,/opened&&tree&&<Branch/);
-  assert.match(local,/opened&&<Branch/);
+  assert.match(local,/opened&&tree&&<LocalCollectionBranch/);
+  assert.match(local,/opened&&<LocalCollectionBranch/);
   assert.match(local,/examplesOpen&&examples\.map/);
 });

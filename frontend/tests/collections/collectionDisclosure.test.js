@@ -51,7 +51,7 @@ test('Expand all local collects nested folder keys recursively',()=>{
 test('React UI exposes bulk controls and independent animated disclosure regions',()=>{
   const app=readWorkbenchSource();
   const explorer=readFileSync(new URL('../../src/features/collections/components/WorkbenchExplorer.jsx',import.meta.url),'utf8');
-  const tree=readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8');
+  const tree=(readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../../src/features/collections/components/LocalCollectionBranch.jsx',import.meta.url),'utf8'));
   const css=readFileSync(new URL('../../src/styles/base.css',import.meta.url),'utf8');
   assert.match(explorer,/expandOrCollapseAllCollections\(true\)/);
   assert.match(explorer,/expandOrCollapseAllCollections\(false\)/);

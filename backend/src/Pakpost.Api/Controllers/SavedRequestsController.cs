@@ -1,5 +1,4 @@
 using Pakpost.Application.Internal.Collections.Commands;
-using Pakpost.Application.Internal.Collections.Queries;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,27 +12,6 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
     public sealed record SaveRequestBody(string Name,string Method,string Url,string HeadersJson,string Body,
         string BodyMode="raw",string ContentType="application/json",string FormFieldsJson="[]",string PreRequestScript="",string PostResponseScript="",int? Revision=null,Guid? FolderId=null);
     private string Instance => Request.Headers["X-PakPost-Instance"].ToString();
-    [HttpGet]
-    public async Task<IActionResult> List(Guid workspaceId,Guid collectionId,CancellationToken ct)
-        =>Ok(await sender.Send(new ListSavedRequestsQuery(User.GetUserId(),workspaceId,collectionId),ct));
-    [HttpGet("index")]
-    public async Task<IActionResult> Index(Guid workspaceId, Guid collectionId, CancellationToken ct)
-        => Ok(await sender.Send(new ListSavedRequestIndexQuery(User.GetUserId(), workspaceId, collectionId), ct));
-
-    // Additive browsing API. Existing /index remains for full exports and runners.
-    [HttpGet("index/page")]
-    public async Task<IActionResult> Page(Guid workspaceId, Guid collectionId,
-        [FromQuery] int size = 120, [FromQuery] string? after = null,
-        [FromQuery] string? search = null, [FromQuery] Guid? folderId = null,
-        [FromQuery] bool rootOnly = false, [FromQuery] bool sortByName = false,
-        CancellationToken ct = default)
-        => Ok(await sender.Send(new PageSavedRequestIndexQuery(User.GetUserId(),
-            workspaceId, collectionId, size, after, search, folderId, rootOnly, sortByName), ct));
-
-    [HttpGet("{requestId:guid}")]
-    public async Task<IActionResult> Detail(Guid workspaceId, Guid collectionId, Guid requestId, CancellationToken ct)
-        => Ok(await sender.Send(new GetSavedRequestQuery(User.GetUserId(), workspaceId, collectionId, requestId), ct));
-
     [HttpPost]
     public async Task<IActionResult> Save(Guid workspaceId,Guid collectionId,SaveRequestBody body,CancellationToken ct)
     {
@@ -49,12 +27,6 @@ public sealed class SavedRequestsController(ISender sender,IWorkspaceChangePubli
         await realtime.PublishAsync(workspaceId,"request.updated",collectionId,result.Id,result.Revision,Instance,ct);
         return Ok(result);
     }
-    [HttpGet("{requestId:guid}/history")]
-    public async Task<IActionResult> History(Guid workspaceId,Guid collectionId,Guid requestId,CancellationToken ct)
-        =>Ok(await sender.Send(new ListSavedRequestHistoryQuery(User.GetUserId(),workspaceId,collectionId,requestId),ct));
-    [HttpGet("{requestId:guid}/history/{revision:int}")]
-    public async Task<IActionResult> HistoryDetail(Guid workspaceId,Guid collectionId,Guid requestId,int revision,CancellationToken ct)
-        =>Ok(await sender.Send(new GetSavedRequestHistoryQuery(User.GetUserId(),workspaceId,collectionId,requestId,revision),ct));
     public sealed record RestoreRevisionBody(int ExpectedRevision);
     [HttpPost("{requestId:guid}/history/{revision:int}/restore")]
     public async Task<IActionResult> Restore(Guid workspaceId,Guid collectionId,Guid requestId,int revision,[FromBody] RestoreRevisionBody body,CancellationToken ct)

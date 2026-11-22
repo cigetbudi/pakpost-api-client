@@ -32,8 +32,8 @@ test('Settings route never mounts WorkspaceManager below the Settings screen',()
 });
 
 test('Local and Cloud collection action menus link to a folder organizer',()=>{
-  const local=source('../../src/features/collections/components/LocalCollectionsTree.jsx');
-  const cloud=source('../../src/features/collections/components/CloudFolderTree.jsx');
+  const local=(source('../../src/features/collections/components/LocalCollectionsTree.jsx')+'\n'+source('../../src/features/collections/components/LocalCollectionBranch.jsx'));
+  const cloud=(source('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+source('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const view=source('../../src/app/components/WorkbenchView.jsx');
   const hook=source('../../src/app/hooks/useWorkbenchController.jsx');
   assert.match(local,/\['organizeFolders','Move folder…'\]/);

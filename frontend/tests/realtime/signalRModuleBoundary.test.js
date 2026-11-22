@@ -10,10 +10,13 @@ const collection = '22222222-2222-2222-2222-222222222222';
 test('realtime event validation is pure and does not pull in SignalR at startup', () => {
   const policy = read('../../src/features/realtime/services/workspaceEventPolicy.js');
   const sync = read('../../src/features/realtime/services/workspaceSync.js');
+  const processor = read('../../src/features/realtime/services/workspaceChangeReconciliation.js');
   const lifecycle = read('../../src/features/realtime/hooks/useWorkspaceRealtimeLifecycle.js');
   assert.doesNotMatch(policy, /@microsoft\/signalr|workspaceRealtime\.js/);
-  assert.match(sync, /from '\.\/workspaceEventPolicy\.js'/);
+  assert.match(processor, /from '\.\/workspaceEventPolicy\.js'/);
+  assert.match(sync, /export \{synchronizeWorkspaceChanges\} from '\.\/workspaceChangeReconciliation\.js'/);
   assert.doesNotMatch(sync, /from '\.\/workspaceRealtime\.js'/);
+  assert.doesNotMatch(processor, /from '\.\/workspaceRealtime\.js'/);
   assert.match(lifecycle, /import\('\.\.\/services\/workspaceRealtime\.js'\)/);
   assert.match(read('../../src/features/realtime/services/workspaceRealtime.js'), /import\('@microsoft\/signalr'\)/);
 });

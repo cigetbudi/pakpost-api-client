@@ -38,7 +38,7 @@ test('Effective permission display relies on backend permissions, not role label
 });
 test('UI shows backend effective permissions and preserves server-side role assignment',()=>{
   const app=readWorkbenchSource();
-  const workspace=source('src/features/workspace/components/WorkspaceManager.jsx');
+  const workspace=source('src/features/workspace/components/WorkspaceMembersSection.jsx');
   const access=source('src/features/workspace/components/WorkspaceAccessBreakdown.jsx');
   assert.match(app,/WorkspaceManager/);
   assert.match(workspace,/WorkspaceAccessBreakdown permissions=\{m\.permissions\|\|\[\]\}/);

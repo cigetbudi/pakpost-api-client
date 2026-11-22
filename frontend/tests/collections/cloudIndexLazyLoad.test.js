@@ -7,7 +7,7 @@ const read=relative=>readFileSync(new URL(relative,import.meta.url),'utf8');
 
 test('Explorer fetches only request index while preserving full list for export and runner',()=>{
   const workbench=read('../../src/features/collections/hooks/useCloudCollectionLifecycle.js');
-  const controller=read('../../../backend/src/Pakpost.Api/Controllers/SavedRequestsController.cs');
+  const controller=read('../../../backend/src/Pakpost.Api/Controllers/SavedRequestReadController.cs');
   assert.match(workbench,/collections\/\$\{selectedCol\}\/requests\/index/);
   assert.match(workbench,/collections\/\$\{col\.id\}\/requests\/index/);
   assert.match(controller,/\[HttpGet\("index"\)\]/);

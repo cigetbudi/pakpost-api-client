@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-const local = read('../../src/features/collections/components/LocalCollectionsTree.jsx');
-const cloud = read('../../src/features/collections/components/CloudFolderTree.jsx');
+const local = (read('../../src/features/collections/components/LocalCollectionsTree.jsx')+'\n'+read('../../src/features/collections/components/LocalCollectionBranch.jsx'));
+const cloud = (read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
 const explorer = read('../../src/features/collections/components/WorkbenchExplorer.jsx');
 const styles = read('../../src/styles/layers/explorer-tree-alignment.css');
 const oldStyles = read('../../src/styles/layers/cloud-folder-polish.css');

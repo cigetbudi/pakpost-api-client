@@ -55,8 +55,8 @@ test('moving a Local folder to another folder and back keeps requests and docs',
 });
 
 test('both explorer types expose real menu move and drop to root routes',()=>{
-  const local=source('../../src/features/collections/components/LocalCollectionsTree.jsx');
-  const cloud=source('../../src/features/collections/components/CloudFolderTree.jsx');
+  const local=(source('../../src/features/collections/components/LocalCollectionsTree.jsx')+'\n'+source('../../src/features/collections/components/LocalCollectionBranch.jsx'));
+  const cloud=(source('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+source('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const explorer=source('../../src/features/collections/components/WorkbenchExplorer.jsx');
   assert.match(local,/\['moveFolder','Move to…'\]/);
   assert.match(local,/localFolderMoveTargets/);

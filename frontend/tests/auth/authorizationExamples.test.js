@@ -57,7 +57,7 @@ test('Postman and OpenAPI can describe Basic and API Key auth',()=>{
   assert.deepEqual(api.paths['/get'].get.security,[{apiKey_header_X_Auth:[]}]);
 });
 test('local and Neon collection examples collapse by default and provide accessible chevrons',()=>{
-  const local=readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8');
+  const local=(readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../../src/features/collections/components/LocalCollectionBranch.jsx',import.meta.url),'utf8'));
   const app=readWorkbenchSource();
   assert.match(local,/expanded\[exampleKey\]\?\?!!search/);
   assert.match(local,/pp-endpoint-example-toggle/);

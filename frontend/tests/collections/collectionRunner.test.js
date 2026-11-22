@@ -86,7 +86,7 @@ test('logs mask tokens and do not include HTTP body',async()=>{
 
 test('runner remains lazy and Cloud/Local menus include Runner',()=>{
   const app=readWorkbenchSource();
-  const local=readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8');
+  const local=(readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../../src/features/collections/components/LocalCollectionBranch.jsx',import.meta.url),'utf8'));
   assert.match(app,/lazy\(\(\) => import\('\.\.\/\.\.\/features\/collections\/components\/CollectionRunner\.jsx'\)\)/);
   assert.match(app,/\['runCollection','Run collection'\]/);
   assert.match(local,/\['runCollection','Run collection'\]/);

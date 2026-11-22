@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
-const component = read('../../src/features/collections/components/CloudFolderTree.jsx');
+const component = (read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
 const css = read('../../src/styles/layers/cloud-folder-polish.css');
 
 test('Cloud folder editor hides the untouched required warning without weakening validation', () => {

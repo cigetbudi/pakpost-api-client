@@ -57,7 +57,7 @@ test('workspace metadata roundtrip keeps renamed examples, request headers and d
 });
 
 test('Local example tree has nested visual order and local/Neon menus include rename',()=>{
-  const tree=readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8');
+  const tree=(readFileSync(new URL('../../src/features/collections/components/LocalCollectionsTree.jsx',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../../src/features/collections/components/LocalCollectionBranch.jsx',import.meta.url),'utf8'));
   const app=readWorkbenchSource();
   assert.match(tree,/example:\[\['renameExample','Rename example'\]/);
   assert.match(tree,/pp-local-request pp-explorer-tree-request/);

@@ -26,7 +26,7 @@ test('Unsaved Cloud draft highlights its own pending row, rather than a saved re
   assert.deepEqual(activeCloudTabForCollection(tabs,'tab-pending',w1,c1),{requestId:null,pendingTabId:'tab-pending'});
 });
 test('Cloud row selection remains separate from active-tab state and modifiers do not open a tab',()=>{
-  const tree=read('../../src/features/collections/components/CloudFolderTree.jsx');
+  const tree=(read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const explorer=read('../../src/features/collections/components/WorkbenchExplorer.jsx');
   const style=read('../../src/styles/layers/cloud-folder-polish.css');
   assert.match(tree,/activeRequestId\?requestKey\(activeRequestId\)/);
@@ -38,7 +38,7 @@ test('Cloud row selection remains separate from active-tab state and modifiers d
   assert.match(style,/\.pp-cloud-selected:not\(\.pp-cloud-tab-active\)/);
 });
 test('Folder tones are identical for collection, child and grandchild; menu icons are explicit',()=>{
-  const tree=read('../../src/features/collections/components/CloudFolderTree.jsx');
+  const tree=(read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const explorer=read('../../src/features/collections/components/WorkbenchExplorer.jsx');
   const style=read('../../src/styles/layers/cloud-folder-polish.css');
   const menu=read('../../src/components/ui/MenuActionItem.jsx');

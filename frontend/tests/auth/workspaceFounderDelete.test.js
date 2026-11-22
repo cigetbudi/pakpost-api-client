@@ -28,10 +28,11 @@ test('workspace repository removes requests and folders before deleting workspac
 
 test('only founder sees delete action and typed confirmation is required', () => {
   const component = read('frontend/src/features/workspace/components/WorkspaceManager.jsx');
+  const dialog = read('frontend/src/features/workspace/components/WorkspaceDeletionDialog.jsx');
 
   assert.match(component, /activeWorkspace\?\.ownerUserId === me\?\.id/);
   assert.match(component, /isFounder &&/);
   assert.match(component, /deleteConfirmation !== deleteTarget\.name/);
-  assert.match(component, /role="alertdialog"/);
+  assert.match(dialog, /role="alertdialog"/);
   assert.match(component, /api\(`\/api\/workspaces\/\$\{workspaceId\}`, 'DELETE'/);
 });

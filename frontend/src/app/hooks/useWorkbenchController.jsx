@@ -6,6 +6,8 @@ import { useRequestAuthorizationFields } from '../../features/requests/hooks/use
 import { useRequestTabSession } from '../../features/requests/hooks/useRequestTabSession.js';
 import { useWorkspaceViewPreferencePersistence } from '../../features/workspace/hooks/useWorkspaceViewPreferencePersistence.js';
 import { useWorkbenchMenuDismissal } from './useWorkbenchMenuDismissal.js';
+import {useWorkbenchNoticeTimeout} from './useWorkbenchNoticeTimeout.js';
+import {useGoogleConnectionStatus} from '../../features/auth/hooks/useGoogleConnectionStatus.js';
 import { useRequestDraftRecovery } from '../../features/requests/hooks/useRequestDraftRecovery.js';
 import { useWorkbenchKeyboardShortcuts } from './useWorkbenchKeyboardShortcuts.js';
 import { createCommandPaletteItems, filterCommandPaletteItems } from '../services/commandPaletteItems.js';
@@ -27,6 +29,7 @@ import { useRequestDraftEditor } from '../../features/requests/hooks/useRequestD
 import { useInterceptorLifecycle } from '../../features/requests/hooks/useInterceptorLifecycle.js';
 import { useAuthOverlayState } from '../../features/auth/hooks/useAuthOverlayState.js';
 import { useBrowserSessionBootstrap } from '../../features/auth/hooks/useBrowserSessionBootstrap.js';
+import {createWorkbenchLogoutActions} from '../../features/auth/controllers/createWorkbenchLogoutActions.js';
 import { useCollectionSessionState } from '../../features/collections/hooks/useCollectionSessionState.js';
 import { useCloudCollectionLifecycle } from '../../features/collections/hooks/useCloudCollectionLifecycle.js';
 import { createRealtimeActions } from '../../features/realtime/controllers/createRealtimeActions.js';
@@ -53,11 +56,10 @@ import { getWorkspaceCollections, getWorkspaceRequests, createWorkspaceRequest, 
 import { reconcileRequestTabs, synchronizeWorkspaceChanges } from '../../features/realtime/services/workspaceSync.js';
 import { executeWorkbenchRequest } from '../../features/requests/services/executeWorkbenchRequest.js';
 import { buildRequestCommand, buildRedactedCodeRequest, buildRequestPreview } from '../../features/requests/services/requestCommand.js';
-import { invalidateBrowserSession, planSignedOutWorkbench } from '../../features/auth/services/logoutWorkbench.js';
 import { useWorkspaceRealtimeLifecycle } from '../../features/realtime/hooks/useWorkspaceRealtimeLifecycle.js';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
-import { api, setBrowserCsrf } from '../../services/httpClient.js';
+import {api} from '../../services/httpClient.js';
 import { prettyJson, initialLocalEnvs } from '../../utils/workbenchHelpers.js';
 import { Dialog } from '../../components/ui/WorkbenchPrimitives.jsx';
 import { ResponsePane } from '../../components/workbench/ResponsePane.jsx';
@@ -80,7 +82,7 @@ import {canWorkspace,currentWorkspaceMember} from '../../features/workspace/serv
 import { KeyValueEditor } from '../../features/requests/components/KeyValueEditor';
 import { DocumentationEditor } from '../../features/collections/components/DocumentationEditor';
 import { isEnabled, encodeStoredHeaders, decodeStoredHeaders } from '../../features/requests/services/requestMetadata';
-import {clearWorkspaceCollectionDocs,workspaceDocKey} from '../../features/collections/services/documentationStore';
+import {workspaceDocKey} from '../../features/collections/services/documentationStore';
 import { RetroSelect } from '../../components/ui/RetroSelect';
 import { ImportDestinationPicker } from '../../components/ui/ImportDestinationPicker';
 import { VariableUrlInput } from '../../features/requests/components/VariableUrlInput';
@@ -94,7 +96,7 @@ import {requestResponseView} from '../../features/requests/services/requestRespo
 import {toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from '../../features/collections/services/collectionExpansion';
 import { blankDraft, parseCurl, isCurl, parseImportText } from '../../features/import-export/services/importExport';
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from '../../features/environments/services/environmentImport';
-import { clearWorkbenchCache, readWorkbenchCache } from '../../features/workspace/services/workspaceCache';
+import {readWorkbenchCache} from '../../features/workspace/services/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from '../../features/collections/services/localCollections';
 import {planTabClose} from '../../features/requests/services/tabActions';
 import {applyLocalAction,updateLocalRequest,createLocalSavedRequest} from '../../features/collections/services/localCollectionActions';
@@ -439,57 +441,18 @@ export function useWorkbenchController() {
       .catch(error => { if (!ignore && error?.status === 401) performLogout(false); });
     return () => { ignore = true; };
   }, [token]);
-  useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(''), 4200);
-    return () => clearTimeout(t);
-  }, [notice]);
+  useWorkbenchNoticeTimeout(notice,setNotice);
 
-  async function logout() {
-    authEpochRef.current += 1;
-    try {
-      await api('/api/auth/logout','POST',{},currentTokenRef.current);
-      performLogout(true);
-      return true;
-    } catch (error) {
-      if (error?.status === 401) {performLogout(true);return true;}
-      setNotice(`Logout could not revoke the server session: ${getMessage(error)}. Try again.`);
-      return false;
-    }
-  }
-  function performLogout(broadcast) {
-    authEpochRef.current += 1;
-    if(broadcast)authTabSyncRef.current?.announceLogout();
-    setBrowserCsrf('');
-    // Auth invalidation must happen BEFORE reading any cached draft: missing
-    // Local snapshots previously threw inside restoreDraft and aborted logout.
-    currentTokenRef.current='';
-    invalidateBrowserSession(sessionStorage, clearWorkbenchCache);
-    clearWorkspaceCollectionDocs(localStorage);
-    setWorkspaceCollectionDocs({});
-    setToken('');setMe(null);setStorageScope(STORAGE_LOCAL);setPage('tester');
-    setAuthOpen(false);setGoogleLinkOpen(false);setGoogleLinked(false);
-    setGoogleLinkPassword('');
-    setRecent([]);setCollections([]);setSavedRequests([]);setWorkspaceRequestLists({});
-    setRemoteAlerts({});setConflictDialog(null);setVersionDialog(null);
-    workspaceUiStore.getState().resetWorkspaceUi();
-    sessionEnvironmentOverlays.current.clear();sessionCollectionVariables.current.clear();
-    savedCollectionVariablesCache.current.clear();sessionDocumentationOverlays.current.clear();
-    setWorkspaceEnvironmentResult({context:'',items:[]});
-    // Only retain Local requests, with a guaranteed draft for every tab.
-    let planned;
-    try {
-      planned=planSignedOutWorkbench(openTabsRef.current,activeTabRef.current,
-        draftsRef.current,snapshotRef.current());
-    } catch {
-      planned=planSignedOutWorkbench([],null,{},null);
-    }
-    draftsRef.current=planned.drafts;
-    activeTabRef.current=planned.activeTabId;
-    setOpenTabs(planned.tabs);setActiveTabId(planned.activeTabId);
-    restoreDraft(planned.activeDraft);
-    setNotice('Signed out. Your Local requests remain available.');
-  }
+  const {logout,performLogout} = createWorkbenchLogoutActions({
+    authEpochRef,api,currentTokenRef,authTabSyncRef,getMessage,setNotice,sessionStorage,localStorage,
+    setWorkspaceCollectionDocs,setToken,setMe,setStorageScope,STORAGE_LOCAL,setPage,
+    setAuthOpen,setGoogleLinkOpen,setGoogleLinked,setGoogleLinkPassword,
+    setRecent,setCollections,setSavedRequests,setWorkspaceRequestLists,
+    setRemoteAlerts,setConflictDialog,setVersionDialog,workspaceUiStore,
+    sessionEnvironmentOverlays,sessionCollectionVariables,savedCollectionVariablesCache,
+    sessionDocumentationOverlays,setWorkspaceEnvironmentResult,
+    openTabsRef,activeTabRef,draftsRef,snapshotRef,setOpenTabs,setActiveTabId,restoreDraft,
+  });
   const { requiresLogin, navigate, completeSignIn, submitGoogleAuth, submitGoogleLink, loadWorkspaces } = createAuthActions({
     STORAGE_WORKSPACE, api, authBusy, currentTokenRef,
     getMessage, googleLinkPassword, setAuthBusy, setAuthError, setAuthMode,
@@ -524,9 +487,7 @@ export function useWorkbenchController() {
       }),
   });
 
-  useEffect(()=>{let current=true;if(!token){setGoogleLinked(false);return;}
-    api('/api/auth/google/status','GET',undefined,token).then(x=>{if(current)setGoogleLinked(!!x.connected)}).catch(()=>{if(current)setGoogleLinked(false)});
-    return()=>{current=false};},[token]);
+  useGoogleConnectionStatus({token,setGoogleLinked,api});
   useCloudCollectionLifecycle({
     STORAGE_WORKSPACE, api, collections, collectionsScope, expandedCollections,
     explorerTab, getMessage, membersWorkspaceId, saveWs, selectedCol, selectedWs,

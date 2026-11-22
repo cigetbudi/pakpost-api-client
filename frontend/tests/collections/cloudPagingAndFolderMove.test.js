@@ -67,8 +67,8 @@ test('virtual list bounds DOM rows at viewport plus overscan regardless of 50K i
   assert.equal(last.end,50000);
 });
 test('DND includes folder drag MIME and root drop routing for Local and Cloud',()=>{
-  const local=source('../../src/features/collections/components/LocalCollectionsTree.jsx');
-  const cloud=source('../../src/features/collections/components/CloudFolderTree.jsx');
+  const local=(source('../../src/features/collections/components/LocalCollectionsTree.jsx')+'\n'+source('../../src/features/collections/components/LocalCollectionBranch.jsx'));
+  const cloud=(source('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+source('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const explorer=source('../../src/features/collections/components/WorkbenchExplorer.jsx');
   assert.match(local,/application\/x-pakpost-local-folder/);
   assert.match(local,/onMoveFolder/);

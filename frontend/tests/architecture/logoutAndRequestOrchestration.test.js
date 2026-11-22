@@ -36,7 +36,7 @@ test('logout credentials are invalidated even if recovery clearing throws', () =
   const profile=read('components/layout/ProfileMenu.jsx');
   assert.match(profile,/aria-label="Account menu"/);
   assert.match(profile,/Yes, sign out/);
-  const handler=app.slice(app.indexOf('  function performLogout(broadcast) {'),app.indexOf('  const { requiresLogin,'));
+  const handler=readFileSync(new URL('../../src/features/auth/controllers/createWorkbenchLogoutActions.js',import.meta.url),'utf8');
   assert.ok(handler.indexOf('invalidateBrowserSession(')<handler.indexOf('planSignedOutWorkbench('));
   assert.ok(handler.indexOf("setToken('')")<handler.indexOf('planSignedOutWorkbench('));
 });

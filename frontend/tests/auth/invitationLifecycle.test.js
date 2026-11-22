@@ -52,7 +52,7 @@ test('SMTP fails closed when unconfigured and does not return invitation URL as 
 });
 test('frontend exposes Invite, Pending, Resend, Revoke, Accept flows',()=>{
  const app=readWorkbenchSource();
- const workspace=read('frontend/src/features/workspace/components/WorkspaceManager.jsx');
+ const workspace=read('frontend/src/features/workspace/components/WorkspaceMembersSection.jsx');
  const auth=read('frontend/src/features/auth/components/AuthOverlays.jsx');
  for(const phrase of ['Invite via email','Pending invitations','Resend','Revoke'])assert.ok(workspace.includes(phrase),phrase);
  assert.ok(auth.includes('Accept invitation'));

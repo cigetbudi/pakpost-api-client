@@ -41,10 +41,12 @@ test('workspace access and membership checks stay centralized', () => {
 test('request environment lists use no-tracking and API error contract has .NET tests', () => {
   const environment = read(`${infrastructure}Persistence/Repositories/RequestEnvironmentRepository.cs`);
   const middleware = read('backend/src/Pakpost.Api/Middlewares/GlobalExceptionMiddleware.cs');
+  const mapper = read('backend/src/Pakpost.Api/Middlewares/ApiExceptionMapper.cs');
   const tests = read('backend/tests/Pakpost.UnitTests/Api/GlobalExceptionMiddlewareTests.cs');
 
   assert.match(environment, /db\.RequestEnvironments\s*\.AsNoTracking\(\)\s*\.Include\(/);
-  assert.match(middleware, /MapException\(/);
+  assert.match(middleware, /ApiExceptionMapper\.MapException\(/);
+  assert.match(mapper, /MapException\(/);
   assert.match(middleware, /context\.Response\.HasStarted/);
   assert.match(tests, /ValidationErrorsKeepFieldAndMessage/);
   assert.match(tests, /UnexpectedExceptionsNeverExposeInternalDetails/);

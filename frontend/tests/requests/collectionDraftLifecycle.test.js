@@ -93,7 +93,7 @@ test('App creates in-place collection drafts, persists first Save, and confirms 
   assert.match(explorer,/pendingTabs=\{openTabs.filter|renderDraft=\{/);
 });
 test('Collections show pending request plus button and unsaved indicators',()=>{
-  const tree=source('../../src/features/collections/components/LocalCollectionsTree.jsx');
+  const tree=(source('../../src/features/collections/components/LocalCollectionsTree.jsx')+'\n'+source('../../src/features/collections/components/LocalCollectionBranch.jsx'));
   const app=readWorkbenchSource();
   const style=source('../../src/styles/layers/request-drafts.css');
   assert.match(tree,/New request in collection/);

@@ -10,13 +10,14 @@ const read = relative => readFileSync(new URL(`../../${relative}`, import.meta.u
 test('REST navigation and Workspace Management offer Collections and Members & Roles without Teams', () => {
   const nav = read('src/components/layout/WorkbenchNavigation.jsx');
   const manager = read('src/features/workspace/components/WorkspaceManager.jsx');
+  const members = read('src/features/workspace/components/WorkspaceMembersSection.jsx');
   const explorer = read('src/features/collections/components/WorkbenchExplorer.jsx');
   assert.doesNotMatch(nav, /\["teams","Teams"/);
   assert.match(manager, /\['members','Members & Roles',ShieldCheck\]/);
   assert.doesNotMatch(manager, /wsTab === 'teams'/);
   assert.doesNotMatch(explorer, /explorerTab === 'teams'/);
-  assert.match(manager, /members\/\$\{m\.userId\}\/roles/);
-  assert.match(manager, /inviteMember/);
+  assert.match(members, /members\/\$\{m\.userId\}\/roles/);
+  assert.match(members, /inviteMember/);
 });
 
 test('Workbench no longer fetches Teams or retains team-only UI state', () => {

@@ -38,8 +38,8 @@ test('long Cloud ancestry remains correct and invalid cycles cannot hide request
 });
 
 test('Cloud and Local Explorer avoid repeated tree work when toggling UI', () => {
-  const cloud = read('../../src/features/collections/components/CloudFolderTree.jsx');
-  const local = read('../../src/features/collections/components/LocalCollectionsTree.jsx');
+  const cloud = (read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
+  const local = (read('../../src/features/collections/components/LocalCollectionsTree.jsx')+'\n'+read('../../src/features/collections/components/LocalCollectionBranch.jsx'));
   const cloudRows = read('../../src/features/collections/components/CloudRequestRows.jsx');
   const explorer = read('../../src/features/collections/components/WorkbenchExplorer.jsx');
   assert.match(cloud,/selectedKeys\.has\(key\)/);

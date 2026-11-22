@@ -51,7 +51,7 @@ test('Collection and Local request renames prevent duplicates without blocking s
 });
 
 test('First-click F2 and Delete survive active-tab transition; modal Enter submits a form',()=>{
-  const tree=read('../../src/features/collections/components/CloudFolderTree.jsx');
+  const tree=(read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const explorer=read('../../src/features/collections/components/WorkbenchExplorer.jsx');
   assert.match(tree,/setSelection\(key\?\[key\]:\[\]\)/);
   assert.match(tree,/\[activeTabId,activeRequestId\]/);
@@ -64,8 +64,8 @@ test('First-click F2 and Delete survive active-tab transition; modal Enter submi
 });
 
 test('Both folder and request rename block Enter and disable submission for unchanged/duplicate name',()=>{
-  const tree=read('../../src/features/collections/components/CloudFolderTree.jsx');
-  const dialogs=read('../../src/features/requests/components/RequestDialogs.jsx');
+  const tree=(read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
+  const dialogs=(read('../../src/features/requests/components/RequestDialogs.jsx')+'\n'+read('../../src/features/requests/components/UnsavedChangesDialog.jsx')+'\n'+read('../../src/features/requests/components/SaveResponseExampleDialog.jsx')+'\n'+read('../../src/features/requests/components/RequestRevisionDialogs.jsx')+'\n'+read('../../src/features/requests/components/RequestStorageDialogs.jsx'));
   const controller=read('../../src/features/collections/controllers/createCollectionDialogActions.js');
   assert.match(tree,/disabled=\{busy\|\|!!folderNameError\}/);
   assert.match(tree,/if\(!editing\|\|cloudFolderNameError\(folders,editing\)\)return/);

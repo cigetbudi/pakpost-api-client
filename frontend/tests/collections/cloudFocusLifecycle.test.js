@@ -60,8 +60,8 @@ test('inline folder restoration skips removed folder and active input',()=>{
 
 test('focus is restored through dialog cleanup, and folder edit escape is implemented',()=>{
   const dialog=read('../../src/components/ui/WorkbenchPrimitives.jsx');
-  const tree=read('../../src/features/collections/components/CloudFolderTree.jsx');
-  const requestDialog=read('../../src/features/requests/components/RequestDialogs.jsx');
+  const tree=(read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
+  const requestDialog=(read('../../src/features/requests/components/RequestDialogs.jsx')+'\n'+read('../../src/features/requests/components/UnsavedChangesDialog.jsx')+'\n'+read('../../src/features/requests/components/SaveResponseExampleDialog.jsx')+'\n'+read('../../src/features/requests/components/RequestRevisionDialogs.jsx')+'\n'+read('../../src/features/requests/components/RequestStorageDialogs.jsx'));
   assert.match(dialog,/previouslyFocused\.current = document\.activeElement/);
   assert.match(dialog,/restoreDialogFocus\(previouslyFocused\.current, dialogRef\.current, document\)/);
   assert.match(dialog,/event\.key === 'Escape'/);

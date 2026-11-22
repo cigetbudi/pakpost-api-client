@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs';
 // useWorkbenchController: the clearWorkbenchCache binding must move too.
 test('Workbench sign-out retains cache invalidation after App relocation', () => {
   const hook = readFileSync(new URL('../../src/app/hooks/useWorkbenchController.jsx', import.meta.url), 'utf8');
-  assert.match(hook, /import\s*\{[^}]*\bclearWorkbenchCache\b[^}]*\}\s*from\s*['"]\.\.\/\.\.\/features\/workspace\/services\/workspaceCache['"]/);
-  assert.match(hook, /invalidateBrowserSession\(sessionStorage,\s*clearWorkbenchCache\)/);
+  const logout = readFileSync(new URL('../../src/features/auth/controllers/createWorkbenchLogoutActions.js', import.meta.url), 'utf8');
+  assert.match(hook, /createWorkbenchLogoutActions/);
+  assert.match(logout, /import\s*\{[^}]*\bclearWorkbenchCache\b[^}]*\}\s*from\s*['"]\.\.\/\.\.\/workspace\/services\/workspaceCache\.js['"]/);
+  assert.match(logout, /invalidateBrowserSession\(sessionStorage,\s*clearWorkbenchCache\)/);
 });

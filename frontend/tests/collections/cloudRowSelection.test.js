@@ -42,7 +42,7 @@ test('backend commits subtree deletes once, checks permission, and emits refresh
   assert.match(controller,/"request\.deleted"/);
 });
 test('Cloud editor shortcuts are scoped to the tree, not document',()=>{
-  const tree=read('../../src/features/collections/components/CloudFolderTree.jsx');
+  const tree=(read('../../src/features/collections/components/CloudFolderTree.jsx')+'\n'+read('../../src/features/collections/components/renderCloudFolderNodes.jsx'));
   const explorer=read('../../src/features/collections/components/WorkbenchExplorer.jsx');
   assert.match(tree,/onKeyDown=\{onKeys\}/);
   assert.match(tree,/event\.key==='F2'/);

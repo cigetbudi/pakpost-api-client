@@ -45,14 +45,16 @@ test('transaction manager and scope share the request DbContext and serializable
 
 test('database serialization and constraint conflicts return safe HTTP 409 responses', () => {
   const middleware = read('backend/src/Pakpost.Api/Middlewares/GlobalExceptionMiddleware.cs');
+  const mapper = read('backend/src/Pakpost.Api/Middlewares/ApiExceptionMapper.cs');
   const tests = read('backend/tests/Pakpost.UnitTests/Api/GlobalExceptionMiddlewareTests.cs');
 
   for (const sqlState of ['40001', '40P01', '23503', '23505']) {
-    assert.ok(middleware.includes(`"${sqlState}"`));
+    assert.ok(mapper.includes(`"${sqlState}"`));
     assert.ok(tests.includes(`"${sqlState}"`));
   }
 
-  assert.match(middleware, /IsDatabaseConflict\(exception\)/);
+  assert.match(mapper, /IsDatabaseConflict\(exception\)/);
+  assert.match(middleware, /ApiExceptionMapper\.IsDatabaseConflict\(ex\)/);
   assert.match(tests, /PostgresMutationConflictsReturnSafeHttp409/);
 });
 

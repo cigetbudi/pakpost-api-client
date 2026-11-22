@@ -15,7 +15,7 @@ test('unregistered users can be invited only via explicit instance admin flow', 
 
 test('creator invite acceptance is separated from workspace-member invitations', () => {
   const overlay = src('../../src/features/auth/components/PlatformCreatorInvitationOverlay.jsx');
-  const service = src('../../../backend/src/Pakpost.Api/Controllers/PlatformCreatorInvitationsController.cs');
+  const service = src('../../../backend/src/Pakpost.Api/Controllers/PlatformCreatorInvitationAcceptanceController.cs');
   assert.match(overlay, /creatorInvite/);
   assert.match(overlay, /Continue with Google/);
   assert.match(overlay, /creator-invitations\/accept/);
