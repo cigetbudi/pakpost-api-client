@@ -42,5 +42,6 @@ test('Local and Cloud collection action menus link to a folder organizer',()=>{
   assert.match(cloud,/pakpost:cloud-folder-organizer/);
   assert.match(hook,/handleWorkspaceMenu, setWorkspaceMenu, tabMenu/);
   assert.match(local,/Folder to move/);
-  assert.match(cloud,/Folder to move/);
+  assert.match(cloud,/<CloudFolderMoveDialog/);
+  assert.match(source('../../src/features/collections/components/CloudFolderMoveDialog.jsx'),/Folder to move/);
 });

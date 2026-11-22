@@ -35,7 +35,8 @@ test('backend enforces folder IDs, RBAC, recursive atomic deletion and atomic im
   assert.match(handlers,/requests\.DeleteSelectedAsync\(cmd\.CollectionId/);
   assert.doesNotMatch(handlers,/requests\.ListAsync\(cmd\.CollectionId/);
   assert.match(controller,/HttpPost\("delete-items"\)/);
-  assert.match(importer,/pathFolders\[currentPath\]\s*=\s*folder/);
+  assert.match(importer,/new ImportedFolderPathResolver\(collection.Id, folders\)/);
+  assert.match(read('../../../backend/src/Pakpost.Application/Internal/Collections/Services/ImportedFolderPathResolver.cs'),/pathFolders\[currentPath\]\s*=\s*folder/);
   assert.equal((importer.match(/unitOfWork\.SaveChangesAsync\(cancellationToken\)/g)||[]).length,1);
   assert.match(migration,/AddColumn<Guid>\(name:"FolderId"/);
 });

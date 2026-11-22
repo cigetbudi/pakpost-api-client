@@ -32,38 +32,16 @@ public sealed class ImportCollectionsHandler(
             WorkspacePermissions.CollectionWrite,
             cancellationToken);
 
-        if (command.Collections is not { Count: > 0 and <= 30 } ||
-            command.Collections.Any(item => item is null || item.Requests is null || item.Variables is null) ||
-            command.Collections.Sum(item => item.Requests.Count) > 200)
-        {
-            throw AppException.BadRequest("Cloud import limits exceeded (30 collections, 200 requests)");
-        }
-
+        CloudImportGuard.ValidateBatch(command);
         var requestValidator = new SaveRequestValidator();
         var variablesValidator = new SaveCollectionVariablesValidator();
+
         var createdCollections = new List<CollectionDto>();
         var requestCount = 0;
 
         foreach (var incomingCollection in command.Collections)
         {
-            if (string.IsNullOrWhiteSpace(incomingCollection.Name) ||
-                incomingCollection.Name.Trim().Length > 120)
-            {
-                throw AppException.BadRequest("Collection name must be 1–120 characters");
-            }
-
-            var variableCheck = variablesValidator.Validate(new SaveCollectionVariablesCommand(
-                command.ActorId,
-                command.WorkspaceId,
-                Guid.Empty,
-                0,
-                incomingCollection.Variables));
-
-            if (!variableCheck.IsValid)
-            {
-                throw AppException.BadRequest(
-                    "Invalid collection variables: " + variableCheck.Errors[0].ErrorMessage);
-            }
+            CloudImportGuard.ValidateCollection(command, incomingCollection, variablesValidator);
 
             var storedVariables = CollectionVariableMapper.ToStored(
                 incomingCollection.Variables,
@@ -82,75 +60,13 @@ public sealed class ImportCollectionsHandler(
 
             collections.Add(collection);
 
-            var pathFolders = new Dictionary<string, CollectionFolder>(
-                StringComparer.OrdinalIgnoreCase);
+            var pathFolders = new ImportedFolderPathResolver(collection.Id, folders);
 
             foreach (var incoming in incomingCollection.Requests)
             {
-                if (incoming is null)
-                {
-                    throw AppException.BadRequest("Request cannot be null");
-                }
+                CloudImportGuard.ValidateRequest(command, collection.Id, incoming, requestValidator);
 
-                var validation = requestValidator.Validate(new SaveRequestCommand(
-                    command.ActorId,
-                    command.WorkspaceId,
-                    collection.Id,
-                    incoming.Name,
-                    incoming.Method,
-                    incoming.Url,
-                    incoming.HeadersJson,
-                    incoming.Body,
-                    incoming.BodyMode,
-                    incoming.ContentType,
-                    incoming.FormFieldsJson,
-                    incoming.PreRequestScript,
-                    incoming.PostResponseScript));
-
-                if (!validation.IsValid)
-                {
-                    throw AppException.BadRequest(
-                        "Invalid imported request: " + validation.Errors[0].ErrorMessage);
-                }
-
-                SavedHeaderPolicy.EnsureSafe(incoming.HeadersJson);
-
-                Guid? folderId = null;
-
-                if (incoming.FolderPath is { Count: > 0 } path)
-                {
-                    if (path.Count > 24)
-                    {
-                        throw AppException.BadRequest("Imported folder depth exceeds 24");
-                    }
-
-                    var currentPath = "";
-
-                    foreach (var segment in path)
-                    {
-                        if (string.IsNullOrWhiteSpace(segment) || segment.Trim().Length > 120)
-                        {
-                            throw AppException.BadRequest("Invalid imported folder segment");
-                        }
-
-                        var name = segment.Trim();
-                        currentPath += name.Length + ":" + name + "/";
-
-                        if (!pathFolders.TryGetValue(currentPath, out var folder))
-                        {
-                            if (pathFolders.Count >= 500)
-                            {
-                                throw AppException.BadRequest("Folder limit: 500 per collection");
-                            }
-
-                            folder = new CollectionFolder(collection.Id, folderId, name);
-                            pathFolders[currentPath] = folder;
-                            folders.Add(folder);
-                        }
-
-                        folderId = folder.Id;
-                    }
-                }
+                var folderId = pathFolders.Resolve(incoming.FolderPath);
 
                 var request = new SavedRequest(
                     collection.Id,

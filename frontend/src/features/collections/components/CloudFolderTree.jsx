@@ -4,13 +4,14 @@ import {ChevronRight,ChevronDown,FolderClosed,FolderPlus,Plus,Settings2,X,Check,
 import {api} from '../../../services/httpClient.js';
 import {Dialog} from '../../../components/ui/WorkbenchPrimitives.jsx';
 import {MenuActionItem} from '../../../components/ui/MenuActionItem.jsx';
-import {makeCloudFolderTree,canMoveCloudFolder,folderPathForId} from '../services/cloudFolderTree.js';
+import {makeCloudFolderTree,canMoveCloudFolder} from '../services/cloudFolderTree.js';
 import {folderKey,requestKey,selectCloudItem,buildCloudDeletePayload} from '../services/cloudSelection.js';
 import {cloudFolderNameError} from '../services/renameValidation.js';
 import {restoreCloudFolderFocus} from '../services/cloudFocus.js';
 import {CloudRequestRows} from './CloudRequestRows.jsx';
 import {CloudPagedRequestRows} from './CloudPagedRequestRows.jsx';
-import {cloudFolderMoveTargets} from '../services/folderMoveTargets.js';
+import {CloudFolderMoveDialog} from './CloudFolderMoveDialog.jsx';
+import {useCloudMoveTargetFolders} from '../hooks/useCloudMoveTargetFolders.js';
 import {startFolderDrag,isFolderDrag,readFolderDrag,endFolderDrag} from '../services/folderDrag.js';
 
 export const CLOUD_FOLDER_DRAG='application/x-pakpost-cloud-folder';
@@ -23,15 +24,7 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
   const [expanded,setExpanded]=useState({}),[editing,setEditing]=useState(null),[selection,setSelection]=useState([]);
   const [confirmDelete,setConfirmDelete]=useState(null),[menu,setMenu]=useState(null),[dragging,setDragging]=useState(false);
   const [moveDialog,setMoveDialog]=useState(null);
-  const [targetFolders,setTargetFolders]=useState([]);
-  useEffect(()=>{
-    if(!moveDialog||!token||moveDialog.targetCollectionId===collectionId){setTargetFolders([]);return;}
-    let active=true;
-    api(`/api/workspaces/${workspaceId}/collections/${moveDialog.targetCollectionId}/folders`,
-      'GET',undefined,token).then(items=>{if(active)setTargetFolders(Array.isArray(items)?items:[]);})
-      .catch(error=>{if(active)onNotice?.(error.message||'Cannot load destination folders');});
-    return()=>{active=false;};
-  },[moveDialog?.targetCollectionId,collectionId,workspaceId,token]);
+  const targetFolders = useCloudMoveTargetFolders({moveDialog,collectionId,workspaceId,token,onNotice});
   const [reload,setReload]=useState(0),[busy,setBusy]=useState(false),[dropTarget,setDropTarget]=useState('');
   const rootRef=useRef(null),anchorRef=useRef(''),lastEditedFolderRef=useRef('');
   const pagedRecordsRef=useRef(new Map());
@@ -294,54 +287,11 @@ export function CloudFolderTree({workspaceId,collectionId,token,open,requests=[]
       <MenuActionItem action="renameFolder" onClick={()=>{rename(folderKey(menu.folder.id));setMenu(null);}}>Rename (F2)</MenuActionItem>
       <MenuActionItem action="deleteFolder" danger onClick={()=>requestDelete(selectedKeys.has(folderKey(menu.folder.id))?selection:[folderKey(menu.folder.id)])}>Delete folder and contents</MenuActionItem>
     </div>,document.body)}
-    {moveDialog&&createPortal(<Dialog title="Move Cloud folder" subtitle="Move the entire folder tree between collections in this workspace." onClose={()=>!busy&&setMoveDialog(null)}>
-      <form className="pp-folder-move-form" onSubmit={e=>{
-        e.preventDefault();
-        if(busy)return;
-        if(!moveDialog.folderId)return;
-        if(moveDialog.targetCollectionId===collectionId)
-          moveCloudFolder(moveDialog.folderId,moveDialog.targetParentId,()=>setMoveDialog(null));
-        else {
-          const source=folders.find(folder=>folder.id===moveDialog.folderId);
-          if(!source)return;
-          mutate(async()=>{
-            await onMoveFolder?.({workspaceId,collectionId,folderId:source.id,version:source.version,
-              targetCollectionId:moveDialog.targetCollectionId,targetParentId:moveDialog.targetParentId});
-            setMoveDialog(null);
-          });
-        }
-      }}>
-        <label htmlFor="pp-cloud-folder-move-source">Folder to move</label>
-        <select id="pp-cloud-folder-move-source" autoFocus disabled={busy||loading} value={moveDialog.folderId}
-          onChange={e=>setMoveDialog(old=>({...old,folderId:e.target.value,targetParentId:null}))}>
-          <option value="">Select a folder…</option>
-          {folders.map(folder=>{try{return {id:folder.id,label:folderPathForId(folders,folder.id).join(' / ')}}catch{return null}})
-            .filter(Boolean).sort((a,b)=>a.label.localeCompare(b.label))
-            .map(folder=><option key={folder.id} value={folder.id}>{folder.label}</option>)}
-        </select>
-        {loading&&<p className="pp-folder-move-note">Loading folders…</p>}
-        {!loading&&!folders.length&&<p className="pp-folder-move-note">This collection has no folders yet. Create a folder first.</p>}
-        <label htmlFor="pp-cloud-folder-move-collection">Destination collection</label>
-        <select id="pp-cloud-folder-move-collection" disabled={busy} value={moveDialog.targetCollectionId||collectionId}
-          onChange={e=>setMoveDialog(old=>({...old,targetCollectionId:e.target.value,targetParentId:null}))}>
-          {collections.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}
-        </select>
-        <label htmlFor="pp-cloud-folder-move-target">Destination folder</label>
-        <select id="pp-cloud-folder-move-target" disabled={busy||!moveDialog.folderId} value={moveDialog.targetParentId||''}
-          onChange={e=>setMoveDialog(old=>({...old,targetParentId:e.target.value||null}))}>
-          {(moveDialog.targetCollectionId===collectionId?
-            cloudFolderMoveTargets(folders,moveDialog.folderId):
-            [{id:null,label:'Collection root'},...targetFolders.map(folder=>{
-              let label=folder.name;
-              try{label=folderPathForId(targetFolders,folder.id).join(' / ');}catch{}
-              return {id:folder.id,label};
-            }).sort((a,b)=>a.label.localeCompare(b.label))]).map(option=><option key={option.id||'root'} value={option.id||''}>{option.label}</option>)}
-        </select>
-        {!!error&&<p role="alert" className="pp-env-error">{error}</p>}
-        <div className="pp-action-dialog-buttons"><button type="button" disabled={busy} onClick={()=>setMoveDialog(null)}>Cancel</button>
-          <button type="submit" disabled={busy||!moveDialog.folderId} className="pp-modal-submit">{busy?'Moving…':'Move folder'}</button></div>
-      </form>
-    </Dialog>,document.body)}
+    {moveDialog&&<CloudFolderMoveDialog
+      moveDialog={moveDialog} setMoveDialog={setMoveDialog} busy={busy} loading={loading}
+      error={error} folders={folders} collectionId={collectionId} collections={collections}
+      targetFolders={targetFolders} moveCloudFolder={moveCloudFolder} mutate={mutate}
+      onMoveFolder={onMoveFolder} workspaceId={workspaceId}/>}
     {confirmDelete&&createPortal(<Dialog title="Delete Cloud items?" subtitle="This action permanently deletes selected requests, all nested folder contents, and request revision history." onClose={()=>!busy&&setConfirmDelete(null)}>
       <p className="pp-cloud-delete-explainer">Delete {confirmDelete.filter(x=>x.startsWith('folder:')).length} selected folder(s) and {confirmDelete.filter(x=>x.startsWith('request:')).length} selected request(s)? Any requests and subfolders inside selected folders will also be removed. This cannot be undone.</p>
       {!!error&&<p role="alert" className="pp-env-error">{error}</p>}

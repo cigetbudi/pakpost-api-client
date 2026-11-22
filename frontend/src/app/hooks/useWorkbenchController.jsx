@@ -1,3 +1,5 @@
+import { createActiveEnvironmentBridge } from '../../features/environments/controllers/createActiveEnvironmentBridge.js';
+import { createRequestPresentationActions } from '../../features/requests/controllers/createRequestPresentationActions.js';
 import { createCloudRequestOpenActions } from '../../features/collections/controllers/createCloudRequestOpenActions.js';
 import { useCollectionDialogState } from '../../features/collections/hooks/useCollectionDialogState.js';
 import { useRequestAuthorizationFields } from '../../features/requests/hooks/useRequestAuthorizationFields.js';
@@ -53,7 +55,7 @@ import { executeWorkbenchRequest } from '../../features/requests/services/execut
 import { buildRequestCommand, buildRedactedCodeRequest, buildRequestPreview } from '../../features/requests/services/requestCommand.js';
 import { invalidateBrowserSession, planSignedOutWorkbench } from '../../features/auth/services/logoutWorkbench.js';
 import { useWorkspaceRealtimeLifecycle } from '../../features/realtime/hooks/useWorkspaceRealtimeLifecycle.js';
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import { api, setBrowserCsrf } from '../../services/httpClient.js';
 import { prettyJson, initialLocalEnvs } from '../../utils/workbenchHelpers.js';
@@ -87,7 +89,8 @@ import {putEnvironmentVariable,isSensitiveVariable} from '../../features/environ
 import {sessionEnvironmentKey,readableEnvironmentValues,applySessionOverrides,sessionOverridesFromValues,storeSessionOverrides} from '../../features/environments/services/sessionEnvironment.js';
 import { readEnvironmentSelections, writeEnvironmentSelections } from '../../features/environments/services/environmentContext.js';
 import { FastTooltip } from '../../components/ui/FastTooltip';
-import {sortCollectionRoots} from '../../features/collections/services/collectionSort';
+import {useVisibleWorkbenchCollections} from '../../features/collections/hooks/useVisibleWorkbenchCollections.js';
+import {requestResponseView} from '../../features/requests/services/requestResponseView.js';
 import {toggleWorkspaceCollection, setAllWorkspaceCollections, workspaceCollectionKey} from '../../features/collections/services/collectionExpansion';
 import { blankDraft, parseCurl, isCurl, parseImportText } from '../../features/import-export/services/importExport';
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from '../../features/environments/services/environmentImport';
@@ -403,40 +406,16 @@ export function useWorkbenchController() {
   const activeSessionEnvironmentKey=envScope===STORAGE_WORKSPACE?sessionEnvironmentKey(environmentContext,activeEnvId):'';
   const activeSessionOverrides=sessionEnvironmentOverlays.current.get(activeSessionEnvironmentKey)||{};
   const canWriteEnvironment=envScope!==STORAGE_WORKSPACE||(membersWorkspaceId===selectedWs&&canWorkspace(currentWorkspaceMember(members,me),'environment.write'));
-  const varsFromEnv=(allowSecrets=true)=>{
-    const base=readableEnvironmentValues(activeEnvironment);
-    const variables=envScope===STORAGE_WORKSPACE?applySessionOverrides(base,activeSessionOverrides):base;
-    if(!allowSecrets){
-      for(const key of Object.keys(variables)){
-        const definition=activeEnvironment?.variables?.find(v=>v.key===key);
-        if(isSensitiveVariable(key,definition))variables[key]='[REDACTED]';
-      }
-    }
-    return variables;
-  };
-  function rememberSessionValues(key,environment,values){
-    if(!key||!environment)return;
-    const next=sessionOverridesFromValues(readableEnvironmentValues(environment),values);
-    if(storeSessionOverrides(sessionEnvironmentOverlays.current,key,next))refreshSessionEnvironment(v=>v+1);
-  }
-  async function quickEditVariable(key,value){
-    if(!activeEnvironment)throw Error('Select an environment in the top toolbar first.');
-    if(envScope===STORAGE_WORKSPACE&&!canWriteEnvironment){
-      // Validate the key and reject edits to restricted server-side secrets.
-      putEnvironmentVariable(activeEnvironment.variables,key,value);
-      rememberSessionValues(activeSessionEnvironmentKey,activeEnvironment,{...varsFromEnv(),[key]:String(value)});
-      setNotice('Variable changed for this session only. Cloud environment is unchanged.');
-      return;
-    }
-    if(envScope===STORAGE_WORKSPACE&&(activeEnvironment.variables||[]).some(v=>v.isRedacted))
-      throw Error('This environment contains restricted variables. Open Environments to edit with appropriate permissions.');
-    const variables=putEnvironmentVariable(activeEnvironment.variables,key,value);
-    await persistEnvironment({...activeEnvironment,variables});
-  }
-  const variableUi={variables:varsFromEnv(),definitions:activeEnvironment?.variables||[],
-    source:activeEnvironment?`${envScope===STORAGE_WORKSPACE?`Cloud · ${workspaces.find(w=>w.id===selectedWs)?.name||'Workspace'}`:'Local · Browser'} / ${activeEnvironment.name}${envScope===STORAGE_WORKSPACE&&!canWriteEnvironment?' · Session-only edits':''}`:'No active environment',
-    onEditVariable:activeEnvironment?quickEditVariable:null,
-    onOpenEnvironments:()=>setExplorerTab('environments')};
+  const { varsFromEnv, rememberSessionValues, variableUi } = createActiveEnvironmentBridge({
+    STORAGE_WORKSPACE, activeEnvironment, activeSessionEnvironmentKey,
+    activeSessionOverrides, applySessionOverrides, canWriteEnvironment,
+    envScope, isSensitiveVariable,
+    // The callback is invoked only on edit, after the environment factory is initialized.
+    persistEnvironment: next => persistEnvironment(next), putEnvironmentVariable,
+    readableEnvironmentValues, refreshSessionEnvironment, selectedWs,
+    sessionEnvironmentOverlays, sessionOverridesFromValues, setExplorerTab,
+    setNotice, storeSessionOverrides, workspaces,
+  });
   const { updateStorageScope, importEnvironmentFile, createEnvironment, duplicateEnvironment, openExportChoice, confirmExport, persistEnvironment, deleteEnvironment, applyScriptVariables } = createEnvironmentActions({
     STORAGE_WORKSPACE, allowedStorageScope, api, currentEnvironments, documentation, downloadJson,
     envScope, exportChoice, exportFormat, exportIncludeSecrets, getMessage, importPreparedEnvironments,
@@ -445,27 +424,14 @@ export function useWorkbenchController() {
     setNotice, setStorageScope, setWorkspaceEnvironments, token, workspaceCollectionDocs, workspaceDocKey,
     workspaceDraft,
   });
-  const selectFormat=(v)=>{setFormat(v);};
-  async function beautifyBody(){
-    try{if(languageFromMime(format)==='json'&&hasJsonComments(body))throw Error('Remove JSON comments before Beautify (to avoid losing them).');setBody(await formatSource(body,languageFromMime(format)));setNotice('Body formatted');}
-    catch(e){setNotice(`Cannot format: ${getMessage(e)}`)}
-  }
-  async function beautifyResult(){
-    if(!result||result.error)return;
-    try{setPrettyResponse(await formatSource(result.body||'',languageFromMime(result.headers?.['Content-Type']||result.headers?.['content-type']||'')));setResponsePretty(true);}
-    catch(e){setNotice(`Cannot format response: ${getMessage(e)}`)}
-  }
-  const commandRequest = () => ({method,url,rows,params,body,format,formFields,binaryFile,auth:currentAuth()});
-  function buildOutgoing(vars=varsFromEnv()) {
-    return buildRequestCommand(commandRequest(), vars);
-  }
-  function buildCodeRequest(allowSecrets=false){
-    if (allowSecrets) return buildOutgoing(varsFromEnv(true));
-    return buildRedactedCodeRequest({request:commandRequest(),variableMap:varsFromEnv(false),allVariableMap:varsFromEnv(false)});
-  }
-  function codePreviewRequest(){
-    return buildRequestPreview(commandRequest());
-  }
+  const { selectFormat, beautifyBody, beautifyResult,
+    buildOutgoing, buildCodeRequest, codePreviewRequest } = createRequestPresentationActions({
+    binaryFile, body, buildRedactedCodeRequest, buildRequestCommand,
+    buildRequestPreview, currentAuth, formFields, format, formatSource,
+    getMessage, hasJsonComments, languageFromMime, method, params, result,
+    rows, setBody, setFormat, setNotice, setPrettyResponse,
+    setResponsePretty, url, varsFromEnv,
+  });
   useEffect(() => {
     let ignore = false;
     if (!token) { setMe(null); setWorkspaces([]); return; }
@@ -706,26 +672,17 @@ export function useWorkbenchController() {
     setResponsePretty, setResult, setScriptDiagnostic, setScriptError, setScriptJump, setScriptLog,
     setScriptTests, stashActive, url, varsFromEnv, writeCollectionVariables,
   });
-  // The request editor rerenders on each keystroke. Explorer filtering and sorting
-  // are derived only when collection data or the search/sort inputs change.
-  const visibleCollections = useMemo(() => {
-    const term = explorerSearch.trim().toLowerCase();
-    const matching = !term ? collections : collections.filter(collection =>
-      collection.name.toLowerCase().includes(term) ||
-      (workspaceRequestLists[workspaceCollectionKey(selectedWs, collection.id)] || []).some(request =>
-        `${request.name || ''} ${request.url || ''}`.toLowerCase().includes(term)));
-    return sortCollectionRoots(matching, collectionSort);
-  }, [collections, workspaceRequestLists, explorerSearch, collectionSort, selectedWs]);
-  const visibleLocalCollections = useMemo(
-    () => sortCollectionRoots(localCollections, collectionSort), [localCollections, collectionSort]);
-  const responseType = result && !result.error ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain') : 'text/plain';
+  // Collection search and presentation derivation stay outside the large controller.
+  const {visibleCollections,visibleLocalCollections}=useVisibleWorkbenchCollections({
+    collections,workspaceRequestLists,explorerSearch,collectionSort,selectedWs,localCollections,
+  });
+  const {responseType,responseText}=requestResponseView(result,resTab,responsePretty,prettyResponse);
   const commandItems = createCommandPaletteItems({
     commandOpen, addTab, setExplorerTab, setSidebarCollapsed, setPage,
     openContext, openTabs, localCollections, token, savedRequests, selectTab,
     openLocalRequest, loadSavedRequest,
   });
   const visibleCommandItems = filterCommandPaletteItems(commandItems, commandQuery);
-  const responseText = result && !result.error ? (resTab === 'body' ? (responsePretty ? (prettyResponse||prettyJson(result.body||'')) : (result.body||'')) : JSON.stringify(result.headers || {}, null, 2)) : '';
   // Explicit UI contract. Runtime-only secret/session refs stay inside this hook.
   return {
     AppHeader, GOOGLE_CLIENT_ID, Link2, LogIn, LogOut, RetroSelect, STORAGE_LOCAL,

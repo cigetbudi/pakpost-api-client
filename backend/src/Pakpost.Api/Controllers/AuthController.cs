@@ -84,58 +84,8 @@ public sealed class AuthController(
         return Ok(new BrowserSessionResponse(true, user with { AvatarUrl = found.AvatarUrl }, found.ExpiresAt, csrf));
     }
 
-    [Authorize, HttpPost("logout")]
-    public async Task<IActionResult> Logout(CancellationToken ct)
-    {
-        var name = BrowserSessionCookies.Name(Request, environment);
-        var current = CurrentSession();
-        await sessions.RevokeAsync(Request.Cookies[name], ct);
-        if (current is not null) await connections.RevokeSessionAsync(hub, current.Id);
-        Response.Cookies.Delete(name, BrowserSessionCookies.Options(Request));
-        return NoContent();
-    }
-
-    [Authorize, HttpPost("logout-all")]
-    public async Task<IActionResult> LogoutAll(CancellationToken ct)
-    {
-        var name = BrowserSessionCookies.Name(Request, environment);
-        await sessions.RevokeAllAsync(User.GetUserId(), ct);
-        await connections.RevokeUserAsync(hub, User.GetUserId());
-        Response.Cookies.Delete(name, BrowserSessionCookies.Options(Request));
-        return NoContent();
-    }
-
     private BrowserSession? CurrentSession() =>
         HttpContext.Items.TryGetValue(typeof(BrowserSession), out var value) ? value as BrowserSession : null;
-
-    [Authorize, HttpGet("sessions")]
-    public async Task<ActionResult<IReadOnlyList<BrowserSessionInfo>>> ActiveSessions(CancellationToken ct)
-    {
-        var current = CurrentSession();
-        if (current is null) return Unauthorized();
-        return Ok(await sessions.ListAsync(User.GetUserId(), current.Id, ct));
-    }
-
-    [Authorize, HttpPost("sessions/{sessionId:guid}/revoke")]
-    public async Task<IActionResult> RevokeSession(Guid sessionId, CancellationToken ct)
-    {
-        var affected = await sessions.RevokeOneAsync(User.GetUserId(), sessionId, ct);
-        if (affected == 0) return NotFound();
-        await connections.RevokeSessionAsync(hub, sessionId);
-        if (CurrentSession()?.Id == sessionId)
-            Response.Cookies.Delete(BrowserSessionCookies.Name(Request, environment), BrowserSessionCookies.Options(Request));
-        return NoContent();
-    }
-
-    [Authorize, HttpPost("sessions/revoke-others")]
-    public async Task<IActionResult> RevokeOthers(CancellationToken ct)
-    {
-        var current = CurrentSession();
-        if (current is null) return Unauthorized();
-        await sessions.RevokeOthersAsync(User.GetUserId(), current.Id, ct);
-        await connections.RevokeOtherSessionsAsync(hub, User.GetUserId(), current.Id);
-        return NoContent();
-    }
 
     [Authorize, HttpPost("google/link"), EnableRateLimiting("auth")]
     public async Task<ActionResult<GoogleLinkResult>> LinkGoogle(GoogleLinkRequest request, CancellationToken ct)

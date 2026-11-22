@@ -1,3 +1,5 @@
+import { createCollectionOpenActions } from './createCollectionOpenActions.js';
+import { createCollectionCreationActions } from './createCollectionCreationActions.js';
 import {collectionParentChain} from '../services/collectionHierarchy.js';
 import {createCollectionMoveActions} from './createCollectionMoveActions.js';
 import {createCollectionExampleActions} from './createCollectionExampleActions.js';
@@ -7,186 +9,35 @@ import {createWorkspaceCollectionMenuActions} from './createWorkspaceCollectionM
 // Dependencies are passed from the current render; no singleton store or persist middleware.
 export function createCollectionActions(dependencies) {
   const {
-    EMPTY_HEADER,
-    STORAGE_LOCAL,
-    STORAGE_WORKSPACE,
-    WORKSPACE_DRAG,
-    actionDialog,
-    actionName,
-    activeSource,
-    activeTabRef,
-    addTab,
-    adoptSavedRevision,
-    allowedStorageScope,
-    api,
-    applyLocalAction,
-    blankDraft,
-    busyAction,
-    canEditCloud,
-    currentTokenRef,
-    selectedWorkspaceRef,
-    collectionImportBusy,
-    collectionImportDestination,
-    collectionImportFile,
-    collectionImportSources,
-    collections,
-    collectionsScope,
-    decodeStoredHeaders,
-    doAction,
-    draftsRef,
-    encodeStoredHeaders,
-    exampleToResult,
-    findBoundTab,
-    freshRequest,
-    getMessage,
-    importRequestsAndEnvironments,
-    loadSavedRequest,
-    localCollectionName,
-    localCollections,
-    openCollectionRunner,
-    openCollectionVariables,
-    openDocumentation,
-    openExportChoice,
-    openRequestHistory,
-    openTabs,
-    openTabsRef,
-    parseImportText,
-    pendingSource,
-    readSavedCollectionVariables,
-    renameResponseExample,
-    requestFingerprint,
-    responseExamples,
-    restoreDraft,
-    rows,
-    sanitizeResponseExamples,
-    savedRequests,
-    selectTab,
-    selectedCol,
-    selectedWs,
-    setActionDialog,
-    setActionName,
-    setActiveTabId,
-    setAllWorkspaceCollections,
-    setCollectionImportBusy,
-    setCollectionImportDestination,
-    setCollectionImportError,
-    setCollectionImportFile,
-    setCollectionImportOpen,
-    setCollections,
-    setCreatingLocalCollection,
-    setExpandedCollections,
-    setExplorerTab,
-    setLocalCollectionName,
-    setLocalCollections,
-    setLocalExpandAllSignal,
-    setNotice,
-    setOpenTabs,
-    setPage,
-    setResTab,
-    setResponseExamples,
-    setResult,
-    setRevealLocalDraft,
-    setSavedRequests,
-    setSelectedCol,
-    setSidebarCollapsed,
-    setWorkspaceCollectionDocs,
-    setWorkspaceMenu,
-    setWorkspaceRequestLists,
-    setWorkspaceSorted,
-    snapshot,
-    storageScope,
-    toLocalCollection,
-    toggleWorkspaceCollection,
-    token,
-    url,
-    validateLibrary,
-    workspaceCollectionKey,
-    workspaceDocKey,
-    workspaceRequestLists
+    EMPTY_HEADER, STORAGE_WORKSPACE, WORKSPACE_DRAG, actionDialog, actionName,
+    activeSource, activeTabRef, addTab, adoptSavedRevision, api,
+    applyLocalAction, blankDraft, canEditCloud, currentTokenRef, selectedWorkspaceRef,
+    collections, collectionsScope, decodeStoredHeaders, doAction, draftsRef,
+    encodeStoredHeaders, freshRequest, getMessage, loadSavedRequest, localCollections,
+    openCollectionRunner, openCollectionVariables, openDocumentation, openExportChoice, openRequestHistory,
+    openTabs, openTabsRef, pendingSource, readSavedCollectionVariables, renameResponseExample,
+    requestFingerprint, responseExamples, rows, sanitizeResponseExamples, savedRequests,
+    selectedCol, selectedWs, setActionDialog, setActionName, setAllWorkspaceCollections,
+    setCollections, setExpandedCollections, setExplorerTab, setLocalCollections, setLocalExpandAllSignal,
+    setNotice, setOpenTabs, setResponseExamples, setRevealLocalDraft, setSavedRequests,
+    setSelectedCol, setSidebarCollapsed, setWorkspaceCollectionDocs, setWorkspaceMenu, setWorkspaceRequestLists,
+    setWorkspaceSorted, snapshot, toggleWorkspaceCollection, token, url,
+    validateLibrary, workspaceCollectionKey, workspaceDocKey, workspaceRequestLists,
   } = dependencies;
-
-  async function createExplorerCollection(e){
-      e.preventDefault();
-      const name=localCollectionName.trim();if(!name||busyAction)return;
-      if(storageScope===STORAGE_WORKSPACE&&token){
-        if(!selectedWs){setNotice('Select a workspace before creating a Cloud collection.');return;}
-        await doAction(async()=>{
-          const created=await api(`/api/workspaces/${selectedWs}/collections`,'POST',{name},token);
-          setCollections(current=>[...current,created]);
-          setSelectedCol(created.id);
-          setLocalCollectionName('');setCreatingLocalCollection(false);
-          setNotice('Cloud collection created.');
-        });
-      }else{
-        try{
-          const next=toLocalCollection({name,requests:[]});
-          next.sortOrder=1+Math.max(0,...localCollections.filter(item=>!item.parentCollectionId).map(item=>Number(item.sortOrder)||0));
-          setLocalCollections(validateLibrary([...localCollections,next]));
-          setLocalCollectionName('');setCreatingLocalCollection(false);
-        }
-        catch(err){setNotice(getMessage(err));}
-      }
-    }
-
-  function openCollectionImport(){
-      setCollectionImportDestination(token&&canEditCloud?STORAGE_WORKSPACE:STORAGE_LOCAL);
-      setCollectionImportFile(null);setCollectionImportError('');setCollectionImportOpen(true);
-    }
-
-  async function submitCollectionImport(){
-      if(!collectionImportFile||collectionImportBusy)return;
-      setCollectionImportBusy(true);setCollectionImportError('');
-      try{
-        const parsed=parseImportText(await collectionImportFile.text());
-        if(parsed.kind==='environment'||(parsed.kind==='pakpost'&&!parsed.requests?.length))
-          throw Error('This file has no collections. Use Environments or Import / Export to import it.');
-        if(!collectionImportSources(parsed).length)
-          throw Error('This file has no HTTP collections. Choose Postman, OpenAPI, Insomnia v4 JSON or cURL.');
-        if(collectionImportDestination===STORAGE_WORKSPACE&&!canEditCloud)
-          throw Error('You cannot import Cloud collections with your current workspace roles. Choose Local.');
-        const message=await importRequestsAndEnvironments(parsed,allowedStorageScope(!!token,collectionImportDestination));
-        setNotice(message);setCollectionImportOpen(false);setCollectionImportFile(null);
-      }catch(error){setCollectionImportError(getMessage(error));}
-      finally{setCollectionImportBusy(false);}
-    }
-
-  function openBoundRequest(request,source){
-      const current=findBoundTab(openTabs,source);
-      if(current){selectTab(current.id);return;}
-      addTab(request,source);
-    }
-
-  function openLocalRequest(request,collectionId){
-      openBoundRequest({...request,name:request.requestName||request.name},
-        {scope:'local',collectionId,requestId:request.id});
-    }
-
-  function previewSavedExample(request,source,example){
-      const resultExample=exampleToResult(example);
-      const current=findBoundTab(openTabs,source);
-      if(current){
-        const stored=current.id===activeTabRef.current?snapshot():draftsRef.current[current.id];
-        const next={...stored,result:resultExample,resTab:'body'};
-        draftsRef.current[current.id]=next;
-        activeTabRef.current=current.id;setActiveTabId(current.id);restoreDraft(next);setPage('tester');
-        setOpenTabs(tabs=>tabs.map(tab=>tab.id===current.id?{...tab,status:resultExample.statusCode}:tab));
-        return;
-      }
-      addTab(request,source);
-      draftsRef.current[activeTabRef.current]={...draftsRef.current[activeTabRef.current],result:resultExample,resTab:'body'};
-      setResult(resultExample);setResTab('body');
-      const newTabId=activeTabRef.current;
-      setOpenTabs(tabs=>tabs.map(tab=>tab.id===newTabId?{...tab,status:resultExample.statusCode}:tab));
-    }
-
-  function openLocalExample(request,collectionId,example){
-      previewSavedExample({...request,name:request.requestName||request.name},{scope:'local',collectionId,requestId:request.id},example);
-    }
-
-  function openWorkspaceExample(request,collectionId,example){
-      const draft=workspaceDraft({...request,collectionId});
-      previewSavedExample({...draft,name:request.name||draft.name},{scope:'workspace',workspaceId:selectedWs,collectionId,requestId:request.id,revision:request.revision},example);
-    }
+  const creationActions = createCollectionCreationActions(dependencies);
+  const createExplorerCollection = creationActions.createExplorerCollection;
+  const openCollectionImport = creationActions.openCollectionImport;
+  const submitCollectionImport = creationActions.submitCollectionImport;
+  // workspaceDraft comes from the Cloud menu factory below. Resolve it lazily
+  // when the user opens an example, after all factories have been initialized.
+  const openActions = createCollectionOpenActions(Object.assign(Object.create(dependencies), {
+    workspaceDraft: (...args) => workspaceDraft(...args),
+  }));
+  const openBoundRequest = openActions.openBoundRequest;
+  const openLocalRequest = openActions.openLocalRequest;
+  const previewSavedExample = openActions.previewSavedExample;
+  const openLocalExample = openActions.openLocalExample;
+  const openWorkspaceExample = openActions.openWorkspaceExample;
 
   function downloadJson(data,filename){
       const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});

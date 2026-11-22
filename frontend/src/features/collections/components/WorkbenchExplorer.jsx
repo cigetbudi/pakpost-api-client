@@ -1,4 +1,4 @@
-import React, {useEffect,useMemo,useRef,useState} from 'react';
+import React, {useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Dialog} from '../../../components/ui/WorkbenchPrimitives.jsx';
 import { PanelLeftClose, Layers3, Settings2, LockKeyhole, ChevronRight, History, Plus, Search, ChevronsUpDown, ChevronsDownUp, FileUp, X, ChevronDown, FolderClosed, ArrowRight } from 'lucide-react';
@@ -15,8 +15,9 @@ import { decodeStoredHeaders } from '../../requests/services/requestMetadata.js'
 import {CLOUD_SERVER_PAGING_THRESHOLD} from '../services/cloudRenderBudget.js';
 import {isFolderDrag,readFolderDrag,endFolderDrag} from '../services/folderDrag.js';
 import {startRequestDrag,peekRequestDrag,isRequestDrag,readRequestDrag,endRequestDrag,dragRowPlacement} from '../services/requestDrag.js';
-import {visibleCollectionNodes,collectionParentChain,arrangeCollections,startCollectionDrag,isCollectionDrag,readCollectionDrag,endCollectionDrag,collectionDropPosition} from '../services/collectionHierarchy.js';
+import {startCollectionDrag,isCollectionDrag,readCollectionDrag,endCollectionDrag,collectionDropPosition} from '../services/collectionHierarchy.js';
 import { statusTone } from '../../requests/services/responseExamples.js';
+import {useCollectionExplorerOrganizer} from '../hooks/useCollectionExplorerOrganizer.js';
 
 // Only the visible explorer mounts. Code generator and import/export panels are
 // still supplied lazily by the workbench; this module never fetches user data.
@@ -42,56 +43,16 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
   // Request index records are immutable in React. Cache parsed response-example
   // metadata per record, not per entire Collection (which would defeat paging).
   // Weak keys are garbage-collected when a Workspace or Collection is replaced.
-  const [collectionOrganizer,setCollectionOrganizer]=useState(null);
-  const [organizeDestination,setOrganizeDestination]=useState('root:');
-  const [collectionDropTarget,setCollectionDropTarget]=useState('');
-  const [requestDropTarget,setRequestDropTarget]=useState('');
-  const [dragging,setDragging]=useState(null);
-  useEffect(()=>{
-    const listener=e=>setDragging(e.detail?.kind&&e.detail?.scope==='workspace'&&
-      e.detail.workspaceId===selectedWs?e.detail:null);
-    window.addEventListener('pakpost:explorer-drag',listener);
-    return()=>window.removeEventListener('pakpost:explorer-drag',listener);
-  },[selectedWs]);
-  useEffect(()=>{
-    const open=event=>{
-      const detail=event.detail;
-      if(detail?.scope==='workspace'&&detail.workspaceId===selectedWs){
-        setCollectionOrganizer({scope:'workspace',sourceId:detail.collectionId});
-        setOrganizeDestination('root:');
-      }
-    };
-    window.addEventListener('pakpost:collection-organizer',open);
-    return()=>window.removeEventListener('pakpost:collection-organizer',open);
-  },[selectedWs]);
-  const localMove=(source,target,placement)=>{setCollectionSort('manual');if(placement==='inside'&&target)window.dispatchEvent(new CustomEvent('pakpost:local-collection-reveal',{detail:{collectionId:target}}));moveLocalCollection(source,target,placement);};
-  const cloudMove=(source,target,placement)=>{
-    if(!canEditCloud)return;
-    setCollectionSort('manual');
-    if(placement==='inside'&&target)setExpandedCollections(old=>({...old,...Object.fromEntries(
-      collectionParentChain(collections,target).map(id=>[workspaceCollectionKey(selectedWs,id),true]))}));
-    moveWorkspaceCollection(source,target,placement);
-  };
-  const cloudNodes=useMemo(()=>visibleCollectionNodes(collections,{sort:collectionSort,search:explorerSearch,
-    isOpen:col=>isWorkspaceCollectionOpen(expandedCollections,selectedWs,col.id,selectedCol),
-    requestMatches:col=>(workspaceRequestLists[workspaceCollectionKey(selectedWs,col.id)]||[]).some(request=>
-      `${request.name||''} ${request.url||''}`.toLowerCase().includes(explorerSearch.toLowerCase()))}),
-    [collections,collectionSort,explorerSearch,expandedCollections,selectedWs,selectedCol,workspaceRequestLists]);
-  const organizationList=collectionOrganizer?.scope==='local'?localCollections:collections;
-  const chosen=organizationList.find(item=>item.id===collectionOrganizer?.sourceId);
-  const organizationOptions=chosen?[{value:'root:',label:'Collection root (last)'},
-    ...organizationList.flatMap(item=>['inside','before','after'].flatMap(placement=>{
-      try{arrangeCollections(organizationList,chosen.id,item.id,placement);}
-      catch{return [];}
-      return [{value:`${placement}:${item.id}`,label:`${placement==='inside'?'Inside':placement==='before'?'Before':'After'} ${item.name}`}];
-    }))]:[];
-  const organize=async()=>{
-    if(!chosen)return;
-    const [placement,target]=organizeDestination.split(':');
-    if(collectionOrganizer.scope==='local')localMove(chosen.id,target||null,placement);
-    else cloudMove(chosen.id,target||null,placement);
-    setCollectionOrganizer(null);
-  };
+  const {
+    collectionOrganizer,setCollectionOrganizer,organizeDestination,setOrganizeDestination,
+    collectionDropTarget,setCollectionDropTarget,requestDropTarget,setRequestDropTarget,
+    dragging,setDragging,localMove,cloudMove,cloudNodes,organizationList,chosen,
+    organizationOptions,organize,
+  } = useCollectionExplorerOrganizer({
+    selectedWs,collectionSort,setCollectionSort,collections,localCollections,
+    explorerSearch,expandedCollections,selectedCol,workspaceRequestLists,
+    canEditCloud,setExpandedCollections,moveLocalCollection,moveWorkspaceCollection,
+  });
   const requestMetadata = useRef(new WeakMap());
   const readRequestMetadata = request => {
     const cached = requestMetadata.current.get(request);

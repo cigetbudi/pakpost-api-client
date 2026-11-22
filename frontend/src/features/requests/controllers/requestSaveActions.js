@@ -1,17 +1,19 @@
+import { createResponseExampleSaveActions } from './createResponseExampleSaveActions.js';
 // Feature controller. Actions execute with the current Workbench context supplied
 // by App; no global state, persistence middleware or extra network requests.
 export function createRequestSaveActions(dependencies) {
   const {
-    activeRequestName, activeTabRef, addTab, adoptSavedRevision, api, applyLocalAction, body,
-    bodyFormat, canEditCloud, createLocalSavedRequest, createResponseExample, createWorkspaceRequest, currentAuth, decodeStoredHeaders,
-    doAction, documentation, draftsRef, encodeStoredHeaders, exampleDescription, exampleName, formFields,
-    format, getWorkspaceRequests, invalidateWorkspaceRequestLists, isReadOnlyCloudTab, loadSavedRequest, localCollections, method,
-    openTabs, params, postScript, preScript, remoteAlerts, responseExamples, result,
-    rows, saveCollection, saveLocalCollection, saveName, saveScope, saveWs, selectedCol,
-    selectedWs, setExampleDescription, setExampleName, setLocalCollections, setNotice, setOpenTabs, setRemoteAlerts,
-    setResponseExamples, setSaveCollection, setSaveExampleOpen, setSaveLocalCollection, setSaveName, setSaveOpen, setSaveScope,
-    setSaveWs, setSavedRequests, setWorkspaceRequestLists, showConflictDialog, snapshot, suggestExampleName, tabSaved,
-    token, updateLocalRequest, updateWorkspaceRequest, upsertResponseExample, url, workspaceCollectionKey, workspaces,
+    activeRequestName, activeTabRef, addTab, body, bodyFormat,
+    canEditCloud, createLocalSavedRequest, createWorkspaceRequest, currentAuth, doAction,
+    documentation, encodeStoredHeaders, formFields, format, getWorkspaceRequests,
+    invalidateWorkspaceRequestLists, loadSavedRequest, localCollections, method, openTabs,
+    params, postScript, preScript, remoteAlerts, responseExamples,
+    rows, saveCollection, saveLocalCollection, saveName, saveScope,
+    saveWs, selectedCol, selectedWs, setLocalCollections, setNotice,
+    setOpenTabs, setRemoteAlerts, setSaveCollection, setSaveLocalCollection, setSaveName,
+    setSaveOpen, setSaveScope, setSaveWs, setSavedRequests, setWorkspaceRequestLists,
+    showConflictDialog, snapshot, tabSaved, token, updateLocalRequest,
+    updateWorkspaceRequest, url, workspaceCollectionKey, workspaces,
   } = dependencies;
   function loadRequest(item) {
     if (Array.isArray(item.rows)) addTab({ ...item, name: item.name || 'From history' });
@@ -117,51 +119,8 @@ export function createRequestSaveActions(dependencies) {
     });
   }
 
-  function openSaveExampleDialog(){
-    if(!result||result.error)return;
-    setExampleName(suggestExampleName(result));
-    setExampleDescription('');
-    setSaveExampleOpen(true);
-  }
-  async function persistResponseExamples(nextExamples){
-    const source=activeSource();
-    if(source?.scope==='local'&&!source.pending){
-      setLocalCollections(old=>applyLocalAction(old,{type:'saveExamples',collectionId:source.collectionId,requestId:source.requestId,responseExamples:nextExamples}));
-    }
-    if(source?.scope==='workspace'&&!source.pending&&!isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabRef.current),canEditCloud,selectedWs)){
-      if(!token)throw Error('Sign in to update workspace examples');
-      const base=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`;
-      const latest=await api(base,'GET',undefined,token);
-      const original=latest.find(request=>request.id===source.requestId);
-      if(!original)throw Error('Saved request not found');
-      const metadata=decodeStoredHeaders(original.headersJson);
-      const saved=await api(`${base}/${source.requestId}`,'PUT',{
-        ...original,headersJson:encodeStoredHeaders(metadata.headers,metadata.params,metadata.documentation,nextExamples,metadata.auth)
-      },token);
-      adoptSavedRevision(saved);
-    const updated=latest.map(request=>request.id===saved.id?saved:request);
-      setWorkspaceRequestLists(old=>({...old,[workspaceCollectionKey(source.workspaceId,source.collectionId)]:updated}));
-      if(source.workspaceId===selectedWs&&source.collectionId===selectedCol)setSavedRequests(updated);
-    }
-    const tabId=activeTabRef.current;
-    draftsRef.current[tabId]={...snapshot(),responseExamples:nextExamples};
-    setResponseExamples(nextExamples);
-  }
-  async function saveResponseExample(e){
-    e?.preventDefault?.();
-    if(!result||result.error)return;
-    const name=(exampleName||'').trim()||suggestExampleName(result);
-    const example=createResponseExample(result,{name,description:exampleDescription});
-    const nextExamples=upsertResponseExample(responseExamples,example);
-    const source=activeSource();
-    const success=await doAction(async()=>{
-      await persistResponseExamples(nextExamples);
-      const sandbox=isReadOnlyCloudTab(openTabs.find(t=>t.id===activeTabRef.current),canEditCloud,selectedWs);
-      setNotice(sandbox?`Example ${name} added to sandbox only. Cloud is unchanged.`:
-        !source||source.pending?`Added ${name} to draft. Save the request to keep it in a collection.`:`Saved example ${name}`);
-    });
-    if(success)setSaveExampleOpen(false);
-  }
+  const {openSaveExampleDialog, persistResponseExamples, saveResponseExample} =
+    createResponseExampleSaveActions(Object.assign(Object.create(dependencies), { activeSource }));
 
   return { loadRequest, activeSource, currentSavePayload, openSaveAs, saveCurrent, saveRequest, openSaveExampleDialog, persistResponseExamples, saveResponseExample };
 }

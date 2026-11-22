@@ -1,266 +1,32 @@
+import { createRequestSandboxActions } from './createRequestSandboxActions.js';
+import { createRequestTabManagementActions } from './createRequestTabManagementActions.js';
+import { createRequestTabNavigationActions } from './createRequestTabNavigationActions.js';
+import { createRequestDraftEditorActions } from './createRequestDraftEditorActions.js';
 // Tabs workbench actions. Stateless factory: shared logic remains scoped to the mounted App.
 // Dependencies are passed from the current render; no singleton store or persist middleware.
 export function createRequestTabActions(dependencies) {
-  const {
-    EMPTY_HEADER,
-    activeTabRef,
-    api,
-    binaryFile,
-    body,
-    canEditCloud,
-    cancelledRequestNameRef,
-    currentAuth,
-    currentTokenRef,
-    documentation,
-    draftsRef,
-    formFields,
-    format,
-    freshRequest,
-    getMessage,
-    isReadOnlyCloudTab,
-    method,
-    needsCloseConfirmation,
-    openBoundRequest,
-    openTabs,
-    originalRequestNameRef,
-    params,
-    parseCurl,
-    planTabClose,
-    postScript,
-    preScript,
-    prettyResponse,
-    reqTab,
-    requestFingerprint,
-    resTab,
-    responseExamples,
-    responsePretty,
-    result,
-    rows,
-    sandboxDocKey,
-    sanitizeResponseExamples,
-    scriptDiagnostic,
-    scriptError,
-    scriptLog,
-    scriptTests,
-    selectedCol,
-    selectedWs,
-    sessionDocumentationOverlays,
-    setActiveTabId,
-    setApiKeyIn,
-    setApiKeyName,
-    setApiKeyValue,
-    setAuthType,
-    setBasicPassword,
-    setBasicUsername,
-    setBearerToken,
-    setBinaryFile,
-    setBody,
-    setCloseConfirmation,
-    setConsoleOpen,
-    setDocumentation,
-    setEditingRequestName,
-    setFormFields,
-    setFormat,
-    setMethod,
-    setNotice,
-    setOpenTabs,
-    setPage,
-    setParams,
-    setPostScript,
-    setPreScript,
-    setPrettyResponse,
-    setReqTab,
-    setResTab,
-    setResponseExamples,
-    setResponsePretty,
-    setResult,
-    setRows,
-    setScriptDiagnostic,
-    setScriptError,
-    setScriptJump,
-    setScriptLog,
-    setScriptTests,
-    setTabMenu,
-    setUrl,
-    tabSaved,
-    tabSequence,
-    token,
-    url,
-    workspaceDraft
-  } = dependencies;
 
-  function beginRequestRename() {
-      const current=openTabs.find(tab=>tab.id===activeTabRef.current);
-      originalRequestNameRef.current=current?.name||'Untitled Request';
-      cancelledRequestNameRef.current=false;
-      setEditingRequestName(true);
-    }
+  const draftActions = createRequestDraftEditorActions(dependencies);
+  const beginRequestRename = draftActions.beginRequestRename;
+  const setCurrentRequestName = draftActions.setCurrentRequestName;
+  const finishRequestRename = draftActions.finishRequestRename;
+  const cancelRequestRename = draftActions.cancelRequestRename;
+  const snapshot = draftActions.snapshot;
+  const restoreDraft = draftActions.restoreDraft;
+  const stashActive = draftActions.stashActive;
+  const importCurlIntoCurrent = draftActions.importCurlIntoCurrent;
+  const navigationActions = createRequestTabNavigationActions(Object.assign(Object.create(dependencies), { stashActive, restoreDraft }));
+  const selectTab = navigationActions.selectTab;
+  const navigateConsoleEvent = navigationActions.navigateConsoleEvent;
+  const addTab = navigationActions.addTab;
+  const selectTabFromDraft = navigationActions.selectTabFromDraft;
+  const loadSavedRequest = navigationActions.loadSavedRequest;
+  const managementActions = createRequestTabManagementActions(Object.assign(Object.create(dependencies), { stashActive, selectTabFromDraft }));
+  const closeTab = managementActions.closeTab;
+  const performTabAction = managementActions.performTabAction;
+  const showTabContext = managementActions.showTabContext;
+  const sandboxActions = createRequestSandboxActions(Object.assign(Object.create(dependencies), { restoreDraft }));
+  const resetSandboxRequest = sandboxActions.resetSandboxRequest;
 
-  function setCurrentRequestName(nextName) {
-      setOpenTabs(tabs=>tabs.map(tab=>tab.id===activeTabRef.current?{...tab,name:nextName}:tab));
-    }
-
-  function finishRequestRename() {
-      if(cancelledRequestNameRef.current){cancelledRequestNameRef.current=false;return;}
-      const current=openTabs.find(tab=>tab.id===activeTabRef.current);
-      const trimmed=(current?.name||'').trim();
-      setCurrentRequestName(trimmed||originalRequestNameRef.current||'Untitled Request');
-      setEditingRequestName(false);
-    }
-
-  function cancelRequestRename() {
-      cancelledRequestNameRef.current=true;
-      setCurrentRequestName(originalRequestNameRef.current);
-      setEditingRequestName(false);
-    }
-
-  function snapshot() { return { method, url, rows: rows.map(r => ({ ...r })), body, documentation, responsePretty, prettyResponse, format, formFields:formFields.map(r=>({...r})),binaryFile:{...binaryFile},preScript,postScript,responseExamples:sanitizeResponseExamples(responseExamples),scriptLog,scriptTests,scriptError,scriptDiagnostic, reqTab, resTab, result, params: params.map(p => ({ ...p })), ...currentAuth() }; }
-
-  function restoreDraft(next) {
-      setMethod(next.method||'GET');setUrl(next.url||'');setRows(next.rows||[{...EMPTY_HEADER}]);setBody(next.body||'');setDocumentation(next.documentation||'');
-      setFormat(next.format||'application/json');setFormFields(next.formFields||[{key:'',value:''}]);
-      setBinaryFile(next.binaryFile||{name:'',base64:''});
-      setPreScript(next.preScript||'');setPostScript(next.postScript||'');setResponseExamples(sanitizeResponseExamples(next.responseExamples));
-      setScriptLog(next.scriptLog||[]);setScriptTests(next.scriptTests||[]);setScriptError(next.scriptError||'');
-      setScriptDiagnostic(next.scriptDiagnostic||null);setScriptJump(null);
-      setReqTab(next.reqTab||'params');setResTab(next.resTab||'body');setResult(next.result||null);setResponsePretty(next.responsePretty??true);setPrettyResponse(next.prettyResponse||'');
-      setParams(next.params||[{...EMPTY_HEADER}]);setAuthType(next.authType||'none');setBearerToken(next.bearerToken||'');
-      setBasicUsername(next.basicUsername||'');setBasicPassword(next.basicPassword||'');
-      setApiKeyName(next.apiKeyName||'X-API-Key');setApiKeyValue(next.apiKeyValue||'');setApiKeyIn(next.apiKeyIn||'header');
-    }
-
-  function stashActive() { draftsRef.current[activeTabRef.current] = snapshot(); }
-
-  function selectTab(id) {
-      setEditingRequestName(false);
-      if (id === activeTabRef.current) { setPage('tester'); return; }
-      stashActive();
-      const next = draftsRef.current[id];
-      if (!next) return;
-      activeTabRef.current = id; setActiveTabId(id);
-      restoreDraft(next);
-
-      setPage('tester');
-    }
-
-  function navigateConsoleEvent(event) {
-      if (!event?.line || !['pre-script','post-script'].includes(event.phase)) return;
-      if (!openTabs.some(tab => tab.id === event.tabId)) {
-        setNotice('The request tab for this Console event is no longer open.');
-        return;
-      }
-      selectTab(event.tabId);
-      setReqTab('scripts');
-      setScriptJump({phase:event.phase==='pre-script'?'pre':'post',line:event.line,column:event.column||1,serial:Date.now()});
-      setConsoleOpen(false);
-    }
-
-  function addTab(request, source = null, { focusName = false } = {}) {
-      stashActive();
-      const id = `t${++tabSequence.current}`;
-      const draft = { ...freshRequest(request?.name || 'Untitled Request'), ...request, binaryFile:{name:request?.binaryFile?.name||'',base64:''},
-        params:request?.params||[{...EMPTY_HEADER}],rows:request?.rows||[{...EMPTY_HEADER}],
-        formFields:request?.formFields||[{...EMPTY_HEADER}],result:null,scriptLog:[],scriptTests:[],scriptError:''};
-      draftsRef.current[id] = draft; activeTabRef.current = id;
-      const name = request?.name || 'Untitled Request';
-      setOpenTabs(t => [...t, { id, name, savedName:name, method: draft.method, source, savedFingerprint:requestFingerprint(draft,name) }]);
-      originalRequestNameRef.current=name; cancelledRequestNameRef.current=false; setEditingRequestName(focusName);
-      setActiveTabId(id); restoreDraft(draft); setPage('tester');
-    }
-
-  function importCurlIntoCurrent(value){
-      try{
-        const parsed=parseCurl(value);
-        setMethod(parsed.method);setUrl(parsed.url);setRows(parsed.rows);setBody(parsed.body);setFormat(parsed.format);
-        setParams(parsed.params);setFormFields(parsed.formFields);setBinaryFile({name:'',base64:''});
-        setAuthType(parsed.authType);setBearerToken(parsed.bearerToken);
-        setBasicUsername(parsed.basicUsername||'');setBasicPassword(parsed.basicPassword||'');
-        setApiKeyName(parsed.apiKeyName||'X-API-Key');setApiKeyValue(parsed.apiKeyValue||'');setApiKeyIn(parsed.apiKeyIn||'header');
-        setResult(null);setPrettyResponse('');
-        setReqTab(parsed.body||parsed.formFields.some(r=>r.key)?'body':'params');
-        setOpenTabs(t=>t.map(x=>x.id===activeTabRef.current?{...x,method:parsed.method,name:parsed.name,status:undefined}:x));
-        setNotice(`cURL imported: ${parsed.method} ${parsed.url}. Review before sending.`);
-      }catch(e){setNotice(`cURL import failed: ${getMessage(e)}`);}
-    }
-
-  function closeTab(id){performTabAction('close',id);}
-
-  function performTabAction(action,id,confirmed=false){
-      setTabMenu(null);
-      if(action==='duplicate'){
-        stashActive();const source=draftsRef.current[id];if(!source)return;
-        const newId=`t${++tabSequence.current}`;
-        const cloned=JSON.parse(JSON.stringify(source));
-        draftsRef.current[newId]={...cloned,binaryFile:{name:cloned.binaryFile?.name||'',base64:''},result:null,scriptLog:[],scriptTests:[],scriptError:''};
-        const sourceTab=openTabs.find(t=>t.id===id);
-        const index=openTabs.findIndex(t=>t.id===id);
-        const copyName=`${sourceTab?.name||'Request'} (copy)`;
-        setOpenTabs(t=>[...t.slice(0,index+1),{id:newId,name:copyName,savedName:copyName,method:cloned.method,source:null,pendingCopy:true,savedFingerprint:requestFingerprint(cloned,copyName)},...t.slice(index+1)]);
-        selectTabFromDraft(newId);return;
-      }
-      stashActive();
-      const plan=planTabClose(openTabs,id,activeTabRef.current,action);
-      if(!confirmed){
-        const unsaved=plan.removedIds.filter(tabId=>{
-          const tab=openTabs.find(t=>t.id===tabId);
-          return needsCloseConfirmation(tab,draftsRef.current[tabId]);
-        });
-        if(unsaved.length){setCloseConfirmation({action,id,unsaved});return;}
-      }
-      setCloseConfirmation(null);
-      if(plan.reset){
-        const blank=freshRequest('Untitled Request');const blankId=id;
-        draftsRef.current={[blankId]:blank};
-        setOpenTabs([{id:blankId,name:'Untitled Request',savedName:'Untitled Request',method:'GET',savedFingerprint:requestFingerprint(blank,'Untitled Request')}]);
-        selectTabFromDraft(blankId);return;
-      }
-      const removed=new Set(plan.removedIds);
-      for(const key of removed)delete draftsRef.current[key];
-      setOpenTabs(plan.remaining);
-      if(plan.nextActiveId!==activeTabRef.current)selectTabFromDraft(plan.nextActiveId);
-    }
-
-  function showTabContext(e,id){
-      e.preventDefault();e.stopPropagation();
-      setTabMenu({id,x:Math.max(8,Math.min(e.clientX,window.innerWidth-224)),y:Math.max(8,Math.min(e.clientY,window.innerHeight-190))});
-    }
-
-  function selectTabFromDraft(id) {
-      setEditingRequestName(false);
-      const next = draftsRef.current[id];
-      if (!next) return;
-      activeTabRef.current = id; setActiveTabId(id);
-      restoreDraft(next);
-
-      setPage('tester');
-    }
-
-  function loadSavedRequest(item) {
-      openBoundRequest(workspaceDraft(item),
-        {scope:'workspace',workspaceId:selectedWs,collectionId:item.collectionId||selectedCol,requestId:item.id,revision:item.revision});
-    }
-
-  async function resetSandboxRequest() {
-      const tab=openTabs.find(t=>t.id===activeTabRef.current);
-      if(!isReadOnlyCloudTab(tab,canEditCloud,selectedWs)||!tab?.source?.requestId)return;
-      if(tab.source.workspaceId!==selectedWs){setNotice("Switch to the request's workspace before resetting its sandbox.");return;}
-      const source=tab.source;
-      const requestTabId=tab.id;
-      const originalToken=token;
-      const currentWorkspace=selectedWs;
-      try {
-        const path=`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`;
-        const requests=await api(path,'GET',undefined,originalToken);
-        if(originalToken!==currentTokenRef.current||currentWorkspace!==selectedWs)throw Error('Workspace changed. Open the Cloud request again.');
-        const saved=requests.find(r=>r.id===source.requestId);
-        if(!saved)throw Error('Cloud request no longer exists.');
-        const baseline={...freshRequest(saved.name),...workspaceDraft(saved),result:null,scriptLog:[],scriptTests:[],scriptError:'',resTab:'body'};
-        draftsRef.current[requestTabId]=baseline;
-        sessionDocumentationOverlays.current.delete(sandboxDocKey({...source,type:'request'}));
-        setOpenTabs(tabs=>tabs.map(t=>t.id===requestTabId?{...tabSaved(t,{...source,revision:saved.revision},baseline,saved.name),status:undefined}:t));
-        if(activeTabRef.current===requestTabId)restoreDraft(baseline);
-        setNotice('Sandbox reset to the latest Cloud version. No shared data was changed.');
-      }catch(error){setNotice(`Could not reset sandbox: ${getMessage(error)}`);}
-    }
   return { beginRequestRename, setCurrentRequestName, finishRequestRename, cancelRequestRename, snapshot, restoreDraft, stashActive, selectTab, navigateConsoleEvent, addTab, importCurlIntoCurrent, closeTab, performTabAction, showTabContext, selectTabFromDraft, loadSavedRequest, resetSandboxRequest };
 }

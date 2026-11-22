@@ -5,10 +5,11 @@ const read = path => readFileSync(new URL(path,import.meta.url),'utf8');
 
 test('Cloud import backend checks permission and uses one SaveChanges transaction boundary',()=>{
   const source=read('../../../backend/src/Pakpost.Application/Internal/Collections/Handlers/ImportCollectionsHandler.cs');
+  const guard=read('../../../backend/src/Pakpost.Application/Internal/Collections/Services/CloudImportGuard.cs');
   const controller=read('../../../backend/src/Pakpost.Api/Controllers/CollectionsController.cs');
   assert.match(controller,/HttpPost\("import"\)/);
   assert.match(source,/WorkspacePermissions\.CollectionWrite/);
-  assert.match(source,/SavedHeaderPolicy\.EnsureSafe/);
+  assert.match(guard,/SavedHeaderPolicy\.EnsureSafe/);
   assert.match(source,/new SaveRequestValidator\(\)/);
   assert.match(source,/new SaveCollectionVariablesValidator\(\)/);
   assert.match(source,/SavedRequestHistoryCodec\.Capture/);

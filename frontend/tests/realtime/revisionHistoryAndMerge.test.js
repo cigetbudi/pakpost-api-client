@@ -63,7 +63,7 @@ test('create, update and restore append version snapshots in a database transact
  assert.match(controller,/realtime.PublishAsync\(workspaceId,"request.updated"/);
 });
 test('frontend uses lazy version panel and requires explicit apply/restore',()=>{
- const app=readWorkbenchSource();const history=source('frontend/src/features/requests/controllers/createRequestHistoryActions.js');const panel=source('frontend/src/features/requests/components/RequestRevisionPanel.jsx');
+ const app=readWorkbenchSource();const history=source('frontend/src/features/requests/controllers/createRequestRevisionActions.js');const panel=source('frontend/src/features/requests/components/RequestRevisionPanel.jsx');
  assert.match(app,/RequestRevisionPanel = lazy/);
  assert.match(app,/applyMergedRevision/);
  assert.match(app,/createRequestHistoryActions/);

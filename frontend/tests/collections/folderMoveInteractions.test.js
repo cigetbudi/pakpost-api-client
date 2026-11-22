@@ -61,8 +61,10 @@ test('both explorer types expose real menu move and drop to root routes',()=>{
   assert.match(local,/\['moveFolder','Move to…'\]/);
   assert.match(local,/localFolderMoveTargets/);
   assert.match(local,/startFolderDrag/);
-  assert.match(cloud,/Move Cloud folder/);
-  assert.match(cloud,/cloudFolderMoveTargets/);
+  const moveDialog=source('../../src/features/collections/components/CloudFolderMoveDialog.jsx');
+  assert.match(cloud,/<CloudFolderMoveDialog/);
+  assert.match(moveDialog,/Move Cloud folder/);
+  assert.match(moveDialog,/cloudFolderMoveTargets/);
   assert.match(cloud,/parentFolderId:targetId,version:current\.version/);
   assert.match(explorer,/pakpost:cloud-folder-drop-root/);
 });

@@ -48,7 +48,7 @@ test('Cloud page uses keyset bounds and keeps existing full index for export',()
   assert.match(api,/index`, 'GET'/);
   assert.equal(CLOUD_SERVER_PAGING_THRESHOLD,800);
   assert.equal(CLOUD_SERVER_PAGE_SIZE,120);
-  const backend=source('../../../backend/src/Pakpost.Infrastructure/Persistence/Repositories/SavedRequestRepository.cs');
+  const backend=source('../../../backend/src/Pakpost.Infrastructure/Persistence/Repositories/SavedRequestIndexReader.cs');
   assert.match(backend,/FromSqlInterpolated/);
   assert.match(backend,/sorted\.Take\(size \+ 1\)/);
   assert.doesNotMatch(backend.slice(backend.indexOf('PageIndexAsync'),backend.indexOf('public async Task<IReadOnlyList<SavedRequest>> ListAsync')),/request\.Body/);
