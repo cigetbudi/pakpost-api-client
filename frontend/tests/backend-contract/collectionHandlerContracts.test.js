@@ -40,11 +40,11 @@ test('real .NET xUnit project is included in solution with behavioral coverage',
   assert.match(project, /PackageReference Include="NSubstitute"/);
 
   for (const file of [
-    'SavedRequestValidationTests.cs',
-    'CloudFolderRulesTests.cs',
-    'CloudFolderHandlerTests.cs',
-    'CloudImportHandlerTests.cs',
-    'SavedRequestAccessTests.cs'
+    'Collections/SavedRequestValidationTests.cs',
+    'Collections/CloudFolderRulesTests.cs',
+    'Collections/CloudFolderHandlerTests.cs',
+    'Collections/CloudImportHandlerTests.cs',
+    'Collections/SavedRequestAccessTests.cs'
   ]) {
     const source = read(`backend/tests/Pakpost.UnitTests/${file}`);
     assert.match(source, /\[Fact\]|\[Theory\]/);

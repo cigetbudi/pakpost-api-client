@@ -1,3 +1,4 @@
+import { createCommandPaletteItems, filterCommandPaletteItems } from '../services/commandPaletteItems.js';
 import {CLOUD_SERVER_PAGING_THRESHOLD} from '../../features/collections/services/cloudRenderBudget.js';
 import { useEnvironmentDataLifecycle } from '../../features/environments/hooks/useEnvironmentDataLifecycle.js';
 import { useWorkbenchPreferencesPersistence } from './useWorkbenchPreferencesPersistence.js';
@@ -928,17 +929,12 @@ export function useWorkbenchController() {
   const visibleLocalCollections = useMemo(
     () => sortCollectionRoots(localCollections, collectionSort), [localCollections, collectionSort]);
   const responseType = result && !result.error ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain') : 'text/plain';
-  const commandItems = commandOpen ? [
-    {key:'new-request', title:'New HTTP request', subtitle:'Open an empty request tab', icon:'action', run:()=>addTab()},
-    {key:'open-collections',title:'Show collections',subtitle:'Browse saved API requests',icon:'action',run:()=>{setExplorerTab('collections');setSidebarCollapsed(false);setPage('tester')}},
-    {key:'open-history',title:'Open request history',subtitle:'Previously sent requests',icon:'action',run:()=>{setExplorerTab('history');setSidebarCollapsed(false);setPage('tester')}},
-    {key:'environments',title:'Manage environments',subtitle:'Edit local and workspace variables',icon:'action',run:()=>openContext('environments')},
-    {key:'code',title:'Generate code',subtitle:'cURL, Fetch, Go, C#, Python',icon:'action',run:()=>{setExplorerTab('code');setSidebarCollapsed(false);setPage('tester')}},
-    ...openTabs.map(t=>({key:`tab-${t.id}`,title:t.name,subtitle:`${t.method} · Open tab`,method:t.method,run:()=>selectTab(t.id)})),
-    ...localCollections.flatMap(col => (col.requests || []).map(req => ({key:`local-${col.id}-${req.id}`,title:req.requestName||req.name||'Untitled Request',subtitle:`${col.name} · ${req.url || ''}`,method:req.method||'GET',run:()=>openLocalRequest(req,col.id)}))),
-    ...(token?savedRequests.map(req=>({key:`neon-${req.id}`,title:req.name,subtitle:`Workspace · ${req.url||''}`,method:req.method||'GET',run:()=>loadSavedRequest(req)})):[])
-  ] : [];
-  const visibleCommandItems = commandItems.filter(item => `${item.title} ${item.subtitle}`.toLowerCase().includes(commandQuery.trim().toLowerCase())).slice(0,30);
+  const commandItems = createCommandPaletteItems({
+    commandOpen, addTab, setExplorerTab, setSidebarCollapsed, setPage,
+    openContext, openTabs, localCollections, token, savedRequests, selectTab,
+    openLocalRequest, loadSavedRequest,
+  });
+  const visibleCommandItems = filterCommandPaletteItems(commandItems, commandQuery);
   const responseText = result && !result.error ? (resTab === 'body' ? (responsePretty ? (prettyResponse||prettyJson(result.body||'')) : (result.body||'')) : JSON.stringify(result.headers || {}, null, 2)) : '';
   // Explicit UI contract. Runtime-only secret/session refs stay inside this hook.
   return {

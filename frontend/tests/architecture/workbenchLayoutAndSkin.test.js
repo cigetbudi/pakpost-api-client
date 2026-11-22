@@ -7,7 +7,7 @@ const app = readWorkbenchSource();
 const main = src('../../src/main.jsx');
 const css = src('../../src/styles/layers/workbench-details.css');
 
-test('v13 skin is appended after v12 without replacing theme or runtime code', () => {
+test('workbench theme layer extends the existing theme without replacing runtime code', () => {
   assert.match(main, /import '\.\/styles\/layers\/collection-workflows\.css';\s*import '\.\/styles\/layers\/workbench-details\.css';/);
   for (const theme of ['light', 'dark', 'oled']) assert.match(css, new RegExp(`:root\\[data-theme='${theme}'\\]`));
   assert.match(app, /executeWorkbenchRequest/);
@@ -30,7 +30,9 @@ test('quick switcher shortcut is accessible and reaches existing open tabs and s
   assert.match(app, /event\.ctrlKey \|\| event\.metaKey/);
   assert.match(app, /event\.key\.toLowerCase\(\) === 'k'/);
   assert.match(app, /aria-label="Quick search and commands"/);
-  assert.match(app, /\.\.\.openTabs\.map/);
-  assert.match(app, /\.\.\.localCollections\.flatMap/);
-  assert.match(app, /openLocalRequest\(req,col\.id\)/);
+  const palette = src('../../src/app/services/commandPaletteItems.js');
+  assert.match(app, /createCommandPaletteItems\(/);
+  assert.match(palette, /\.\.\.openTabs\.map/);
+  assert.match(palette, /\.\.\.localCollections\.flatMap/);
+  assert.match(palette, /openLocalRequest\(request, collection\.id\)/);
 });

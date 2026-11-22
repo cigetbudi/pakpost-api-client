@@ -114,8 +114,20 @@ with zipfile.ZipFile(
             skipped += 1
             continue
 
+        # Include only the essential binary branding assets. Do not include
+        # arbitrary images or screenshots in source archives.
+        approved_binary_asset = (
+            (len(relative.parts) == 4
+             and relative.parts[:3] == ('extension', 'common', 'icons')
+             and name.startswith('icon-') and name.endswith('.png'))
+            or relative.as_posix() == 'backend/src/Pakpost.Infrastructure/Services/EmailTemplates/pakpost-logo.png'
+            or (relative.parts[:3] == ('frontend', 'public', 'branding')
+                and name.endswith('.png'))
+        )
+
         if (
-            relative.suffix.lower() not in allowed_extensions
+            not approved_binary_asset
+            and relative.suffix.lower() not in allowed_extensions
             and name not in allowed_names
         ):
             skipped += 1
@@ -125,11 +137,17 @@ with zipfile.ZipFile(
             skipped += 1
             continue
 
-        # Additional binary detection
-        with file.open("rb") as f:
-            if b"\x00" in f.read(4096):
-                skipped += 1
-                continue
+        # Reject arbitrary binaries; the allowlisted logos/icons are safe PNGs.
+        if approved_binary_asset:
+            with file.open('rb') as f:
+                if f.read(8) != b'\x89PNG\r\n\x1a\n':
+                    skipped += 1
+                    continue
+        else:
+            with file.open('rb') as f:
+                if b"\x00" in f.read(4096):
+                    skipped += 1
+                    continue
 
         archive.write(file, arcname=rel)
         included.append(rel)

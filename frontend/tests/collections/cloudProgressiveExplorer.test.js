@@ -50,7 +50,7 @@ test('progressive view preserves existing interaction paths and renders closed c
   assert.match(rows,/onContextMenu: event => onContextMenu\(event, key\)/);
   assert.match(explorer,/examplesOpen&&\(meta\.responseExamples\|\|\[\]\)\.map/);
   assert.match(workbench,/const visibleCollections = useMemo/);
-  assert.match(workbench,/const commandItems = commandOpen \?/);
+  assert.match(workbench,/createCommandPaletteItems\(/);
   assert.match(local,/opened&&tree&&<Branch/);
   assert.match(local,/opened&&<Branch/);
   assert.match(local,/examplesOpen&&examples\.map/);
