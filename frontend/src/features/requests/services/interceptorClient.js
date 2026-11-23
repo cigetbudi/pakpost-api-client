@@ -2,16 +2,18 @@
  * content script and re-authorized in the extension background before every send.
  * Never fall back to the backend proxy for extension failures.
  */
-export const INTERCEPTOR_MODES=['proxy','browser','extension'];
+import { isTauriDesktop } from '../../collections/services/desktopLocalRepository.js';
+
+export const INTERCEPTOR_MODES=['proxy','browser','extension','native'];
 export const EXTENSION_CHANNEL='pakpost.interceptor.v1';
 const MAX_RESPONSE_BYTES=1_048_576;
 
 export function readInterceptorMode(store){
-  try { const mode=store?.getItem('pakpost_interceptor_mode');return INTERCEPTOR_MODES.includes(mode)?mode:'proxy'; }
+  try { const mode=store?.getItem('pakpost_interceptor_mode');return INTERCEPTOR_MODES.includes(mode)&& (mode!=='native'||isTauriDesktop())?mode:(isTauriDesktop()?'native':'proxy'); }
   catch{return 'proxy';}
 }
 export function writeInterceptorMode(store,mode){
-  if(!INTERCEPTOR_MODES.includes(mode))throw Error('Unknown interceptor');
+  if(!INTERCEPTOR_MODES.includes(mode)||(mode==='native'&&!isTauriDesktop()))throw Error('Unknown interceptor');
   try{store?.setItem('pakpost_interceptor_mode',mode);}catch{}
 }
 
@@ -112,6 +114,11 @@ export async function sendBrowserRequest(command){
 }
 
 export async function dispatchRequest(command,mode){
+  if(mode==='native'){
+    if(!isTauriDesktop())throw Error('Native transport only works in PakPost Desktop');
+    const {invoke}=await import('@tauri-apps/api/core');
+    return invoke('send_native_http',{command});
+  }
   if(mode==='extension')return sendExtensionRequest(command);
   if(mode==='browser')return sendBrowserRequest(command);
   return null; // Caller invokes its existing secure server proxy.

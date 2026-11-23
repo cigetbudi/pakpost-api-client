@@ -1,3 +1,4 @@
+import { isTauriDesktop } from '../../collections/services/desktopLocalRepository.js';
 import { useEffect } from 'react';
 import { api } from '../../../services/httpClient.js';
 
@@ -7,6 +8,7 @@ export function useEnvironmentDataLifecycle({envScope, storageWorkspace, token, 
   setWorkspaceEnvironmentResult, setNotice, setStorageScope, storageLocal, getMessage}) {
   useEffect(()=>{if(!token&&envScope===storageWorkspace)setStorageScope(storageLocal);},[token,envScope]);
   useEffect(()=>{
+    if(isTauriDesktop())return;
     const safe=localEnvironments.map(e=>({...e,variables:e.variables.map(v=>v.isSecret?{...v,value:''}:v)}));
     const secrets=Object.fromEntries(localEnvironments.map(e=>[e.id,Object.fromEntries(e.variables.filter(v=>v.isSecret).map(v=>[v.key,v.value]))]));
     localStorage.setItem('pakpost_guest_envs',JSON.stringify(safe));

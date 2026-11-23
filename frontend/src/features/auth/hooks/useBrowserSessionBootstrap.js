@@ -1,3 +1,4 @@
+import { isTauriDesktop } from '../../collections/services/desktopLocalRepository.js';
 import { useEffect } from 'react';
 import { BROWSER_SESSION, getBrowserCsrf, setBrowserCsrf } from '../../../services/httpClient.js';
 import { createAuthTabSync } from '../services/authTabSync.js';
@@ -17,6 +18,7 @@ export function useBrowserSessionBootstrap({
   setMe, setStorageScope, setToken,
 }) {
   useEffect(()=>{
+    if (isTauriDesktop()) return; // Local-first desktop: no implicit public session probe.
     // Purge credentials written by pre-cookie versions of PakPost.
     try{sessionStorage.removeItem('pakpost_token');}catch{}
     let active=true;

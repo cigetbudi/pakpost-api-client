@@ -70,6 +70,15 @@ export function filterCollectionTree(tree,search){
   return visit(tree);
 }
 
+// Recovery-safe snapshot. Secrets are deliberately omitted from disk persistence.
+export function safeLocalCollectionsSnapshot(collections) {
+  validateLibrary(collections);
+  return {version:1,collections:collections.map(c=>({...c,
+    variables:(c.variables||[]).map(v=>v.isSecret?{...v,value:''}:v),
+    requests:(c.requests||[]).map(r=>safeExportDraft(r,false)),
+  }))};
+}
+
 export function readLocalCollections(){
   if(typeof sessionStorage==='undefined')return [];
   for(const [store,key] of [[sessionStorage,LIVE],[localStorage,FALLBACK]]){

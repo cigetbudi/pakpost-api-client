@@ -173,7 +173,7 @@ export function WorkbenchView({ model }) {
 /></Suspense> : null}
       </main>
     </div>
-    <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost | Made with ♡ by cigetbudi</span><span className="pp-footer-center">{interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
+    <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost | Made with ♡ by cigetbudi</span><span className="pp-footer-center">{interceptorMode==='native'?'Desktop Native · Direct from this computer':interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
       <WorkbenchOverlays model={model}/>
   </div>;
 }

@@ -1,3 +1,4 @@
+import {isTauriDesktop} from '../../collections/services/desktopLocalRepository.js';
 import React,{useState} from 'react';
 import {ArrowRight,Code2,FileUp,Info,Keyboard,LayoutPanelTop,Palette,ShieldCheck,Variable,Puzzle,Server,Globe2,RefreshCw,CheckCircle2,AlertCircle} from 'lucide-react';
 import {AppearanceSidebar} from './AppearanceSidebar';
@@ -29,6 +30,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
         <h2>Request Interceptor</h2><p>Choose how Pakpost sends requests. Internal APIs must never be sent through the public proxy by accident.</p>
         <div className="pp-extension-options" role="radiogroup" aria-label="Request interceptor">
           {[
+            ...(isTauriDesktop()?[['native','Desktop Native',Server,'Direct HTTP from this computer; supports localhost/LAN without CORS. Use only trusted endpoints.']]:[]),
             ['proxy','Secure Proxy',Server,'Pakpost backend. Private addresses are blocked.'],
             ['browser','Browser',Globe2,'Direct browser fetch, subject to CORS.'],
             ['extension','Browser Extension',Puzzle,'Use your network/VPN with Allow All or Specified destinations.']
@@ -47,6 +49,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
           <button type="button" className="pp-extension-check" onClick={onCheckExtension}><RefreshCw size={14}/> Check connection</button>
           <p className="pp-extension-hint">The extension does not use Pakpost's backend proxy and does not follow redirects. You must be on the appropriate LAN/VPN.</p>
         </div>}
+        {interceptorMode==='native'&&<p className="pp-extension-hint">Requests run on your computer, not on the PakPost server. Internal network and localhost are reachable. Cookies are not retained automatically; redirects are blocked.</p>}
         {interceptorMode==='browser'&&<p className="pp-extension-hint">Requests run in your webpage. Cross-origin APIs must allow Pakpost's origin via CORS; otherwise choose Browser Extension.</p>}
       </>}
       {category==='shortcuts'&&<><h2>Keyboard shortcuts</h2><p>Available while working in REST.</p><dl className="pp-settings-shortcuts"><div><dt>Send request</dt><dd>Ctrl / Cmd + Enter</dd></div><div><dt>Save request</dt><dd>Ctrl / Cmd + S</dd></div><div><dt>Quick search</dt><dd>Ctrl / Cmd + K</dd></div><div><dt>Toggle comment</dt><dd>Ctrl / Cmd + / (editor)</dd></div></dl></>}
