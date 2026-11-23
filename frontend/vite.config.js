@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -12,8 +13,13 @@ export default defineConfig({
     ],
   },
   server: {
+    host: '127.0.0.1',
     port: 5173,
     strictPort: true,
+
+    // Allow local HTTPS reverse proxy (Caddy)
+    allowedHosts: ['pakpost.local.test'],
+
     proxy: {
       '/api': apiOrigin,
       // SignalR negotiation and WebSocket upgrades use the same API origin.

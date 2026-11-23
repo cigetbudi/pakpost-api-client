@@ -15,6 +15,7 @@ public static class AuthenticationServiceExtensions
             throw new InvalidOperationException("Jwt__SigningKey must be at least 32 UTF-8 bytes");
 
         services.AddScoped<ServerSessionStore>();
+        services.AddSingleton<DesktopPairingStore>();
         services.AddHostedService<ExpiredSessionCleanupService>();
         services.AddAuthentication(options =>
         {

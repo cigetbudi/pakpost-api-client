@@ -22,6 +22,17 @@ public static class PakpostRateLimitingExtensions
                         QueueLimit = 0,
                         AutoReplenishment = true
                     }));
+                    
+            options.AddPolicy("desktop-poll", context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    "desktop-poll:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
 
             options.AddPolicy("health-readiness", context =>
                 RateLimitPartition.GetFixedWindowLimiter(

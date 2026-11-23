@@ -1,0 +1,14 @@
+{
+  "name": "pakpost-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:deb": "tauri build --bundles deb",
+    "build:rpm": "tauri build --bundles rpm"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

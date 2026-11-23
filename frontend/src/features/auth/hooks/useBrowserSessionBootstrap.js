@@ -18,7 +18,28 @@ export function useBrowserSessionBootstrap({
   setMe, setStorageScope, setToken,
 }) {
   useEffect(()=>{
-    if (isTauriDesktop()) return; // Local-first desktop: no implicit public session probe.
+    if (isTauriDesktop()) {
+      let mounted=true;
+      // Local defaults to zero network requests. Only an already-authorized
+      // remote session can enable the shared workspace API adapter.
+      (async()=>{
+        try {
+          const {invoke}=await import('@tauri-apps/api/core');
+          if (!await invoke('desktop_remote_status') || !mounted) return;
+          window.__PAKPOST_DESKTOP_REMOTE__=true;
+          const result=await api('/api/auth/session','GET');
+          if (!mounted || !result?.authenticated || !result.user) return;
+          currentTokenRef.current=BROWSER_SESSION;
+          setBrowserCsrf(result.csrfToken||'');
+          setToken(BROWSER_SESSION);
+          setMe(result.user);
+          setAuthOpen(false);
+          setStorageScope('workspace');
+          loadWorkspaces(BROWSER_SESSION,result.user.id);
+        } catch (e) {console.warn('Desktop remote session unavailable:', String(e));window.__PAKPOST_DESKTOP_REMOTE__=false;}
+      })();
+      return ()=>{mounted=false};
+    }
     // Purge credentials written by pre-cookie versions of PakPost.
     try{sessionStorage.removeItem('pakpost_token');}catch{}
     let active=true;
