@@ -27,7 +27,10 @@ public sealed class AuthSessionsController(
     {
         var name = BrowserSessionCookies.Name(Request, environment);
         var current = CurrentSession();
-        await sessions.RevokeAsync(Request.Cookies[name], ct);
+        var raw = HttpContext.Items.ContainsKey("pakpost_desktop_auth")
+            ? Request.Headers.Authorization.ToString()["PakpostDesktop ".Length..]
+            : Request.Cookies[name];
+        await sessions.RevokeAsync(raw, ct);
         if (current is not null) await connections.RevokeSessionAsync(hub, current.Id);
         Response.Cookies.Delete(name, BrowserSessionCookies.Options(Request));
         return NoContent();

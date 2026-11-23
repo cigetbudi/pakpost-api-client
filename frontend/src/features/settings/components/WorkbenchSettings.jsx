@@ -1,3 +1,4 @@
+import {DesktopConnections} from '../../desktop/components/DesktopConnections.jsx';
 import {isTauriDesktop} from '../../collections/services/desktopLocalRepository.js';
 import React,{useState} from 'react';
 import {ArrowRight,Code2,FileUp,Info,Keyboard,LayoutPanelTop,Palette,ShieldCheck,Variable,Puzzle,Server,Globe2,RefreshCw,CheckCircle2,AlertCircle} from 'lucide-react';
@@ -13,7 +14,8 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
   const chooseCategory=onCategoryChange??setLocalCategory;
   const categories=[
     ['appearance','Appearance',Palette],['layout','Request layout',LayoutPanelTop],
-    ['interceptor','Interceptor',Puzzle],['shortcuts','Keyboard shortcuts',Keyboard],
+    ['interceptor','Interceptor',Puzzle],
+    ...(isTauriDesktop() ? [['connections','Desktop connections',Server]] : []),['shortcuts','Keyboard shortcuts',Keyboard],
     ['environments','Environments',Variable],['exchange','Import / Export',FileUp],
     ['privacy','Privacy & proxy',ShieldCheck],['security','Security & sessions',ShieldCheck],
     ...(me?.isSuperAdmin ? [['instance','Instance admin',ShieldCheck]] : []),
@@ -24,6 +26,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
     <div className="pp-settings-inner"><nav aria-label="Settings categories" className="pp-settings-categories">
       {categories.map(([id,name,Icon])=><button key={id} className={category===id?'selected':''} onClick={()=>chooseCategory(id)}><Icon size={17}/><span>{name}</span></button>)}
     </nav><section className="pp-settings-details">
+      {category==='connections'&&isTauriDesktop()&&<DesktopConnections/>}
       {category==='appearance'&&<><h2>Appearance</h2><p>Choose a theme for the entire workbench, including code editors.</p><AppearanceSidebar value={theme} onChange={onThemeChange}/></>}
       {category==='layout'&&<><h2>Request layout</h2><p>Choose how request and response share the available space.</p><div className="pp-settings-layouts"><button className={split==='horizontal'?'chosen':''} onClick={()=>onSplitChange('horizontal')}><LayoutPanelTop size={22}/>Stacked <small>Request above response</small></button><button className={split==='vertical'?'chosen':''} onClick={()=>onSplitChange('vertical')}><Code2 size={22}/>Side by side<small>Request left of response</small></button></div></>}
       {category==='interceptor'&&<>

@@ -16,6 +16,30 @@ export const CLIENT_INSTANCE_ID =
  * handling and existing authorization paths rely on them.
  */
 export async function api(path, method = 'GET', body, token = '', {signal} = {}) {
+  if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__ && (path.startsWith('/api/') || path.startsWith('/hubs/'))) {
+    if (!window.__PAKPOST_DESKTOP_REMOTE__ || !path.startsWith('/api/')) {
+      throw new Error('Desktop Local Mode: Cloud API is disabled. Use Desktop Native for API requests.');
+    }
+    // All authenticated API requests are made by Rust to the selected HTTPS
+    // origin. The opaque session token never enters the JS or WebView runtime.
+    let result;
+    try {
+      const {invoke} = await import('@tauri-apps/api/core');
+      result = await invoke('remote_api', {path, method, body: body === undefined ? null : body});
+    } catch (reason) {
+      throw new Error(String(reason));
+    }
+    if (result.status < 200 || result.status >= 300) {
+      const data=result.data;
+      const message=data?.message || data?.detail || data?.title || `HTTP ${result.status}`;
+      const error=new Error(message);
+      error.status=result.status;
+      error.requestId=result.requestId;
+      error.retryAfter=result.retryAfter;
+      throw error;
+    }
+    return result.data;
+  }
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   // Legacy token argument remains in the API signature for old unit callers;

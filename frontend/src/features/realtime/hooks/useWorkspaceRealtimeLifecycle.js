@@ -10,7 +10,7 @@ export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, ses
   callbacks.current = {onEvent,onAccessChanged,onStatus,onReset};
   useEffect(() => {
     callbacks.current.onReset?.();
-    if (!enabled || !token || !workspaceId) {
+    if (window.__TAURI_INTERNALS__ || !enabled || !token || !workspaceId) {
       callbacks.current.onStatus?.('offline');
       return;
     }

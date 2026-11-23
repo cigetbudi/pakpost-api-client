@@ -71,7 +71,9 @@ public sealed class AuthController(
     [AllowAnonymous, HttpGet("session")]
     public async Task<ActionResult<BrowserSessionResponse>> Session(CancellationToken ct)
     {
-        var raw = Request.Cookies[BrowserSessionCookies.Name(Request, environment)];
+        var raw = HttpContext.Items.ContainsKey("pakpost_desktop_auth")
+            ? Request.Headers.Authorization.ToString()["PakpostDesktop ".Length..]
+            : Request.Cookies[BrowserSessionCookies.Name(Request, environment)];
         var found = HttpContext.Items.TryGetValue(typeof(BrowserSession), out var cached)
             ? cached as BrowserSession : await sessions.FindAsync(raw, ct);
         if (found is null)

@@ -18,6 +18,10 @@ export function createWorkbenchLogoutActions({
     authEpochRef.current += 1;
     try {
       await api('/api/auth/logout','POST',{},currentTokenRef.current);
+      if(window.__TAURI_INTERNALS__ && window.__PAKPOST_DESKTOP_REMOTE__){
+        try{const {invoke}=await import('@tauri-apps/api/core');await invoke('disconnect_remote');}catch{}
+        window.__PAKPOST_DESKTOP_REMOTE__=false;
+      }
       performLogout(true);
       return true;
     } catch (error) {

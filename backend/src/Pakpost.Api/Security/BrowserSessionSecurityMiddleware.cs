@@ -36,7 +36,7 @@ public sealed class BrowserSessionSecurityMiddleware(
             // Credential endpoints rotate the session and are origin-checked above.
             var authPath = request.Path.Value ?? "";
             var login = authPath is "/api/auth/login" or "/api/auth/register" or "/api/auth/google";
-            if (!login && !ServerSessionStore.VerifyCsrf(session,
+            if (!login && !context.Items.ContainsKey("pakpost_desktop_auth") && !ServerSessionStore.VerifyCsrf(session,
                 request.Headers["X-PakPost-CSRF"].ToString()))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;

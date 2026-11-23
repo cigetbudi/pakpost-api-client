@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import {DesktopApproval} from './features/desktop/components/DesktopApproval.jsx';
 import { WorkbenchErrorBoundary } from './components/ui/WorkbenchErrorBoundary.jsx';
 import './styles/base.css';
 import './styles/clean-workbench.css';
@@ -14,7 +15,7 @@ import './styles/layers/context-sidebar.css';
 import './styles/layers/request-drafts.css';
 import { readAppearance } from './features/settings/services/appearance.js';
 document.documentElement.dataset.theme = readAppearance(window.localStorage);
-createRoot(document.getElementById('root')).render(<React.StrictMode><WorkbenchErrorBoundary><App/></WorkbenchErrorBoundary></React.StrictMode>);
+createRoot(document.getElementById('root')).render(<React.StrictMode><WorkbenchErrorBoundary>{window.location.pathname==='/desktop-connect'?<DesktopApproval/>:<App/>}</WorkbenchErrorBoundary></React.StrictMode>);
 import './styles/layers/environment-branding.css';
 import './styles/layers/action-menus.css';
 
@@ -51,3 +52,5 @@ import './styles/layers/workspace-founder-delete.css';
 
 import './styles/layers/instance-administration.css';
 import './styles/layers/motion-system.css';
+
+import './styles/desktop-connections.css';
