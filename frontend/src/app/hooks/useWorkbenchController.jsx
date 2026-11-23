@@ -1,3 +1,5 @@
+import { loadDesktopEnvironments, saveDesktopEnvironments } from '../../features/environments/services/desktopEnvironmentRepository.js';
+import { loadDesktopHistory, saveDesktopHistory } from '../../features/requests/services/desktopHistoryRepository.js';
 import { createActiveEnvironmentBridge } from '../../features/environments/controllers/createActiveEnvironmentBridge.js';
 import { createRequestPresentationActions } from '../../features/requests/controllers/createRequestPresentationActions.js';
 import { createCloudRequestOpenActions } from '../../features/collections/controllers/createCloudRequestOpenActions.js';
@@ -98,6 +100,7 @@ import { blankDraft, parseCurl, isCurl, parseImportText } from '../../features/i
 import {parseEnvironmentDocument,uniqueEnvironmentImports} from '../../features/environments/services/environmentImport';
 import {readWorkbenchCache} from '../../features/workspace/services/workspaceCache';
 import {toLocalCollection,validateLibrary,readLocalCollections,writeLocalCollections} from '../../features/collections/services/localCollections';
+import {isTauriDesktop,loadDesktopCollections} from '../../features/collections/services/desktopLocalRepository.js';
 import {planTabClose} from '../../features/requests/services/tabActions';
 import {applyLocalAction,updateLocalRequest,createLocalSavedRequest} from '../../features/collections/services/localCollectionActions';
 import {stripJsonComments,hasJsonComments} from '../../features/requests/services/jsonComments';
@@ -183,7 +186,7 @@ export function useWorkbenchController() {
   // Each workbench has its own memory-only Environment store. Existing Local
   // persistence, Cloud authorization, and QA session overlays are unchanged.
   const [environmentStore] = useState(() => createEnvironmentWorkbenchStore({
-    localEnvironments: initialLocalEnvs(),
+    localEnvironments: isTauriDesktop() ? [] : initialLocalEnvs(),
     environmentSelections: readEnvironmentSelections(localStorage, CACHED),
   }));
   const { localEnvironments, setLocalEnvironments,
@@ -202,6 +205,29 @@ export function useWorkbenchController() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(RECOVERED.result || null);
   const [recent, setRecent] = useState(CACHED?.recent || []);
+  const [desktopEnvReady,setDesktopEnvReady] = useState(()=>!isTauriDesktop());
+  const [desktopHistoryReady,setDesktopHistoryReady] = useState(()=>!isTauriDesktop());
+  const desktopEnvSaveQueue=useRef(Promise.resolve());
+  const desktopHistorySaveQueue=useRef(Promise.resolve());
+  useEffect(()=>{
+    if(!isTauriDesktop())return;
+    let active=true;
+    loadDesktopEnvironments().then(envs=>{if(active){setLocalEnvironments(envs);setDesktopEnvReady(true);}})
+      .catch(err=>{if(active){console.error('Desktop environment recovery failed (saving disabled):',err);setNotice('Cannot load Local Environments. SQLite saving is disabled to protect existing data. Check desktop console.');}});
+    loadDesktopHistory().then(entries=>{if(active){setRecent(entries);setDesktopHistoryReady(true);}})
+      .catch(err=>console.error('Desktop history load failed (saving disabled):',err));
+    return()=>{active=false};
+  },[]);
+  useEffect(()=>{
+    if(!isTauriDesktop()||!desktopEnvReady)return;
+    desktopEnvSaveQueue.current=desktopEnvSaveQueue.current.catch(()=>{}).then(()=>saveDesktopEnvironments(localEnvironments));
+    desktopEnvSaveQueue.current.catch(err=>{console.error('Desktop environments write failed:',err);setNotice('Local Environment could not be saved to SQLite. Check desktop console.');});
+  },[localEnvironments,desktopEnvReady]);
+  useEffect(()=>{
+    if(!isTauriDesktop()||!desktopHistoryReady)return;
+    desktopHistorySaveQueue.current=desktopHistorySaveQueue.current.catch(()=>{}).then(()=>saveDesktopHistory(recent));
+    desktopHistorySaveQueue.current.catch(err=>console.error('Desktop history write failed:',err));
+  },[recent,desktopHistoryReady]);
   const [workspaceUiStore] = useState(createWorkspaceUiStore);
   const { workspaces, setWorkspaces, selectedWs, setSelectedWs, members, setMembers, membersWorkspaceId, setMembersWorkspaceId, wsTab, setWsTab, newWs, setNewWs, newCollection, setNewCollection, newMember, setNewMember, newMemberRoles, setNewMemberRoles, editingMemberId, setEditingMemberId, editingMemberRoles, setEditingMemberRoles, memberSearch, setMemberSearch, memberRoleFilter, setMemberRoleFilter, showMemberAdd, setShowMemberAdd, inviteOpen, setInviteOpen, inviteEmail, setInviteEmail, inviteRoles, setInviteRoles, invitationRows, setInvitationRows, invitationError, setInvitationError, invitationBusy, setInvitationBusy, expandedMemberAccess, setExpandedMemberAccess, canCreateWorkspace, setCanCreateWorkspace } = useStore(workspaceUiStore);
   const selectedWorkspaceRef=useRef(selectedWs);
@@ -223,7 +249,7 @@ export function useWorkbenchController() {
   // Collections have an independent, per-workbench Zustand store. Keeping
   // remote API operations in App avoids bypassing workspace RBAC checks.
   const [collectionStore] = useState(() => createCollectionWorkbenchStore({
-    localCollections: readLocalCollections(),
+    localCollections: isTauriDesktop() ? [] : readLocalCollections(),
     collectionSort: localStorage.getItem('pakpost_v14_global_collection_sort') || 'manual',
   }));
   const { collections, setCollections, localCollections, setLocalCollections,
@@ -293,7 +319,21 @@ export function useWorkbenchController() {
   const snapshotRef=useRef(snapshot);snapshotRef.current=snapshot;
   function restoreDraft(...args) { return tabActions.restoreDraft(...args); }
   function stashActive(...args) { return tabActions.stashActive(...args); }
-  useWorkbenchPreferencesPersistence({localCollections,workspaceCollectionDocs,collectionSort,rightWidth});
+  const [desktopLocalReady,setDesktopLocalReady]=useState(()=>!isTauriDesktop());
+  useEffect(()=>{
+    if(!isTauriDesktop())return;
+    let active=true;
+    loadDesktopCollections().then(collections=>{
+      if(!active)return;
+      setLocalCollections(collections);
+      setDesktopLocalReady(true);
+    }).catch(error=>{
+      // Fail closed: do not overwrite a database that could not be read.
+      console.error('PakPost desktop local database unavailable:',error);
+    });
+    return ()=>{active=false};
+  },[setLocalCollections]);
+  useWorkbenchPreferencesPersistence({localCollections,workspaceCollectionDocs,collectionSort,rightWidth,desktopLocalReady});
 
   useWorkbenchMenuDismissal({ tabMenu, setTabMenu, workspaceMenu, setWorkspaceMenu });
   useEffect(()=>{try{localStorage.setItem('pakpost_workspace_sort',JSON.stringify(workspaceSorted))}catch{}},[workspaceSorted]);
