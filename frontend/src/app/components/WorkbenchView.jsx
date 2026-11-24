@@ -61,7 +61,7 @@ export function WorkbenchView({ model }) {
         envScope, googleLinked, isDarkAppearance, logout, me, openContext,
         selectedWs, setActiveEnvId, setAuthOpen, setCommandIndex, setCommandOpen, setCommandQuery,
         setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, storageScope, theme, token,
-        updateStorageScope, workspaces,
+        updateStorageScope, workspaces, setPage, setSettingsCategory,
         onOpenSecurity:()=>{setSettingsCategory('security');setPage('settings');},}}/>
 
     <div className={`pp-main-frame ${page==='settings'?'pp-view-settings':page==='workspace'?'pp-view-workspace':'pp-view-tester'} ${sidebarCollapsed?'pp-navigator-collapsed':''}`} style={{'--pp-context-panel-width':`${rightWidth}px`}}>

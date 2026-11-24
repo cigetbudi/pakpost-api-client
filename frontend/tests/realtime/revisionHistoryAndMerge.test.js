@@ -24,15 +24,17 @@ test('selected merge never overwrites unselected local script, auth or body',()=
  assert.equal(result.bearerToken,'my token');
  assert.deepEqual(ours,{name:'local',body:'my secret',preScript:'console.log("my code")',method:'POST',authType:'bearer',bearerToken:'my token'});
 });
-test('auth merge is grouped and the unsafe fields have no value preview',()=>{
+test('auth merge stays grouped, and previews show everything except authorization',()=>{
  const local={authType:'bearer',bearerToken:'old',basicPassword:'keep'};
  const remote={authType:'basic',bearerToken:'new',basicPassword:'secret'};
  const merged=applyFieldMerge(local,remote,['auth']);
  assert.equal(merged.authType,'basic');assert.equal(merged.basicPassword,'secret');
  assert.ok(!safeVersionSummary('auth','token-very-secret').includes('token-very-secret'));
- assert.ok(!safeVersionSummary('body','password-very-secret').includes('password-very-secret'));
- assert.ok(!safeVersionSummary('url','https://url.test?token=secret').includes('secret'));
- assert.ok(!safeVersionSummary('preScript','var key="secret"').includes('secret'));
+ assert.equal(safeVersionSummary('body','password-very-secret'),'password-very-secret');
+ assert.equal(safeVersionSummary('url','https://url.test?token=secret'),'https://url.test?token=secret');
+ assert.equal(safeVersionSummary('preScript','var key="secret"'),'var key="secret"');
+ assert.equal(safeVersionSummary('rows',[{key:'X-Key',value:'abc'}]),'[\n  {\n    "key": "X-Key",\n    "value": "abc"\n  }\n]');
+ assert.equal(safeVersionSummary('body','{"foo":1}'),'{\n  "foo": 1\n}');
 });
 test('history model is immutable and encrypted, not plaintext in table',()=>{
  const entity=source('backend/src/Pakpost.Domain/Entities/SavedRequestRevision.cs');

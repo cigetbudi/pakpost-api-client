@@ -46,10 +46,20 @@ export function applyFieldMerge(local={},remote={},chosen=[]){
   }
   return next;
 }
-// No raw values in the diff UI: URLs can contain query tokens and scripts/body
-// can contain credentials. Users review each version in their regular editor.
+// This comparison deliberately shows complete request values on user request.
+// Authorization alone remains hidden. Rendering occurs only inside the local UI;
+// previews are never written to logs or sent to an external service.
 export function safeVersionSummary(field,value){
-  if(field==='method' || field==='name')return String(value??'').slice(0,110);
-  if(field==='format')return String(value??'').slice(0,100);
-  return 'Content hidden — may contain credentials';
+  if(field==='auth')return 'Authorization hidden';
+  if(value===null||value===undefined||value==='')return '—';
+  if(typeof value==='string'){
+    if(['body','responseExamples','documentation'].includes(field)){
+      try{return JSON.stringify(JSON.parse(value),null,2);}catch{/* Keep raw input. */}
+    }
+    return value;
+  }
+  if(typeof value==='object'){
+    try{return JSON.stringify(value,null,2);}catch{return String(value);}
+  }
+  return String(value);
 }

@@ -5,14 +5,43 @@ import { useEffect, useRef } from 'react';
  * storage; callback ref prevents reconnection on unrelated React renders.
  */
 export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, sessionRevision=0, onEvent,
-  onAccessChanged, onStatus, onReset }) {
-  const callbacks = useRef({onEvent,onAccessChanged,onStatus,onReset});
-  callbacks.current = {onEvent,onAccessChanged,onStatus,onReset};
+  onAccessChanged, onStatus, onReset, onDesktopPoll }) {
+  const callbacks = useRef({onEvent,onAccessChanged,onStatus,onReset,onDesktopPoll});
+  callbacks.current = {onEvent,onAccessChanged,onStatus,onReset,onDesktopPoll};
   useEffect(() => {
     callbacks.current.onReset?.();
-    if (window.__TAURI_INTERNALS__ || !enabled || !token || !workspaceId) {
+    if (!enabled || !token || !workspaceId) {
       callbacks.current.onStatus?.('offline');
       return;
+    }
+    if (window.__TAURI_INTERNALS__) {
+      // Desktop tokens must remain in Rust. REST convergence is a safe fallback
+      // until native, authenticated SignalR transport is available.
+      let cancelled=false, timer=null, running=false;
+      const checkpoint={collections:null,knownCollectionIds:null,indexes:new Map(),pagedCounts:new Map(),cursor:0};
+      const tick=async()=>{
+        if(cancelled||running)return;
+        running=true;
+        try {
+          await callbacks.current.onDesktopPoll?.(checkpoint,()=>!cancelled);
+          if(!cancelled)callbacks.current.onStatus?.('syncing');
+        } catch(error) {
+          if(!cancelled) {
+            callbacks.current.onStatus?.('offline');
+            // A revoked session must not keep a stale workspace visually live.
+            if(error?.status===401)window.dispatchEvent(new Event('pakpost:desktop-session-expired'));
+          }
+        } finally {
+          running=false;
+          if(!cancelled)timer=setTimeout(tick,5000);
+        }
+      };
+      callbacks.current.onStatus?.('connecting');
+      tick();
+      const wake=()=>{if(document.visibilityState==='visible'&&!running){clearTimeout(timer);timer=setTimeout(tick,100);}};
+      document.addEventListener('visibilitychange',wake);
+      window.addEventListener('focus',wake);
+      return ()=>{cancelled=true;clearTimeout(timer);document.removeEventListener('visibilitychange',wake);window.removeEventListener('focus',wake);callbacks.current.onReset?.();};
     }
     let disposed = false, stop = null;
     import('../services/workspaceRealtime.js').then(({connectWorkspaceRealtime}) =>

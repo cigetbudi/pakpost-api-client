@@ -13,7 +13,14 @@
 .pp-revision-field{display:grid;grid-template-columns:18px minmax(110px,1fr) minmax(80px,1fr) minmax(80px,1fr);align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border,#7773);font-size:11px;cursor:pointer}
 .pp-revision-field:last-child{border-bottom:0}.pp-revision-field.conflict{background:rgba(220,120,75,.09)}
 .pp-revision-field-name{font-weight:650}.pp-revision-field-name small{display:block;font-weight:400;font-size:10px;opacity:.68;margin-top:2px}
-.pp-revision-field-preview{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.65;font-size:10px}
+/* Full values with bounded vertical scroll, preserving indentation and newlines. */
+.pp-revision-field-preview{
+  display:block;min-width:0;max-height:210px;overflow:auto;
+  white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;
+  opacity:.85;font-size:11px;line-height:1.55;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  user-select:text;cursor:text;
+}
 .pp-revision-actions,.pp-revision-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:11px}
 .pp-revision-actions button,.pp-revision-footer button,.pp-revision-restore button{border:1px solid var(--border,#7775);border-radius:8px;padding:8px 11px;color:inherit;background:transparent;cursor:pointer;font-size:12px}
 .pp-revision-actions button:not(:disabled){border-color:var(--accent,#508de8)}

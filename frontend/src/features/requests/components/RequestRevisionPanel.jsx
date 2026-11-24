@@ -37,8 +37,8 @@ export default function RequestRevisionPanel({mode='history',localDraft={},remot
             <input type="checkbox" checked={selected.includes(field.key)} disabled={field.same||busy}
               onChange={e=>setSelected(old=>e.target.checked?[...old,field.key]:old.filter(x=>x!==field.key))}/>
             <span className="pp-revision-field-name">{field.label}<small>{field.same?'Matched':field.conflict?'Conflict — both changed':field.suggestedCloud?'Only Cloud changed':field.yourChange&&!field.cloudChange?'Only you changed':'Different'}</small></span>
-            <span className="pp-revision-field-preview" title="Content redacted for safe comparison">{safeVersionSummary(field.key,localDraft[field.key])}</span>
-            <span className="pp-revision-field-preview" title="Content redacted for safe comparison">{safeVersionSummary(field.key,remoteDraft[field.key])}</span>
+            <span className="pp-revision-field-preview" title={field.key==='auth'?'Authorization hidden':undefined}>{safeVersionSummary(field.key,localDraft[field.key])}</span>
+            <span className="pp-revision-field-preview" title={field.key==='auth'?'Authorization hidden':undefined}>{safeVersionSummary(field.key,remoteDraft[field.key])}</span>
           </label>)}
         </div>
         <div className="pp-revision-actions">
