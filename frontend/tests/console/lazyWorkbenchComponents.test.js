@@ -9,7 +9,7 @@ const sidebars=readFileSync(new URL('../../src/features/requests/components/Work
 test('CodeMirror is loaded on demand, never imported eagerly by the app shell',()=>{
   assert.doesNotMatch(app,/^import\s+.*from\s+['"]\.\/features\/Editors['"]/m);
   assert.match(app,/lazy\(\(\) => import\('\.\.\/\.\.\/features\/requests\/components\/Editors\.jsx'\)/);
-  assert.match(app,/<Suspense fallback=\{<div className="pp-editor-loading"/);
+  assert.match(app,/<Suspense fallback=\{<Skeleton label="Loading editor/);
   assert.match(app,/reqTab === 'body'/); // body editing remains available
   assert.match(app,/\['pre-script','post-script'\]\.includes\(scriptTab\)/);
 });

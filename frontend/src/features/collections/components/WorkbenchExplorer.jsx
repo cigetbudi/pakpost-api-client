@@ -1,3 +1,4 @@
+import {Skeleton,EmptyState} from '../../../components/ui/AsyncFeedback.jsx';
 import React, {useRef} from 'react';
 import {createPortal} from 'react-dom';
 import {Dialog} from '../../../components/ui/WorkbenchPrimitives.jsx';
@@ -215,10 +216,10 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                     <button type="button" className="pp-tree-action" aria-label={`Actions for example ${example.name}`} onClick={e=>showWorkspaceMenu(e,{type:'example',collectionId:c.id,requestId:r.id,exampleId:example.id,name:example.name})}><Settings2 size={14}/></button>
                   </div>)}</div></div>}
                   </React.Fragment>}} />
-                {opened && !paged && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,c.id)) && <div className="pp-tree-hint">Loading requests…</div>}
+                {opened && !paged && !Object.prototype.hasOwnProperty.call(workspaceRequestLists,workspaceCollectionKey(selectedWs,c.id)) && <Skeleton label="Loading requests…" rows={3} className="pp-ux-tree-loading"/>}
                 </div></div>
               </div>})}
-              {!collections.length && <div className="pp-tree-hint">{selectedWs?'No collections yet. Start by creating one.':'No workspace selected. Create one to store Cloud collections.'}</div>}
+              {!collections.length && <EmptyState label={selectedWs?'No collections yet':'No workspace selected'} description={selectedWs?'Use New to create a collection.':'Choose or create a workspace to store Cloud collections.'}/>}
             </> : <>
               {!localCollections.length&&<div className="pp-tree-hint">No local collections yet. Create a collection or import one from a file.</div>}
               {!token&&<button className="pp-add-side pp-login-hint" onClick={() => setAuthOpen(true)}><LockKeyhole size={14}/> Sign in to access Cloud collections</button>}

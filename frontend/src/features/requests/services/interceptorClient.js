@@ -104,22 +104,24 @@ export async function decodeBrowserResponse(response,elapsedMs){
   return {statusCode:response.status,reasonPhrase:response.statusText||'',elapsedMs,
     headers:Object.fromEntries(response.headers.entries()),body,truncated,isBinary};
 }
-export async function sendBrowserRequest(command){
+export async function sendBrowserRequest(command,{signal}={}){
   const {url,init}=prepareBrowserRequest(command);
   const controller=new AbortController();init.signal=controller.signal;
+  const abort=()=>controller.abort(signal?.reason);
+  if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
   const timeout=setTimeout(()=>controller.abort(),20000);
   try{const start=performance.now();const response=await fetch(url,init);return await decodeBrowserResponse(response,Math.round(performance.now()-start))}
   catch(error){throw Error(`Browser request failed (${error.message}). Check CORS or use the Browser Extension interceptor.`)}
-  finally{clearTimeout(timeout)}
+  finally{clearTimeout(timeout);signal?.removeEventListener('abort',abort)}
 }
 
-export async function dispatchRequest(command,mode){
+export async function dispatchRequest(command,mode,options){
   if(mode==='native'){
     if(!isTauriDesktop())throw Error('Native transport only works in PakPost Desktop');
     const {invoke}=await import('@tauri-apps/api/core');
     return invoke('send_native_http',{command});
   }
   if(mode==='extension')return sendExtensionRequest(command);
-  if(mode==='browser')return sendBrowserRequest(command);
+  if(mode==='browser')return sendBrowserRequest(command,options);
   return null; // Caller invokes its existing secure server proxy.
 }

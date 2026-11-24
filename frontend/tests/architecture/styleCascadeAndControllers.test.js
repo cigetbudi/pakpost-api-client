@@ -12,7 +12,7 @@ test('all former release-number styles have semantic filenames and a stable casc
   const main = src('main.jsx');
   const cssImports = [...main.matchAll(/import ['"]\.\/(styles\/[^'"]+\.css)['"];?/g)].map(m => m[1]);
   assert.equal(new Set(cssImports).size, cssImports.length, 'No duplicate CSS entry imports');
-  assert.deepEqual(cssImports.slice(-7), [
+  assert.deepEqual(cssImports.slice(-8), [
     'styles/desktop-connections.css',
     'styles/workbench-tokens.css',
     'styles/workbench-utilities.css',
@@ -20,10 +20,11 @@ test('all former release-number styles have semantic filenames and a stable casc
     'styles/adaptive-controls.css',
     'styles/adaptive-comfort.css',
     'styles/adaptive-mobile.css',
+    'styles/ux-polish.css',
   ]);
   assert.ok(cssImports.indexOf('styles/layers/instance-administration.css') < cssImports.indexOf('styles/layers/motion-system.css'));
   assert.ok(cssImports.indexOf('styles/layers/workspace-founder-delete.css') < cssImports.indexOf('styles/layers/instance-administration.css'));
-  assert.equal(cssImports.at(-8), 'styles/layers/motion-system.css');
+  assert.equal(cssImports.at(-9), 'styles/layers/motion-system.css');
   assert.ok(cssImports.indexOf('styles/layers/explorer-tree-alignment.css') < cssImports.indexOf('styles/layers/workspace-founder-delete.css'));
   assert.ok(cssImports[0] === 'styles/base.css');
   assert.ok(cssImports[1] === 'styles/clean-workbench.css');

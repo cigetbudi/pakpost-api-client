@@ -20,6 +20,7 @@ export function createCommandPaletteItems({
     { key: 'open-collections', title: 'Show collections', subtitle: 'Browse saved API requests', icon: 'action', run: () => showPanel('collections') },
     { key: 'open-history', title: 'Open request history', subtitle: 'Previously sent requests', icon: 'action', run: () => showPanel('history') },
     { key: 'environments', title: 'Manage environments', subtitle: 'Edit local and workspace variables', icon: 'action', run: () => openContext('environments') },
+    { key: 'settings', title: 'Open settings', subtitle: 'Appearance, keyboard shortcuts and preferences', icon: 'action', run: () => setPage('settings') },
     { key: 'code', title: 'Generate code', subtitle: 'cURL, Fetch, Go, C#, Python', icon: 'action', run: () => showPanel('code') },
     ...openTabs.map(tab => ({
       key: `tab-${tab.id}`, title: tab.name, subtitle: `${tab.method} · Open tab`,

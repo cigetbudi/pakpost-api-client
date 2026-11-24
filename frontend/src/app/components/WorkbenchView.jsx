@@ -1,3 +1,5 @@
+import {useWorkbenchPreferences} from '../../features/settings/services/useWorkbenchPreferences.js';
+import {Spinner} from '../../components/ui/AsyncFeedback.jsx';
 import { WorkbenchOverlays } from './WorkbenchOverlays.jsx';
 import React, { useEffect, useState } from 'react';
 import { Play, Terminal } from 'lucide-react';
@@ -43,7 +45,7 @@ export function WorkbenchView({ model }) {
     panesRef, params, postScript, preScript, reqTab, requestNameInputRef,
     resTab, resetSandboxRequest, responseExamples, responsePretty, responseText, responseType,
     result, rows, saveCurrent, scriptDiagnostic, scriptError, scriptJump,
-    scriptLog, scriptTests, selectFormat, sendRequest, setApiKeyIn, setApiKeyName,
+    scriptLog, scriptTests, selectFormat, sendRequest, cancelRequest, canCancelRequest, setApiKeyIn, setApiKeyName,
     setApiKeyValue, setAuthType, setBasicPassword, setBasicUsername, setBearerToken, setBinaryFile,
     setBody, setCurrentRequestName, setFormFields, setMethod, setOpenTabs, setParams,
     setPostScript, setPreScript, setReqTab, setResTab, setResponsePretty, setRows,
@@ -59,6 +61,18 @@ export function WorkbenchView({ model }) {
     setEditingMemberId, setEditingMemberRoles, selectedWorkspaceRef, currentTokenRef,
   } = model;
   const [responseMode, setResponseMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'collapsed' : 'expanded');
+  const preferences=useWorkbenchPreferences();
+  useEffect(()=>{
+    const root=document.documentElement;
+    root.dataset.ppDensity=preferences.density;
+    root.dataset.ppMotion=preferences.motion?'on':'off';
+    return()=>{delete root.dataset.ppDensity;delete root.dataset.ppMotion;};
+  },[preferences.density,preferences.motion]);
+  useEffect(()=>{
+    if(loading&&preferences.autoExpandResponse){
+      setResponseMode(previous=>window.matchMedia('(max-width: 760px)').matches?'maximized':previous==='collapsed'?'expanded':previous);
+    }
+  },[loading,preferences.autoExpandResponse]);
   const [wideLayout, setWideLayout] = useState(() => window.matchMedia('(min-width: 981px)').matches);
   useEffect(() => {
     const query = window.matchMedia('(min-width: 981px)');
@@ -169,13 +183,13 @@ export function WorkbenchView({ model }) {
         openTabs, panesRef, params, postScript, preScript, reqTab,
         requestNameInputRef, resTab, resetSandboxRequest, responseExamples, responsePretty, responseText,
         responseType, result, rows, saveCurrent, scriptDiagnostic, scriptError,
-        scriptJump, scriptLog, scriptTests, selectFormat, selectedWs, sendRequest,
+        scriptJump, scriptLog, scriptTests, selectFormat, selectedWs, sendRequest, cancelRequest, canCancelRequest,
         setApiKeyIn, setApiKeyName, setApiKeyValue, setAuthType, setBasicPassword, setBasicUsername,
         setBearerToken, setBinaryFile, setBody, setCurrentRequestName, setFormFields, setMethod,
         setNotice, setOpenTabs, setParams, setPostScript, setPreScript, setReqTab,
         setResTab, setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump,
         setSplit, setUrl, split: effectiveSplit, wideLayout, splitPercent, setSplitPercent, theme, url,
-        variableUi,}}/> : page === 'workspace' ? <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Workspace…</div>}><WorkspaceManager
+        variableUi,}}/> : page === 'workspace' ? <Suspense fallback={<div className="pp-feature-loading" role="status"><Spinner label="Opening Workspace…"/></div>}><WorkspaceManager
   data={{
     activeWorkspace, workspaces, canCreateWorkspace, newWs, token,
     busyAction, selectedWs, wsTab, canEditCloud, newCollection,
@@ -200,7 +214,7 @@ export function WorkbenchView({ model }) {
       </main>
     </div>
     {runnerTarget && <div className="pp-aw-runner-dock" hidden={consoleOpen||runnerMinimized}>
-      <Suspense fallback={<div className="pp-adaptive-console-loading" role="status">Opening Collection Runner…</div>}>
+      <Suspense fallback={<div className="pp-adaptive-console-loading" role="status"><Spinner label="Opening Collection Runner…"/></div>}>
         <CollectionRunner key={`${runnerTarget.scope}:${runnerTarget.workspaceId||''}:${runnerTarget.collectionId}`}
           target={runnerTarget} requests={runnerTarget.requests} environmentVariables={runnerTarget.environmentVariables}
           collectionVariables={runnerTarget.collectionVariables} onClose={closeRunner}
@@ -209,7 +223,7 @@ export function WorkbenchView({ model }) {
             :dispatchRequest(command,runnerTarget.transport)}/>
       </Suspense>
     </div>}
-    {consoleOpen && <Suspense fallback={<div className="pp-adaptive-console-loading" role="status">Opening Console…</div>}>
+    {consoleOpen && <Suspense fallback={<div className="pp-adaptive-console-loading" role="status"><Spinner label="Opening Console…"/></div>}>
       <PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents} onNavigate={navigateConsoleEvent}/>
     </Suspense>}
     <footer className="pp-global-footer"><div className="pp-bottom-tools">

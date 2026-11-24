@@ -1,6 +1,7 @@
 import React from 'react';
 import { Dialog } from '../../../components/ui/WorkbenchPrimitives.jsx';
 import { GoogleSignInButton } from './GoogleSignInButton.jsx';
+import { LoaderCircle } from 'lucide-react';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
 
@@ -31,7 +32,24 @@ export function AuthOverlays({ data, actions }) {
         {authError && <div className="form-error" role="alert">{authError}</div>}
         {GOOGLE_CLIENT_ID ? <div className="pp-google-auth-section">
           <GoogleSignInButton clientId={GOOGLE_CLIENT_ID} disabled={authBusy} onCredential={submitGoogleAuth} onError={setAuthError}/>
-          {authBusy && <p className="pp-muted-small pp-center" role="status">Signing in…</p>}
+          {authBusy && (
+            <div
+              className="tw:flex tw:items-center tw:justify-center tw:gap-2 tw:py-3"
+              role="status"
+              aria-live="polite"
+            >
+              <LoaderCircle
+                size={16}
+                className="tw:animate-spin"
+                style={{ color: 'var(--accent)' }}
+                aria-hidden="true"
+              />
+
+              <span className="pp-muted-small">
+                Signing in…
+              </span>
+            </div>
+          )}
         </div> : <p className="form-error" role="alert">Google sign-in is not configured on this PakPost instance. Contact the administrator.</p>}
         <p className="pp-muted-small pp-center">New accounts are created automatically after Google verification. PakPost never receives your Google password.</p>
       </div>

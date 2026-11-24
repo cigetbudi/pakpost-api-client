@@ -65,7 +65,7 @@ test('Workspace page is lazy-loaded, while optional tools remain deferred', () =
   assert.match(app, /lazy\(\(\) => import\('\.\.\/\.\.\/features\/workspace\/components\/WorkspaceManager\.jsx'\)/);
   assert.match(app, /lazy\(\(\) => import\('\.\.\/\.\.\/features\/collections\/components\/CollectionRunner\.jsx'\)/);
   assert.match(app, /lazy\(\(\) => import\('\.\.\/\.\.\/features\/console\/components\/PakpostConsole\.jsx'\)/);
-  assert.match(app, /<Suspense fallback=\{<div className="pp-feature-loading" role="status">Opening Workspace/);
+  assert.match(app, /<Suspense fallback=\{<div className="pp-feature-loading" role="status"><Spinner label="Opening Workspace/);
 });
 
 test('all new components have resolvable local imports', () => {

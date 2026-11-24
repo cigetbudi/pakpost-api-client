@@ -18,7 +18,7 @@ test('request URL editor keeps cURL paste and Send action', () => {
   assert.match(app, /className="pp-url-entry"/);
   assert.match(app, /className="pp-url-input"/);
   assert.match(app, /onPaste=\{e=>\{const raw=e\.clipboardData\.getData\('text'\);if\(isCurl\(raw\)\)/);
-  assert.match(app, /className="pp-send" disabled=\{loading\} onClick=\{sendRequest\}/);
+  assert.match(app, /className="pp-send" disabled=\{loading&&!canCancelRequest\} onClick=\{loading\?cancelRequest:sendRequest\}/);
 });
 
 test('Save updates bound requests and Save As creates new record', () => {

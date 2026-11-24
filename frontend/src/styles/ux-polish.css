@@ -1,0 +1,45 @@
+/* UX polish: theme-aware feedback, editor tools and optional local density. */
+.pp-ux-feedback{display:inline-flex;align-items:center;justify-content:center;gap:8px;color:var(--muted);line-height:1.5;min-width:0}
+.pp-ux-spin{flex:none;animation:pp-ux-spin .85s linear infinite;vertical-align:middle}
+.pp-ux-feedback .pp-ux-spin,.pp-response-empty-symbol .pp-ux-spin{color:var(--accent)}
+@keyframes pp-ux-spin{to{transform:rotate(360deg)}}
+.pp-ux-skeleton{padding:14px;display:grid;align-content:start;gap:14px;color:var(--muted);border-radius:var(--aw-radius,6px);background:var(--surface);font-size:12px}
+.pp-ux-skeleton>div{display:grid;gap:10px}.pp-ux-skeleton i{display:block;height:9px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);animation:pp-ux-pulse 1.35s ease-in-out infinite alternate}
+@keyframes pp-ux-pulse{from{opacity:.55}to{opacity:1}}
+.pp-ux-tree-loading{padding:10px 14px;background:transparent}
+.pp-ux-empty{display:grid;justify-items:center;text-align:center;gap:8px;padding:24px 12px;color:var(--muted);font-size:12px;line-height:1.5}
+.pp-ux-empty strong{color:var(--text);font-size:13px}.pp-ux-empty svg{color:var(--accent)}
+.pp-toast-note>svg{flex:none;color:var(--accent)}.pp-toast-note>span{min-width:0;overflow-wrap:anywhere}
+.pp-adaptive-workbench .pp-pane-meta{display:inline-flex;align-items:center;gap:6px}
+.pp-ux-script-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block;margin-left:5px;vertical-align:middle;flex:none}
+.pp-editor-wrap .pp-cm-editor .cm-content{font-size:var(--pp-editor-font,13px)}
+.pp-ux-editor-tools,.pp-ux-editor-search{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:7px 10px;border-bottom:1px solid var(--border);background:var(--surface)}
+.pp-ux-editor-tools{justify-content:flex-end}
+.pp-ux-editor-tools button,.pp-ux-editor-search button,.pp-ux-secondary,.pp-ux-density-options button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:30px;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font:inherit;color:var(--text);background:var(--surface);cursor:pointer}
+.pp-ux-editor-tools button[aria-pressed=true],.pp-ux-editor-tools button[aria-expanded=true],.pp-ux-density-options button[aria-pressed=true]{color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}
+.pp-ux-editor-tools button:hover,.pp-ux-editor-search button:hover,.pp-ux-secondary:hover,.pp-ux-density-options button:hover{border-color:var(--accent)}
+.pp-ux-editor-search input{flex:1 1 140px;min-width:0;width:100%;min-height:32px;border:1px solid var(--border);padding:6px 9px;background:var(--editor);color:var(--text);border-radius:6px}
+.pp-ux-editor-search span{font-size:11px;color:var(--muted)}.pp-ux-editor-search button:disabled{opacity:.45;cursor:default}
+.pp-ux-preferences{display:grid;gap:15px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border);max-width:590px;min-width:0;font-size:13px}
+.pp-ux-preferences h3,.pp-ux-preferences p{margin:0}.pp-ux-preferences p{color:var(--muted)}
+.pp-ux-preferences fieldset{border:0;padding:0;margin:0;min-width:0}.pp-ux-preferences legend{font-weight:600;margin-bottom:9px}
+.pp-ux-density-options{display:flex;gap:8px;flex-wrap:wrap}.pp-ux-density-options button{flex:1 1 95px}
+.pp-ux-font-label{display:grid;gap:8px}.pp-ux-font-label>span{display:flex;justify-content:space-between}.pp-ux-font-label input{width:100%;accent-color:var(--accent)}
+.pp-ux-editor-preview{margin:0;border:1px solid var(--border);background:var(--editor);border-radius:6px;padding:12px;overflow:auto;font-family:monospace;color:var(--text);line-height:1.55}
+.pp-ux-check{display:flex;align-items:center;gap:9px;line-height:1.5;cursor:pointer}.pp-ux-check input{width:16px;height:16px;accent-color:var(--accent);flex:none}.pp-ux-secondary{justify-self:start}
+@media (min-width:761px) and (pointer:fine){
+  :root[data-pp-density=compact] .pp-adaptive-workbench{--aw-content-inset:11px;--aw-field-height:34px;--aw-field-gap:7px;--aw-section-gap:10px;--aw-panel-head:34px}
+  :root[data-pp-density=comfortable] .pp-adaptive-workbench{--aw-content-inset:18px;--aw-field-height:40px;--aw-field-gap:10px;--aw-section-gap:15px;--aw-panel-head:40px;--aw-tab:38px}
+}
+@media (pointer:coarse){.pp-ux-editor-tools button,.pp-ux-editor-search button,.pp-ux-editor-search input,.pp-ux-secondary,.pp-ux-density-options button{min-height:44px}.pp-ux-check{min-height:44px}}
+:root[data-pp-motion=off] *, :root[data-pp-motion=off] *::before,:root[data-pp-motion=off] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+@media(prefers-reduced-motion:reduce){.pp-ux-spin,.pp-ux-skeleton i{animation:none!important}}
+
+/* Command palette: method badges are labels, not flexible text columns. */
+.pp-command-results button[role="option"]{display:grid;grid-template-columns:58px minmax(0,1fr) 14px;align-items:center;gap:10px}
+.pp-command-results button[role="option"]>.pp-http-label{display:inline-flex;flex:none;align-items:center;justify-content:center;justify-self:stretch;min-width:0;width:auto;white-space:nowrap;line-height:1.4;padding:3px 4px;text-align:center}
+.pp-command-results button[role="option"]>span:not(.pp-http-label){min-width:0;gap:3px}
+.pp-command-results button[role="option"]>span:not(.pp-http-label)>strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-command-results button[role="option"]>svg{justify-self:center;flex:none}
+.pp-command-results button[role="option"]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+@media(max-width:480px){.pp-command-results button[role="option"]{grid-template-columns:52px minmax(0,1fr) 14px;gap:8px;padding-inline:8px}}
