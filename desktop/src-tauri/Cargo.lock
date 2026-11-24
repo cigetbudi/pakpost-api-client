@@ -2410,6 +2410,7 @@ name = "pakpost-desktop"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "futures-util",
  "log",
  "reqwest 0.12.28",
  "rusqlite",
@@ -2418,6 +2419,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-log",
+ "tokio",
 ]
 
 [[package]]

@@ -1,3 +1,4 @@
+import {parseRunnerData,runnerReport,runnerJUnit} from '../services/runnerData.js';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {WorkbenchButton} from '../../../components/ui/WorkbenchButton.jsx';
 import {CheckCircle2,ChevronDown,ChevronRight, CircleX, Play, Square, X} from 'lucide-react';
@@ -10,6 +11,8 @@ import '../../../styles/features/collection-runner.css';
 export default function CollectionRunner({target,requests=[],environmentVariables={},collectionVariables={},send,onClose}) {
   const [selected,setSelected]=useState(()=>requests.map(r=>r.id));
   const [iterations,setIterations]=useState(1);
+  const [dataset,setDataset]=useState([]);const [dataName,setDataName]=useState('');const [dataBusy,setDataBusy]=useState(false);
+  const [dataError,setDataError]=useState('');
   const [delayMs,setDelayMs]=useState(0);
   const [stopOnFailure,setStopOnFailure]=useState(true);
   const [confirmWrites,setConfirmWrites]=useState(false);
@@ -22,14 +25,14 @@ export default function CollectionRunner({target,requests=[],environmentVariable
   const dangerous=useMemo(()=>requests.some(r=>selected.includes(r.id)&&!['GET','HEAD','OPTIONS'].includes(String(r.method).toUpperCase())),[requests,selected]);
   const steps=selected.length*iterations;
   const invalidOptions=!Number.isInteger(iterations)||iterations<1||iterations>RUNNER_MAX_ITERATIONS||!Number.isInteger(delayMs)||delayMs<0||delayMs>RUNNER_MAX_DELAY_MS;
-  const blocked=running||invalidOptions||!selected.length||steps>RUNNER_MAX_STEPS||(dangerous&&!confirmWrites);
+  const blocked=running||dataBusy||!!dataError||invalidOptions||!selected.length||steps>RUNNER_MAX_STEPS||(dangerous&&!confirmWrites);
   async function start(){
     if(blocked||controller.current)return;
     const aborter=new AbortController();controller.current=aborter;
     setRunning(true);setFailure('');setSummary(null);setExpanded('');
     try{
       await executeCollectionRun({requests,selectedIds:selected,iterations,delayMs,stopOnFailure,
-        environmentVariables,collectionVariables,signal:aborter.signal,
+        environmentVariables,collectionVariables,iterationData:dataset,signal:aborter.signal,
         script:runSandbox,send,
         onProgress:setSummary,
         onStep:row=>appendConsoleEvent({executionId:row.runId,phase:'runner',level:row.passed?'info':'error',
@@ -38,6 +41,12 @@ export default function CollectionRunner({target,requests=[],environmentVariable
     }catch(error){setFailure(String(error?.message||error).slice(0,400));}
     finally{setRunning(false);controller.current=null;}
   }
+  async function loadData(event){
+    const file=event.target.files?.[0];event.target.value='';if(!file||running)return;
+    setDataError('');setDataBusy(true);
+    try{if(file.size>262144)throw Error('Dataset exceeds 256 KiB.');const rows=parseRunnerData(await file.text(),file.name.toLowerCase().endsWith('.json')?'json':'csv');setDataset(rows);setDataName(file.name);setIterations(rows.length);}catch(e){setDataset([]);setDataName('');setDataError(e.message);}finally{setDataBusy(false);}
+  }
+  function exportReport(kind){if(!summary||running)return;const text=kind==='xml'?runnerJUnit(summary):JSON.stringify(runnerReport(summary),null,2);const url=URL.createObjectURL(new Blob([text],{type:kind==='xml'?'application/xml':'application/json'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`pakpost-run-report.${kind}`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function close(){controller.current?.abort();onClose();}
   function toggle(id){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);setConfirmWrites(false);}
   return <section className="pp-runner-dialog pp-runner-docked" role="region" aria-label={`Collection Runner · ${target.name}`}>
@@ -54,10 +63,12 @@ export default function CollectionRunner({target,requests=[],environmentVariable
             {!requests.length&&<p className="pp-runner-empty">No saved requests in this Collection.</p>}
           </div>
           <div className="pp-runner-config">
-            <label>Iterations <input aria-label="Runner iterations" type="number" min="1" max={RUNNER_MAX_ITERATIONS} value={iterations} disabled={running} onChange={e=>setIterations(Number(e.target.value))}/></label>
+            <label>Iterations <input aria-label="Runner iterations" type="number" min="1" max={RUNNER_MAX_ITERATIONS} value={iterations} disabled={running||!!dataset.length} onChange={e=>setIterations(Number(e.target.value))}/></label>
             <label>Delay (ms) <input aria-label="Runner delay" type="number" min="0" max={RUNNER_MAX_DELAY_MS} step="100" value={delayMs} disabled={running} onChange={e=>setDelayMs(Number(e.target.value))}/></label>
             <label className="pp-runner-toggle"><input type="checkbox" checked={stopOnFailure} disabled={running} onChange={e=>setStopOnFailure(e.target.checked)}/> Stop on failure</label>
           </div>
+          <div className="pp-runner-config"><label>Iteration data (CSV / JSON)<input aria-label="Runner data file" type="file" accept=".csv,.json" disabled={running||dataBusy} onChange={loadData}/></label>{dataName&&<small>{dataName} · {dataset.length} iterations</small>}{(dataName||dataError)&&<button type="button" disabled={running||dataBusy} onClick={()=>{setDataset([]);setDataName('');setDataError('');setIterations(1);}}>Clear data</button>}</div>
+          {dataError&&<p className="form-error" role="alert">{dataError}</p>}
           <p className="pp-runner-hint">Requests are sent to real endpoints. Run uses the selected Environment and Collection values as a private snapshot. Script variables can chain across requests; no Save/Cloud write is performed.</p>
           {dangerous&&<label className="pp-runner-safety"><input type="checkbox" disabled={running} checked={confirmWrites} onChange={e=>setConfirmWrites(e.target.checked)}/><span>I understand: selected POST/PUT/PATCH/DELETE requests may create or change real data on the target API.</span></label>}
           {steps>RUNNER_MAX_STEPS&&<p className="form-error">Limit: {RUNNER_MAX_STEPS} requests per run. Reduce endpoints or iterations.</p>}
@@ -70,6 +81,7 @@ export default function CollectionRunner({target,requests=[],environmentVariable
           {summary&&<>
             <div className="pp-runner-progress" role="progressbar" aria-valuenow={summary.completed} aria-valuemin={0} aria-valuemax={summary.total}><span style={{width:`${summary.total?summary.completed/summary.total*100:0}%`}}/></div>
             <div className="pp-runner-stats"><div><strong>{summary.completed}/{summary.total}</strong><span>Executed</span></div><div><strong>{summary.passed}</strong><span>Passed</span></div><div><strong>{summary.failed}</strong><span>Failed</span></div><div><strong>{summary.assertionsPassed}/{summary.assertionsPassed+summary.assertionsFailed}</strong><span>Assertions</span></div></div>
+            {!running&&<div className="pp-runner-select-actions"><button onClick={()=>exportReport('json')}>Export JSON</button><button onClick={()=>exportReport('xml')}>Export JUnit XML</button></div>}
             <div className="pp-runner-result-list">
               {summary.rows.map(row=><div className="pp-runner-result" key={row.id}>
                 <button type="button" className="pp-runner-result-title" aria-expanded={expanded===row.id} onClick={()=>setExpanded(old=>old===row.id?'':row.id)}>

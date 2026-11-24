@@ -3,7 +3,7 @@ import {newQuickJSWASMModuleFromVariant} from 'quickjs-emscripten-core';
 import releaseVariant from '@jitl/quickjs-singlefile-browser-release-sync';
 
 self.onmessage = async ({data}) => {
-  const {id, code, phase, variables, collectionVariables, localVariables, request, response}=data;
+  const {id, code, phase, variables, collectionVariables, localVariables, request, response, iterationData, iterationInfo}=data;
   let runtime, vm;
   let sourceStartLine=1;
   try {
@@ -27,7 +27,7 @@ self.onmessage = async ({data}) => {
       libraryResult.value.dispose();
     }
 
-    const initial=JSON.stringify({phase,variables,collectionVariables,localVariables,request,response});
+    const initial=JSON.stringify({phase,variables,collectionVariables,localVariables,request,response,iterationData,iterationInfo});
     // Code executes inside QuickJS, not the JS worker's host/global context.
     const prefix=String.raw`(function(){
       'use strict';
@@ -35,12 +35,13 @@ self.onmessage = async ({data}) => {
       const __environment={...input.variables};
       const __collection={...(input.collectionVariables||{})};
       const __local={...input.localVariables};
+      const __data=Object.assign(Object.create(null),input.iterationData||{});
       const __logs=[]; const __tests=[];
       const __request=input.request ? {...input.request,headers:{...(input.request.headers||{})}} : null;
       const __headerOverrides={};
       const __has=(o,k)=>Object.prototype.hasOwnProperty.call(o,String(k));
-      const __allVars=()=>({...__collection,...__environment,...__local});
-      const __get=(key)=>__has(__local,key)?__local[String(key)]:__has(__environment,key)?__environment[String(key)]:__collection[String(key)];
+      const __allVars=()=>({...__collection,...__environment,...__data,...__local});
+      const __get=(key)=>__has(__local,key)?__local[String(key)]:__has(__data,key)?__data[String(key)]:__has(__environment,key)?__environment[String(key)]:__collection[String(key)];
       const __collectionScope={
         get:(k)=>__collection[String(k)],
         set:(k,v)=>{__collection[String(k)]=String(v)},
@@ -72,13 +73,15 @@ self.onmessage = async ({data}) => {
       if(__request)__request.headers=Object.assign(__headerMethods,__request.headers);
       const __status=input.response?.statusCode;
       const pm={
+        iterationData:{get:k=>__data[String(k)],has:k=>__has(__data,k),toObject:()=>({...__data})},
+        info:{iteration:input.iterationInfo?.iteration??0,iterationCount:input.iterationInfo?.iterationCount??1},
         environment:__envScope,
         collectionVariables:__collectionScope,
         variables:{
           get:__get,
           set:(k,v)=>{__local[String(k)]=String(v)},
           unset:(k)=>{delete __local[String(k)]},
-          has:(k)=>__has(__local,k)||__has(__environment,k)||__has(__collection,k),
+          has:(k)=>__has(__local,k)||__has(__data,k)||__has(__environment,k)||__has(__collection,k),
           toObject:__allVars,
           replaceIn:(template)=>{
             let text=String(template);
@@ -97,6 +100,7 @@ self.onmessage = async ({data}) => {
           responseTime:input.response.elapsedMs,
           json:()=>JSON.parse(input.response.body),
           text:()=>input.response.body,
+          headers:{...(input.response.headers||{}),get:k=>Object.entries(input.response.headers||{}).find(([name])=>name.toLowerCase()===String(k).toLowerCase())?.[1],has:k=>Object.keys(input.response.headers||{}).some(name=>name.toLowerCase()===String(k).toLowerCase())},
           to:{have:{status:(n)=>{if(__status!==n)throw Error('Expected status '+n+', received '+__status)}}}
         }:null,
         test:(name,fn)=>{try{fn();__tests.push({name:String(name),passed:true})}catch(e){__tests.push({name:String(name),passed:false,error:String(e&&e.message||e)})}},

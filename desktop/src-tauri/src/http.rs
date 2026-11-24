@@ -47,10 +47,53 @@ pub struct NativeResponse {
     status_code: u16,
     reason_phrase: String,
     elapsed_ms: u64,
+    timing: NativeTiming,
     headers: HashMap<String, String>,
     body: String,
     truncated: bool,
     is_binary: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeTiming { headers_ms: u64, body_ms: u64, total_ms: u64 }
+
+// Reserve before dispatch: cancellation can arrive before the HTTP future starts.
+struct CancelSlot {
+    sender: Option<tokio::sync::oneshot::Sender<()>>,
+    receiver: Option<tokio::sync::oneshot::Receiver<()>>,
+    created: Instant,
+}
+#[derive(Default)]
+pub struct NativeCancellation(std::sync::Mutex<HashMap<String, CancelSlot>>);
+
+#[tauri::command]
+pub fn reserve_native_http(state: tauri::State<'_, NativeCancellation>, request_id: String) -> Result<(), String> {
+    if request_id.len()!=36 || !request_id.bytes().all(|c| c.is_ascii_hexdigit() || c==b'-') { return Err("Invalid execution ID".into()); }
+    let mut slots=state.0.lock().map_err(|_| "Cancellation state unavailable")?;
+    slots.retain(|_,slot| slot.receiver.is_none() || slot.created.elapsed()<Duration::from_secs(60));
+    if slots.len()>=32 || slots.contains_key(&request_id) { return Err("Too many native requests".into()); }
+    let (sender,receiver)=tokio::sync::oneshot::channel();
+    slots.insert(request_id,CancelSlot{sender:Some(sender),receiver:Some(receiver),created:Instant::now()});
+    Ok(())
+}
+#[tauri::command]
+pub fn cancel_native_http(state: tauri::State<'_, NativeCancellation>, request_id: String) -> Result<(), String> {
+    let mut slots=state.0.lock().map_err(|_| "Cancellation state unavailable")?;
+    if let Some(slot)=slots.get_mut(&request_id) { if let Some(sender)=slot.sender.take(){let _=sender.send(());} }
+    Ok(())
+}
+#[tauri::command]
+pub async fn send_cancelable_native_http(state: tauri::State<'_, NativeCancellation>, request_id: String, command: NativeCommand) -> Result<NativeResponse,String> {
+    let receiver={let mut slots=state.0.lock().map_err(|_| "Cancellation state unavailable")?;
+        slots.get_mut(&request_id).and_then(|slot|slot.receiver.take()).ok_or("Unknown execution ID")?};
+    // The cancellation future is polled first, so a prior cancellation cannot dispatch HTTP.
+    let output=match futures_util::future::select(Box::pin(receiver),Box::pin(send_native_http(command))).await {
+        futures_util::future::Either::Left((_cancelled,_http))=>Err("Native request cancelled".into()),
+        futures_util::future::Either::Right((response,_cancel))=>response,
+    };
+    state.0.lock().map_err(|_| "Cancellation state unavailable")?.remove(&request_id);
+    output
 }
 
 fn decoded_file(encoded: &str) -> Result<Vec<u8>, String> {
@@ -176,6 +219,7 @@ pub async fn send_native_http(command: NativeCommand) -> Result<NativeResponse, 
         .send()
         .await
         .map_err(|e| format!("Native request failed: {e}"))?;
+    let headers_ms = start.elapsed().as_millis().min(u64::MAX as u128) as u64;
     let status = response.status();
     if status.is_redirection() {
         return Err("Redirect blocked. Send request to the destination URL directly.".into());
@@ -217,10 +261,12 @@ pub async fn send_native_http(command: NativeCommand) -> Result<NativeResponse, 
         Ok(text) => (text, false),
         Err(_) => (STANDARD.encode(&bytes), true),
     };
+    let total_ms=start.elapsed().as_millis().min(u64::MAX as u128) as u64;
     Ok(NativeResponse {
         status_code: status.as_u16(),
         reason_phrase: status.canonical_reason().unwrap_or("").to_string(),
-        elapsed_ms: start.elapsed().as_millis().min(u64::MAX as u128) as u64,
+        elapsed_ms: total_ms,
+        timing: NativeTiming{headers_ms,body_ms:total_ms.saturating_sub(headers_ms),total_ms},
         headers: response_headers,
         body,
         truncated,

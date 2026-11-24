@@ -5,7 +5,8 @@ import CodeMirror from '@uiw/react-codemirror';
 import {json} from '@codemirror/lang-json';
 import {xml} from '@codemirror/lang-xml';
 import {html} from '@codemirror/lang-html';
-import {javascript} from '@codemirror/lang-javascript';
+import {javascript,javascriptLanguage} from '@codemirror/lang-javascript';
+import {postmanCompletions} from '../services/scriptSnippets.js';
 import {linter, lintGutter, forceLinting} from '@codemirror/lint';
 import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
 import {EditorView} from '@codemirror/view';
@@ -106,6 +107,7 @@ export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=
     if(lang==='html')ex.push(html());
     if(lang==='javascript')ex.push(javascript());
     if(lang==='javascript'&&scriptDiagnostics&&!readOnly){
+      ex.push(javascriptLanguage.data.of({autocomplete:postmanCompletions}));
       ex.push(linter(view=>{
         const diagnostics=[];
         const length=view.state.doc.length;

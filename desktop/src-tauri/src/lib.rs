@@ -6,6 +6,7 @@ mod remote;
 pub fn run() {
     tauri::Builder::default()
         .manage(remote::RemoteState::default())
+        .manage(http::NativeCancellation::default())
         .invoke_handler(tauri::generate_handler![
             remote::begin_remote_sign_in,
             remote::poll_remote_sign_in,
@@ -19,6 +20,9 @@ pub fn run() {
             database::load_local_history,
             database::save_local_history,
             http::send_native_http,
+            http::reserve_native_http,
+            http::cancel_native_http,
+            http::send_cancelable_native_http,
             profiles::load_connection_profiles,
             profiles::save_connection_profiles
         ])

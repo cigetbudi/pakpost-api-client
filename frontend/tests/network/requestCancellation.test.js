@@ -31,8 +31,8 @@ test('cancelling supported request aborts signal, prevents duplicate sends and r
   h.actions.cancelRequest();assert.equal(signal.aborted,true);h.release();await run;
   assert.equal(h.outcome.cancelled,true);assert.equal(h.loading,false);assert.equal(h.executionRef.current,null);assert.equal(h.variablesWritten,0);
 });
-test('native transport does not pretend to support cancellation',async()=>{
-  const h=harness('native');const run=h.actions.sendRequest();h.actions.cancelRequest();assert.equal(h.executionRef.current.controller.signal.aborted,false);h.release();await run;assert.equal(h.outcome.statusCode,200);
+test('native cancellation aborts the client execution and discards the result',async()=>{
+  const h=harness('native');const run=h.actions.sendRequest();h.actions.cancelRequest();assert.equal(h.executionRef.current.controller.signal.aborted,true);h.release();await run;assert.equal(h.outcome.cancelled,true);
 });
 test('browser dispatch forwards cancellation to the underlying fetch signal',async()=>{
   const originalFetch=globalThis.fetch;let observed;

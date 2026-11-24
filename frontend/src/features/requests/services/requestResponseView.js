@@ -6,7 +6,7 @@ export function requestResponseView(result,resTab,responsePretty,prettyResponse)
     ? (result.headers?.['Content-Type'] || result.headers?.['content-type'] || 'text/plain')
     : 'text/plain';
   const responseText = result && !result.error
-    ? (resTab === 'body'
+    ? (resTab !== 'headers'
       ? (responsePretty ? (prettyResponse||prettyJson(result.body||'')) : (result.body||''))
       : JSON.stringify(result.headers || {}, null, 2))
     : '';

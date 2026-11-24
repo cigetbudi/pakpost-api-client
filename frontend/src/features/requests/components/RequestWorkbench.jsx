@@ -110,6 +110,7 @@ export function RequestWorkbench(props) {
               onCopy={() => { navigator.clipboard?.writeText(responseText); setNotice('Response copied'); }}
               isDark={isDarkAppearance(theme)}
               Editor={TextEditor}
+              variableUi={variableUi}
             />
           </div>
         </div>

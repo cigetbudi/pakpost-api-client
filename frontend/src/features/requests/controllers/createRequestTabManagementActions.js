@@ -10,6 +10,7 @@ export function createRequestTabManagementActions(dependencies) {
   function closeTab(id){performTabAction('close',id);}
   function performTabAction(action,id,confirmed=false){
       setTabMenu(null);
+      if(action==='pin'){setOpenTabs(tabs=>tabs.map(tab=>tab.id===id?{...tab,pinned:!tab.pinned}:tab));return;}
       if(action==='duplicate'){
         stashActive();const source=draftsRef.current[id];if(!source)return;
         const newId=`t${++tabSequence.current}`;

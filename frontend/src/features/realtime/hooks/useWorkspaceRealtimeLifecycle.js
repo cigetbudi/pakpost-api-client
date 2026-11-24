@@ -17,23 +17,25 @@ export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, ses
     if (window.__TAURI_INTERNALS__) {
       // Desktop tokens must remain in Rust. REST convergence is a safe fallback
       // until native, authenticated SignalR transport is available.
-      let cancelled=false, timer=null, running=false;
+      let cancelled=false, timer=null, running=false, failures=0;
       const checkpoint={collections:null,knownCollectionIds:null,indexes:new Map(),pagedCounts:new Map(),cursor:0};
       const tick=async()=>{
         if(cancelled||running)return;
         running=true;
         try {
           await callbacks.current.onDesktopPoll?.(checkpoint,()=>!cancelled);
+          failures=0;
           if(!cancelled)callbacks.current.onStatus?.('syncing');
         } catch(error) {
           if(!cancelled) {
+            failures++;
             callbacks.current.onStatus?.('offline');
             // A revoked session must not keep a stale workspace visually live.
             if(error?.status===401)window.dispatchEvent(new Event('pakpost:desktop-session-expired'));
           }
         } finally {
           running=false;
-          if(!cancelled)timer=setTimeout(tick,5000);
+          if(!cancelled)timer=setTimeout(tick,Math.min(60000,5000*2**Math.min(failures,4)));
         }
       };
       callbacks.current.onStatus?.('connecting');
@@ -41,7 +43,8 @@ export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, ses
       const wake=()=>{if(document.visibilityState==='visible'&&!running){clearTimeout(timer);timer=setTimeout(tick,100);}};
       document.addEventListener('visibilitychange',wake);
       window.addEventListener('focus',wake);
-      return ()=>{cancelled=true;clearTimeout(timer);document.removeEventListener('visibilitychange',wake);window.removeEventListener('focus',wake);callbacks.current.onReset?.();};
+      window.addEventListener('online',wake);
+      return ()=>{cancelled=true;clearTimeout(timer);document.removeEventListener('visibilitychange',wake);window.removeEventListener('focus',wake);window.removeEventListener('online',wake);callbacks.current.onReset?.();};
     }
     let disposed = false, stop = null;
     import('../services/workspaceRealtime.js').then(({connectWorkspaceRealtime}) =>

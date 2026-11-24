@@ -19,26 +19,44 @@ export function useBrowserSessionBootstrap({
 }) {
   useEffect(()=>{
     if (isTauriDesktop()) {
-      let mounted=true;
-      // Local defaults to zero network requests. Only an already-authorized
-      // remote session can enable the shared workspace API adapter.
-      (async()=>{
+      let mounted=true, checking=false;
+      const refreshDesktop=async()=>{
+        if(!mounted||checking)return;
+        checking=true;const epoch=authEpochRef.current;
+        const current=()=>mounted&&epoch===authEpochRef.current;
+        async function expire(invoke){
+          if(!current())return;
+          window.__PAKPOST_DESKTOP_REMOTE__=false;
+          if(currentTokenRef.current)performLogout(false);
+          // Remove expired native credentials as well. Local data stays untouched.
+          try{await invoke('disconnect_remote');}catch{}
+        }
         try {
           const {invoke}=await import('@tauri-apps/api/core');
-          if (!await invoke('desktop_remote_status') || !mounted) return;
+          const connected=await invoke('desktop_remote_status');
+          if(!current())return;
+          if(!connected){if(currentTokenRef.current)await expire(invoke);return;}
           window.__PAKPOST_DESKTOP_REMOTE__=true;
-          const result=await api('/api/auth/session','GET');
-          if (!mounted || !result?.authenticated || !result.user) return;
+          let result;
+          try{result=await api('/api/auth/session','GET');}
+          catch(e){if(e?.status===401)await expire(invoke);return;}
+          if(!current())return;
+          if(!result?.authenticated||!result.user){await expire(invoke);return;}
+          if(currentTokenRef.current===BROWSER_SESSION&&currentUserRef.current?.id===result.user.id)return;
+          if(currentTokenRef.current&&currentUserRef.current?.id&&currentUserRef.current.id!==result.user.id)performLogout(false);
           currentTokenRef.current=BROWSER_SESSION;
-          setBrowserCsrf(result.csrfToken||'');
-          setToken(BROWSER_SESSION);
-          setMe(result.user);
-          setAuthOpen(false);
-          setStorageScope('workspace');
-          loadWorkspaces(BROWSER_SESSION,result.user.id);
-        } catch (e) {console.warn('Desktop remote session unavailable:', String(e));window.__PAKPOST_DESKTOP_REMOTE__=false;}
-      })();
-      return ()=>{mounted=false};
+          setBrowserCsrf(result.csrfToken||'');setToken(BROWSER_SESSION);setMe(result.user);
+          setAuthOpen(false);setStorageScope('workspace');loadWorkspaces(BROWSER_SESSION,result.user.id);
+        }catch{/* Network errors are not a sign-out. */}
+        finally{checking=false;}
+      };
+      refreshDesktop();
+      const timer=setInterval(()=>{if(document.visibilityState==='visible')refreshDesktop();},30000);
+      const wake=()=>{if(document.visibilityState==='visible')refreshDesktop();};
+      document.addEventListener('visibilitychange',wake);
+      window.addEventListener('online',wake);
+      window.addEventListener('pakpost:desktop-session-expired',refreshDesktop);
+      return()=>{mounted=false;clearInterval(timer);document.removeEventListener('visibilitychange',wake);window.removeEventListener('online',wake);window.removeEventListener('pakpost:desktop-session-expired',refreshDesktop);};
     }
     // Purge credentials written by pre-cookie versions of PakPost.
     try{sessionStorage.removeItem('pakpost_token');}catch{}

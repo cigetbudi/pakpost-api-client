@@ -11,6 +11,7 @@ export function createRequestTabNavigationActions(dependencies) {
   } = dependencies;
 
   function selectTab(id) {
+      setOpenTabs(tabs=>tabs.map(t=>t.id===id?{...t,lastOpenedAt:Date.now()}:t));
       setEditingRequestName(false);
       if (id === activeTabRef.current) { setPage('tester'); return; }
       stashActive();
@@ -40,7 +41,7 @@ export function createRequestTabNavigationActions(dependencies) {
         formFields:request?.formFields||[{...EMPTY_HEADER}],result:null,scriptLog:[],scriptTests:[],scriptError:''};
       draftsRef.current[id] = draft; activeTabRef.current = id;
       const name = request?.name || 'Untitled Request';
-      setOpenTabs(t => [...t, { id, name, savedName:name, method: draft.method, source, savedFingerprint:requestFingerprint(draft,name) }]);
+      setOpenTabs(t => [...t, { id, name, savedName:name, lastOpenedAt:Date.now(), method: draft.method, source, savedFingerprint:requestFingerprint(draft,name) }]);
       originalRequestNameRef.current=name; cancelledRequestNameRef.current=false; setEditingRequestName(focusName);
       setActiveTabId(id); restoreDraft(draft); setPage('tester');
     }

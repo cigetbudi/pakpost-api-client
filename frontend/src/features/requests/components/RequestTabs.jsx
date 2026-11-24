@@ -1,6 +1,6 @@
 import React,{useState} from 'react';
 import { useStore } from 'zustand';
-import { AlertTriangle, History, Layers3, Plus, X } from 'lucide-react';
+import { AlertTriangle, History, Layers3, Plus, Pin, X } from 'lucide-react';
 import { hasUnsavedMarker, freshRequest } from '../services/draftLifecycle';
 import { reorderTabs } from '../services/tabActions';
 import { STORAGE_WORKSPACE } from '../../import-export/services/storageScope';
@@ -27,7 +27,7 @@ export function RequestTabs({ store, page, remoteAlerts, snapshot, draftsRef,
               onDrop={e=>{e.preventDefault();e.stopPropagation();const from=tabDragRef.current;
                 if(from&&from!==t.id)setOpenTabs(tabs=>reorderTabs(tabs,from,t.id,position(e)));
                 tabDragRef.current=null;setDropTarget(null);}}
-              onDragEnd={()=>{tabDragRef.current=null;setDropTarget(null);}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span><span className="pp-tab-name">{t.name}</span>{remoteAlerts[t.id]&&<AlertTriangle size={13} className="pp-conflict-conflict-icon" aria-label="Cloud changed elsewhere"/>}{hasUnsavedMarker(t,t.id===activeTabId?snapshot():draftsRef.current[t.id]) && <span className="pp-unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"/>}{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
+              onDragEnd={()=>{tabDragRef.current=null;setDropTarget(null);}} onContextMenu={e=>showTabContext(e,t.id)} onKeyDown={e=>{if(e.key==='F10'&&e.shiftKey){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setTabMenu({id:t.id,x:Math.max(8,Math.min(rect.left,window.innerWidth-224)),y:Math.max(8,Math.min(rect.bottom,window.innerHeight-190))});}}}><span className={`pp-http-label ${t.method.toLowerCase()}`}>{t.method}</span>{t.pinned&&<Pin size={12} aria-label="Pinned tab"/>}<span className="pp-tab-name">{t.name}</span>{remoteAlerts[t.id]&&<AlertTriangle size={13} className="pp-conflict-conflict-icon" aria-label="Cloud changed elsewhere"/>}{hasUnsavedMarker(t,t.id===activeTabId?snapshot():draftsRef.current[t.id]) && <span className="pp-unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"/>}{t.status && <span className={`pp-tab-status ${t.status >= 400 ? 'error' : ''}`}>{t.status}</span>}<span className="pp-tab-x" title="Close tab" onClick={e => { e.stopPropagation(); closeTab(t.id); }}><X size={13}/></span></button>)}
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
           </div>

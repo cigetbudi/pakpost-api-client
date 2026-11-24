@@ -1,3 +1,4 @@
+import {ResponseAnalysis} from './ResponseAnalysis.jsx';
 import {useEffect, useState} from 'react';
 import {Spinner} from '../ui/AsyncFeedback.jsx';
 import React from 'react';
@@ -40,6 +41,7 @@ export function ResponsePane({
   onCopy,
   isDark,
   Editor,
+  variableUi,
 }) {
   const [elapsed,setElapsed]=useState(0);
   useEffect(()=>{
@@ -79,22 +81,23 @@ export function ResponsePane({
         <button className={resTab === 'headers' ? 'active' : ''} aria-pressed={resTab === 'headers'} onClick={() => onResTabChange('headers')}>
           Headers{hasResponse && <span className="pp-tiny-count">{headerCount}</span>}
         </button>
+        <button aria-pressed={resTab === 'analysis'} className={resTab === 'analysis' ? 'active' : ''} onClick={()=>onResTabChange('analysis')}>Analysis</button>
         <div className="pp-panel-tabs-spacer" />
-        <button className="pp-copy-response" disabled={!hasResponse} onClick={onBeautify} title="Beautify response">
+        <button className="pp-copy-response" disabled={!hasResponse||resTab==='analysis'} onClick={onBeautify} title="Beautify response">
           <WandSparkles size={14} /> Beautify
         </button>
-        <button className="pp-copy-response" disabled={!hasResponse} onClick={() => onResponsePrettyChange(value => !value)} title="Toggle raw/pretty">
+        <button className="pp-copy-response" disabled={!hasResponse||resTab==='analysis'} onClick={() => onResponsePrettyChange(value => !value)} title="Toggle raw/pretty">
           {responsePretty ? 'Pretty' : 'Raw'}
         </button>
         <button className="pp-copy-response" disabled={!hasResponse} onClick={onSaveExample} title="Save response example">
           <Save size={14} /> Save example
         </button>
-        <button className="pp-copy-response" disabled={!hasResponse} onClick={onCopy} title="Copy response">
+        <button className="pp-copy-response" disabled={!hasResponse||resTab==='analysis'} onClick={onCopy} title="Copy response">
           <Copy size={14} /> Copy
         </button>
       </div>
 
-      <div className="pp-panel-body pp-response-body">
+      <div className="pp-panel-body pp-response-body" style={resTab==='analysis'?{display:'none'}:undefined}>
         {!result ? (
           <div className="pp-response-empty">
             <div className="pp-response-empty-symbol">{loading?<Spinner size={28}/>:<Terminal size={28}/>}</div>
@@ -110,7 +113,7 @@ export function ResponsePane({
           </div>
         ) : (
           <>
-            <div className="pp-response-code">
+            <div className="pp-response-code" hidden={resTab==='analysis'}>
               <Editor
                 readOnly
                 outputTools
@@ -126,14 +129,15 @@ export function ResponsePane({
         )}
       </div>
 
-      <div className="pp-pane-footer">
+      </>}
+      <div style={{display:mode!=='collapsed'&&resTab==='analysis'?'flex':'none',flex:1,minHeight:0,overflow:'auto'}}><ResponseAnalysis result={result} variableUi={variableUi}/></div>
+      {mode!=='collapsed'&&<div className="pp-pane-footer">
         <span>{hasResponse ? `HTTP ${result.statusCode}` : 'No response yet'}</span>
         <span className="pp-footer-tail">
           {exampleCount ? `${exampleCount} example${exampleCount > 1 ? 's' : ''} saved` :
             (result?.truncated ? 'Truncated' : 'Raw / JSON preview')}
         </span>
-      </div>
-      </>}
+      </div>}
     </section>
   );
 }
