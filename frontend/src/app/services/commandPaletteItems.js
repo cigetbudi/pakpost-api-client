@@ -22,8 +22,8 @@ export function createCommandPaletteItems({
     { key: 'environments', title: 'Manage environments', subtitle: 'Edit local and workspace variables', icon: 'action', run: () => openContext('environments') },
     { key: 'settings', title: 'Open settings', subtitle: 'Appearance, keyboard shortcuts and preferences', icon: 'action', run: () => setPage('settings') },
     { key: 'code', title: 'Generate code', subtitle: 'cURL, Fetch, Go, C#, Python', icon: 'action', run: () => showPanel('code') },
-    ...openTabs.map(tab => ({
-      key: `tab-${tab.id}`, title: tab.name, subtitle: `${tab.method} · Open tab`,
+    ...[...openTabs].sort((a,b)=>(b.lastOpenedAt||0)-(a.lastOpenedAt||0)).map(tab => ({
+      key: `tab-${tab.id}`, title: tab.name, subtitle: `${tab.method} · Recently opened${tab.pinned?' · Pinned':''}`,
       method: tab.method, run: () => selectTab(tab.id),
     })),
     ...localCollections.flatMap(collection => (collection.requests || []).map(request => ({

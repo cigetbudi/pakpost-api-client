@@ -45,6 +45,17 @@ export function RetroSelect({value, onChange, options=[], ariaLabel='Choose an o
     }
   }
   useLayoutEffect(()=>{if(open)measure();},[open,choices.length]);
+  // Keep the active keyboard option visible in long, grouped menus.
+  useLayoutEffect(()=>{
+    if(!open || !menu.current)return;
+    const option=menu.current.querySelector('[id="'+id+'-option-'+active+'"]');
+    if(!option)return;
+    const list=menu.current;
+    const bounds=list.getBoundingClientRect();
+    const row=option.getBoundingClientRect();
+    if(row.top<bounds.top+5)list.scrollTop+=row.top-bounds.top-5;
+    else if(row.bottom>bounds.bottom-5)list.scrollTop+=row.bottom-bounds.bottom+5;
+  },[open,active,id]);
   useEffect(()=>{
     if(!open)return;
     function outside(e){if(!trigger.current?.contains(e.target)&&!menu.current?.contains(e.target))close();}

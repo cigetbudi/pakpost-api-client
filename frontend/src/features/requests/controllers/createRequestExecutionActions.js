@@ -62,7 +62,7 @@ export function createRequestExecutionActions(dependencies) {
       if(!url.trim()){setNotice('Enter a request URL first');return;}
       if(loading||executionRef.current)return;
       const controller=new AbortController();
-      const canCancel=interceptorMode==='browser'||(interceptorMode==='proxy'&&!globalThis.window?.__TAURI_INTERNALS__);
+      const canCancel=interceptorMode==='browser'||interceptorMode==='native'||(interceptorMode==='proxy'&&!globalThis.window?.__TAURI_INTERNALS__);
       executionRef.current={controller,canCancel};
       const tabId=activeTabRef.current;
       const executionId=globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;

@@ -158,6 +158,7 @@ export function WorkbenchView({ model }) {
             }else handleWorkspaceMenu(id,workspaceMenu);}}>{label}</MenuActionItem>)}
         </div>}
         {tabMenu&&<div className="pp-tab-context" role="menu" style={{left:tabMenu.x,top:tabMenu.y}} onContextMenu={e=>e.preventDefault()}>
+          <button role="menuitem" onClick={()=>performTabAction('pin',tabMenu.id)}>{openTabs.find(t=>t.id===tabMenu.id)?.pinned?'Unpin tab':'Pin tab'}</button>
           <button role="menuitem" onClick={()=>performTabAction('duplicate',tabMenu.id)}><Copy size={14}/> Duplicate tab</button>
           <button role="menuitem" onClick={()=>{selectTab(tabMenu.id);setTabMenu(null);setTimeout(()=>openSaveAs(),0);}}><Save size={14}/> Save as new request</button>
 
@@ -171,7 +172,7 @@ export function WorkbenchView({ model }) {
           <AlertTriangle size={17}/><span><strong>{remoteAlerts[activeTabId].kind==='deleted'?'Cloud request deleted or moved':'A newer Cloud version is available'}</strong><small>Your current draft was not overwritten. Review before saving.</small></span>
           <button type="button" onClick={()=>showConflictDialog(activeTabId)}>Review / Resync</button>
         </div>}
-        {page === 'tester' ? <RequestWorkbench key={activeTabId} responseMode={responseMode} setResponseMode={setResponseMode} {...{        AUTH_OPTIONS, ChevronRight, Code2, Columns2, History, KeyValueEditor,
+        {page === 'tester' ? <RequestWorkbench key={`${me?.id||'guest'}:${selectedWs||'local'}:${activeTabId}`} responseMode={responseMode} setResponseMode={setResponseMode} {...{        AUTH_OPTIONS, ChevronRight, Code2, Columns2, History, KeyValueEditor,
         LayoutPanelTop, Link2, METHODS, Pencil, RequestBody, ResponsePane,
         RetroSelect, Save, ScriptEditor, Send, ShieldCheck, Suspense,
         TextEditor, VariableAwareInput, VariableUrlInput, activeRequestName, activeTabId, apiKeyIn,

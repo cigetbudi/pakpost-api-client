@@ -174,6 +174,9 @@ export function useWorkbenchController() {
     inviteToken, setInviteToken, acceptingInvite, setAcceptingInvite, inviteAcceptError, setInviteAcceptError,
   } = useAuthOverlayState();
   const [notice, setNotice] = useState('');
+  const [undoLocalDelete,setUndoLocalDelete]=useState(null);
+  useEffect(()=>{if(!undoLocalDelete)return;const timer=setTimeout(()=>setUndoLocalDelete(null),Math.max(0,undoLocalDelete.expires-Date.now()));return()=>clearTimeout(timer);},[undoLocalDelete]);
+  useEffect(()=>setUndoLocalDelete(null),[me?.id]);
   const [exportChoice,setExportChoice] = useState(null);
   const [exportFormat,setExportFormat] = useState('postman');
   const [exportIncludeSecrets,setExportIncludeSecrets] = useState(false);
@@ -651,7 +654,7 @@ export function useWorkbenchController() {
     setExplorerTab, setLocalCollectionName, setLocalCollections, setLocalExpandAllSignal, setNotice, setOpenTabs,
     setPage, setResTab, setResponseExamples, setResult, setRevealLocalDraft, setSavedRequests,
     setSelectedCol, setSidebarCollapsed, setWorkspaceCollectionDocs, setWorkspaceMenu, setWorkspaceRequestLists, setWorkspaceSorted,
-    snapshot, storageScope, toLocalCollection, toggleWorkspaceCollection, token, url,
+    snapshot, storageScope, toLocalCollection, toggleWorkspaceCollection, token, url, setUndoLocalDelete,
     validateLibrary, workspaceCollectionKey, workspaceDocKey, workspaceRequestLists,
   });
   // Both collection and tab actions are ready: the helpers only run on user events.
@@ -693,6 +696,16 @@ export function useWorkbenchController() {
     collections,workspaceRequestLists,explorerSearch,collectionSort,selectedWs,localCollections,
   });
   const {responseType,responseText}=requestResponseView(result,resTab,responsePretty,prettyResponse);
+  function undoDeletedLocalRequest(){
+    const entry=undoLocalDelete;setUndoLocalDelete(null);
+    if(!entry||entry.expires<Date.now())return;
+    try{setLocalCollections(old=>{
+      const target=old.find(c=>c.id===entry.collectionId);
+      if(!target||old.some(c=>c.requests.some(r=>r.id===entry.request.id)))throw Error('Original collection is missing or request already exists.');
+      const requests=[...target.requests];requests.splice(Math.min(entry.index,requests.length),0,entry.request);
+      return validateLibrary(old.map(c=>c.id===target.id?{...c,requests}:c));
+    });setNotice('Local request restored. Reopen it from Collections.');}catch(e){setNotice(getMessage(e));}
+  }
   const commandItems = createCommandPaletteItems({
     commandOpen, addTab, setExplorerTab, setSidebarCollapsed, setPage,
     openContext, openTabs, localCollections, token, savedRequests, selectTab,
@@ -744,7 +757,7 @@ export function useWorkbenchController() {
     setNewCollection, setCollections, setSelectedCol, setSavedRequests, setShowMemberAdd, setInviteOpen, setNewMember, setNewMemberRoles, setMembers, inviteMember,
     setInviteEmail, setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess, setEditingMemberId,
     setEditingMemberRoles, selectedWorkspaceRef, currentTokenRef, CommandPalette, commandIndex, commandOpen, commandQuery,
-    visibleCommandItems, notice, createPortal, CollectionDialogs, ArrowDownToLine, Braces, CollectionVariablesEditor,
+    visibleCommandItems, notice, undoLocalDelete, undoDeletedLocalRequest, setUndoLocalDelete, createPortal, CollectionDialogs, ArrowDownToLine, Braces, CollectionVariablesEditor,
     Dialog, DocumentationEditor, FileJson, applyCollectionVariableSession, canWorkspace, collectionTargetKey, collectionVariablesBusy,
     collectionVariablesData, collectionVariablesError, collectionVariablesFetchId, collectionVariablesLoading, collectionVariablesTarget, confirmExport, docBusy,
     documentationTarget, exportChoice, exportFormat, exportIncludeSecrets, readCollectionVariables, reloadCollectionVariables, resetCollectionVariableSession,

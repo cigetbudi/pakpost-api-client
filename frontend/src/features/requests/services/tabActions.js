@@ -4,8 +4,8 @@ export function planTabClose(tabs,targetId,activeId,kind){
   if(index<0)throw Error('Tab does not exist.');
   let remaining;
   if(kind==='close')remaining=tabs.filter(t=>t.id!==targetId);
-  else if(kind==='others')remaining=tabs.filter(t=>t.id===targetId);
-  else if(kind==='right')remaining=tabs.slice(0,index+1);
+  else if(kind==='others')remaining=tabs.filter(t=>t.id===targetId||t.pinned);
+  else if(kind==='right')remaining=tabs.filter((t,i)=>i<=index||t.pinned);
   else throw Error('Unsupported tab action.');
   const removedIds=tabs.filter(t=>!remaining.some(r=>r.id===t.id)).map(t=>t.id);
   const nextActiveId=remaining.some(t=>t.id===activeId)?activeId:(remaining.some(t=>t.id===targetId)?targetId:(remaining[index]||remaining[index-1])?.id||null);

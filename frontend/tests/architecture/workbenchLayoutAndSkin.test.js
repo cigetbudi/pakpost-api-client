@@ -32,7 +32,7 @@ test('quick switcher shortcut is accessible and reaches existing open tabs and s
   assert.match(app, /aria-label="Quick search and commands"/);
   const palette = src('../../src/app/services/commandPaletteItems.js');
   assert.match(app, /createCommandPaletteItems\(/);
-  assert.match(palette, /\.\.\.openTabs\.map/);
+  assert.match(palette, /\.\.\.\[\.\.\.openTabs\]\.sort\([^\n]+\)\.map/);
   assert.match(palette, /\.\.\.localCollections\.flatMap/);
   assert.match(palette, /openLocalRequest\(request, collection\.id\)/);
 });

@@ -70,9 +70,10 @@ function sleep(ms,signal){
  * @param {Function} options.onProgress - receives sanitized progress, never raw HTTP data
  */
 export async function executeCollectionRun({requests,selectedIds,iterations=1,delayMs=0,stopOnFailure=true,
-  environmentVariables={},collectionVariables={},script,send,signal,onProgress=()=>{},onStep=()=>{}}){
+  environmentVariables={},collectionVariables={},iterationData=[],script,send,signal,onProgress=()=>{},onStep=()=>{}}){
   const steps=validateRunnerConfig({requests,selectedIds,iterations,delayMs});
   if(typeof script!=='function'||typeof send!=='function')throw Error('Runner execution adapters are missing.');
+  if(!Array.isArray(iterationData)||(iterationData.length&&iterationData.length!==iterations))throw Error('Iterations must match dataset row count.');
   let env={...environmentVariables};let collection={...collectionVariables};let local={};
   const runId=globalThis.crypto?.randomUUID?.()||`run-${Date.now()}`;
   const summary={runId,status:'running',total:steps.length*iterations,completed:0,passed:0,failed:0,
@@ -80,6 +81,8 @@ export async function executeCollectionRun({requests,selectedIds,iterations=1,de
   const publish=()=>onProgress({...summary,rows:[...summary.rows]});
   publish();
   outer:for(let iteration=1;iteration<=iterations;iteration++){
+    const data=iterationData[iteration-1]||{};
+    const dataVars=Object.fromEntries(Object.entries(data).map(([k,v])=>[k,String(v??'')]));
     for(const request of steps){
       if(signal?.aborted){summary.status='stopped';break outer;}
       const started=Date.now();
@@ -88,12 +91,12 @@ export async function executeCollectionRun({requests,selectedIds,iterations=1,de
         tests:[],logs:[],error:''};
       try{
         const pre=await script(request.preScript||'','pre',env,
-          postmanRequestSnapshot({method:row.method,url:request.url,headers:Object.fromEntries((request.rows||[]).filter(r=>r.key&&r.enabled!==false).map(r=>[r.key,r.value])),body:request.body||'',format:request.format},resolvedScriptVariables(collection,env,local)),
-          null,local,collection);
+          postmanRequestSnapshot({method:row.method,url:request.url,headers:Object.fromEntries((request.rows||[]).filter(r=>r.key&&r.enabled!==false).map(r=>[r.key,r.value])),body:request.body||'',format:request.format},resolvedScriptVariables(collection,{...env,...dataVars},local)),
+          null,local,collection,data,{iteration:iteration-1,iterationCount:iterations});
         const logs=[...(pre.logs||[])];
         if(pre.error){row.logs=logs.slice(-MAX_VISIBLE_LOGS).map(safeText);throw Error('Pre-request: '+pre.error);}
         env={...pre.environmentVariables};collection={...pre.collectionVariables};local={...pre.localVariables};
-        const variables=resolvedScriptVariables(collection,env,local);
+        const variables=resolvedScriptVariables(collection,{...env,...dataVars},local);
         const command=prepareRequest(request,variables);
         for(const [name,value] of Object.entries(pre.requestHeaderOverrides||{})){
           for(const key of Object.keys(command.headers))if(key.toLowerCase()===name.toLowerCase())delete command.headers[key];
@@ -102,7 +105,7 @@ export async function executeCollectionRun({requests,selectedIds,iterations=1,de
         const response=await send(command);
         row.status=response.statusCode;
         row.elapsedMs=Number.isFinite(response.elapsedMs)?response.elapsedMs:Date.now()-started;
-        const post=await script(request.postScript||'','post',env,command,response,local,collection);
+        const post=await script(request.postScript||'','post',env,command,response,local,collection,data,{iteration:iteration-1,iterationCount:iterations});
         logs.push(...(post.logs||[]));
         row.logs=logs.slice(-MAX_VISIBLE_LOGS).map(safeText);
         row.tests=[...(pre.tests||[]),...(post.tests||[])].slice(0,100).map(test=>({

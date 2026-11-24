@@ -110,7 +110,7 @@ export async function sendBrowserRequest(command,{signal}={}){
   const abort=()=>controller.abort(signal?.reason);
   if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
   const timeout=setTimeout(()=>controller.abort(),20000);
-  try{const start=performance.now();const response=await fetch(url,init);return await decodeBrowserResponse(response,Math.round(performance.now()-start))}
+  try{const start=performance.now();const response=await fetch(url,init);const headersMs=Math.round(performance.now()-start);const decoded=await decodeBrowserResponse(response,headersMs);const totalMs=Math.round(performance.now()-start);return {...decoded,timing:{headersMs,bodyMs:Math.max(0,totalMs-headersMs),totalMs}}}
   catch(error){throw Error(`Browser request failed (${error.message}). Check CORS or use the Browser Extension interceptor.`)}
   finally{clearTimeout(timeout);signal?.removeEventListener('abort',abort)}
 }
@@ -119,7 +119,18 @@ export async function dispatchRequest(command,mode,options){
   if(mode==='native'){
     if(!isTauriDesktop())throw Error('Native transport only works in PakPost Desktop');
     const {invoke}=await import('@tauri-apps/api/core');
-    return invoke('send_native_http',{command});
+    const signal=options?.signal;
+    if(!signal)return invoke('send_native_http',{command});
+    if(signal.aborted)throw Error('Request cancelled');
+    const requestId=globalThis.crypto.randomUUID();
+    await invoke('reserve_native_http',{requestId});
+    const cancel=()=>invoke('cancel_native_http',{requestId}).catch(()=>{});
+    signal.addEventListener('abort',cancel,{once:true});
+    try{
+      if(signal.aborted)await cancel();
+      return await invoke('send_cancelable_native_http',{requestId,command});
+    }finally{signal.removeEventListener('abort',cancel);}
+
   }
   if(mode==='extension')return sendExtensionRequest(command);
   if(mode==='browser')return sendBrowserRequest(command,options);

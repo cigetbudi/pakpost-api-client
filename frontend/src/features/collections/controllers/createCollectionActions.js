@@ -22,7 +22,7 @@ export function createCollectionActions(dependencies) {
     setNotice, setOpenTabs, setResponseExamples, setRevealLocalDraft, setSavedRequests,
     setSelectedCol, setSidebarCollapsed, setWorkspaceCollectionDocs, setWorkspaceMenu, setWorkspaceRequestLists,
     setWorkspaceSorted, snapshot, toggleWorkspaceCollection, token, url,
-    validateLibrary, workspaceCollectionKey, workspaceDocKey, workspaceRequestLists,
+    validateLibrary, workspaceCollectionKey, workspaceDocKey, workspaceRequestLists, setUndoLocalDelete,
   } = dependencies;
   const creationActions = createCollectionCreationActions(dependencies);
   const createExplorerCollection = creationActions.createExplorerCollection;
@@ -46,7 +46,16 @@ export function createCollectionActions(dependencies) {
     }
 
   function updateLocal(action){
-      try{setLocalCollections(old=>applyLocalAction(old,action));
+      try{let removed=null;
+        setLocalCollections(old=>{
+          if(action.type==='deleteRequest'){
+            const collection=old.find(c=>c.id===action.collectionId);
+            const index=collection?.requests.findIndex(r=>r.id===action.requestId)??-1;
+            if(index>=0)removed={collectionId:collection.id,index,request:structuredClone(collection.requests[index]),expires:Date.now()+30000};
+          }
+          return applyLocalAction(old,action);
+        });
+        if(removed)setUndoLocalDelete?.(removed);
         if(action.type==='deleteRequest'||action.type==='deleteCollection')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&(action.type==='deleteCollection'?t.source.collectionId===action.collectionId:(t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId))?{...t,source:null}:t));
         if(action.type==='renameRequest')setOpenTabs(ts=>ts.map(t=>t.source?.scope==='local'&&t.source.collectionId===action.collectionId&&t.source.requestId===action.requestId?{...t,name:action.name,savedName:action.name}:t));
         if(action.type==='deleteExample'){
