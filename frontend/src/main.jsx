@@ -54,3 +54,5 @@ import './styles/layers/instance-administration.css';
 import './styles/layers/motion-system.css';
 
 import './styles/desktop-connections.css';
+
+import './styles/adaptive-workbench.css';

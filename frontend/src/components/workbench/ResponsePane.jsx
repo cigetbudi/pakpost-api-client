@@ -2,6 +2,10 @@ import React from 'react';
 import {
   ArrowDownToLine,
   Bolt,
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
   Clock3,
   Copy,
   Save,
@@ -18,6 +22,8 @@ import { languageFromMime } from '../../features/requests/services/requestTools.
  * Passing the lazy Editor avoids downloading CodeMirror during startup.
  */
 export function ResponsePane({
+  mode = 'expanded',
+  onModeChange,
   result,
   loading,
   resTab,
@@ -40,7 +46,9 @@ export function ResponsePane({
   return (
     <section className="pp-response-pane">
       <div className="pp-pane-heading pp-response-heading">
-        <span className="pp-pane-title"><Bolt size={15} /> Response</span>
+        <button type="button" className="pp-pane-title pp-response-toggle" aria-expanded={mode !== 'collapsed'} onClick={()=>onModeChange?.(mode === 'collapsed' ? 'expanded' : 'collapsed')} title={mode === 'collapsed' ? 'Expand response' : 'Collapse response'}>
+          {mode === 'collapsed' ? <ChevronRight size={15}/> : <ChevronDown size={15}/>} <Bolt size={14}/> Response
+        </button>
         {hasResponse ? (
           <div className="pp-response-metrics">
             <span className={`pp-status ${statusTone(result.statusCode)}`}>
@@ -50,9 +58,13 @@ export function ResponsePane({
             <span><Clock3 size={13} /> {result.elapsedMs} ms</span>
             <span><ArrowDownToLine size={13} /> {bodySize.toLocaleString()} B</span>
           </div>
-        ) : <span className="pp-pane-meta">Awaiting response</span>}
+        ) : <span className="pp-pane-meta">{loading ? 'Sending…' : result?.error ? 'Request failed' : 'Awaiting response'}</span>}
+        <button type="button" className="pp-response-focus" aria-label={mode === 'maximized' ? 'Restore response panel' : 'Maximize response panel'} title={mode === 'maximized' ? 'Restore response panel' : 'Maximize response panel'} onClick={()=>onModeChange?.(mode === 'maximized' ? 'expanded' : 'maximized')}>
+          {mode === 'maximized' ? <Minimize2 size={15}/> : <Maximize2 size={15}/>}
+        </button>
       </div>
 
+      {mode !== 'collapsed' && <>
       <div className="pp-panel-tabs">
         <button className={resTab === 'body' ? 'active' : ''} onClick={() => onResTabChange('body')}>Body</button>
         <button className={resTab === 'headers' ? 'active' : ''} onClick={() => onResTabChange('headers')}>
@@ -111,6 +123,7 @@ export function ResponsePane({
             (result?.truncated ? 'Truncated' : 'Raw / JSON preview')}
         </span>
       </div>
+      </>}
     </section>
   );
 }

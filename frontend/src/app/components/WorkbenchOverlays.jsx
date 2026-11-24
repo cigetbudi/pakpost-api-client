@@ -29,8 +29,7 @@ export function WorkbenchOverlays({ model }) {
     setExampleDescription, setExampleName, setSaveCollection, setSaveExampleOpen, setSaveLocalCollection, setSaveName,
     setSaveOpen, setSaveScope, setSaveWs, setVersionDialog, snapshot, statusTone,
     submitCollectionImport, versionDialog, workspaceDraft, workspaces, runnerTarget, CollectionRunner,
-    closeRunner, api, dispatchRequest, consoleOpen, PakpostConsole, consoleEvents,
-    setConsoleOpen, clearConsoleEvents, navigateConsoleEvent, FastTooltip,
+    closeRunner, api, dispatchRequest, FastTooltip,
   } = model;
   return <>
 <CommandPalette {...{        ArrowRight, Code2, Search, commandIndex, commandOpen, commandQuery,
@@ -76,6 +75,5 @@ export function WorkbenchOverlays({ model }) {
         ?api('/api/proxy/send','POST',command)
         :dispatchRequest(command,runnerTarget.transport)}/>
   </Suspense>}
-  {consoleOpen && <Suspense fallback={<div className="pp-console-loading">Opening PakPost Console…</div>}><PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents} onNavigate={navigateConsoleEvent}/></Suspense>}
   <FastTooltip/></>;
 }
