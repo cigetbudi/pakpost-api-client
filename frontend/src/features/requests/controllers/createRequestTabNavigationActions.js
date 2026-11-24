@@ -28,7 +28,7 @@ export function createRequestTabNavigationActions(dependencies) {
         return;
       }
       selectTab(event.tabId);
-      setReqTab('scripts');
+      setReqTab(event.phase==='post-script'?'post-script':'pre-script');
       setScriptJump({phase:event.phase==='pre-script'?'pre':'post',line:event.line,column:event.column||1,serial:Date.now()});
       setConsoleOpen(false);
     }

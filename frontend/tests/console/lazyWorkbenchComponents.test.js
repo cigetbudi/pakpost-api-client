@@ -11,7 +11,7 @@ test('CodeMirror is loaded on demand, never imported eagerly by the app shell',(
   assert.match(app,/lazy\(\(\) => import\('\.\.\/\.\.\/features\/requests\/components\/Editors\.jsx'\)/);
   assert.match(app,/<Suspense fallback=\{<div className="pp-editor-loading"/);
   assert.match(app,/reqTab === 'body'/); // body editing remains available
-  assert.match(app,/reqTab === 'scripts'/);
+  assert.match(app,/\['pre-script','post-script'\]\.includes\(scriptTab\)/);
 });
 
 test('optional workbench panels are dynamically imported only when visible',()=>{

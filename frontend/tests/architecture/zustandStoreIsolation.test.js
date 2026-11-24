@@ -36,7 +36,7 @@ test('request editor modules preserve variable-aware body and script diagnostics
   assert.match(scripts, /scriptDiagnostic\?\.phase==='post'/);
   assert.match(scripts, /pp-script-diagnostic-item/);
   assert.match(app, /reqTab === 'body' && <Suspense/);
-  assert.match(app, /reqTab === 'scripts' && <Suspense/);
+  assert.match(app, /\['pre-script','post-script'\]\.includes\(scriptTab\) && <Suspense/);
 });
 
 test('Cloud conflict, saved draft and tab close workflow remain in App orchestration', () => {

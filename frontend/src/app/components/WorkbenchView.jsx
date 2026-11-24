@@ -1,5 +1,6 @@
 import { WorkbenchOverlays } from './WorkbenchOverlays.jsx';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Play, Terminal } from 'lucide-react';
 
 /** Pure workbench renderer. No data fetching or workspace mutations. */
 export function WorkbenchView({ model }) {
@@ -27,7 +28,7 @@ export function WorkbenchView({ model }) {
     WorkbenchSettings, setTheme, split, setSplit, interceptorMode, setInterceptorMode,
     extensionStatus, refreshExtensionStatus, RequestTabs, requestWorkbenchStore, remoteAlerts, tabDragRef,
     closeTab, showTabContext, setTabMenu, addTab, runnerLoading, openRunnerForCurrentCollection,
-    consoleOpen, setConsoleOpen, realtimeStatus, openRequestHistory, workspaceMenu, MenuActionItem,
+    consoleOpen, setConsoleOpen, PakpostConsole, consoleEvents, clearConsoleEvents, navigateConsoleEvent, realtimeStatus, openRequestHistory, workspaceMenu, MenuActionItem,
     handleWorkspaceMenu, setWorkspaceMenu, tabMenu, performTabAction, Copy, openSaveAs, Save,
     ArrowRight, AlertTriangle, showConflictDialog, RequestWorkbench, AUTH_OPTIONS, ChevronRight,
     Columns2, KeyValueEditor, LayoutPanelTop, METHODS, Pencil, RequestBody,
@@ -55,7 +56,16 @@ export function WorkbenchView({ model }) {
     setInviteEmail, setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess,
     setEditingMemberId, setEditingMemberRoles, selectedWorkspaceRef, currentTokenRef,
   } = model;
-  return <div className="pp-app">
+  const [responseMode, setResponseMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'collapsed' : 'expanded');
+  // Collapse once when entering a narrow window; manual toggles remain available.
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 960px)');
+    const adapt = () => { if (query.matches) setSidebarCollapsed(true); };
+    adapt();
+    query.addEventListener('change', adapt);
+    return () => query.removeEventListener('change', adapt);
+  }, [setSidebarCollapsed]);
+  return <div className="pp-app pp-adaptive-workbench">
 <AppHeader {...{        GOOGLE_CLIENT_ID, Link2, LogIn, LogOut, RetroSelect, STORAGE_LOCAL,
         STORAGE_WORKSPACE, Search, Settings2, activeEnvId, activeWorkspace, currentEnvironments,
         envScope, googleLinked, isDarkAppearance, logout, me, openContext,
@@ -100,7 +110,7 @@ export function WorkbenchView({ model }) {
 />}
       <main className="pp-content">
         {page==='settings'&&<WorkbenchSettings category={settingsCategory} onCategoryChange={setSettingsCategory} theme={theme} onThemeChange={setTheme} token={token} me={me} split={split} onSplitChange={setSplit} interceptorMode={interceptorMode} onInterceptorChange={setInterceptorMode} extensionStatus={extensionStatus} onCheckExtension={refreshExtensionStatus} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
-        <RequestTabs store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} runnerLoading={runnerLoading} openRunnerForCurrentCollection={openRunnerForCurrentCollection} consoleOpen={consoleOpen} setConsoleOpen={setConsoleOpen} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
+        <RequestTabs store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
             ['newRequest','New request'],['newFolder','New folder'],['organizeFolders','Move folder…'],['organizeCollection','Move collection…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
@@ -131,7 +141,7 @@ export function WorkbenchView({ model }) {
           <AlertTriangle size={17}/><span><strong>{remoteAlerts[activeTabId].kind==='deleted'?'Cloud request deleted or moved':'A newer Cloud version is available'}</strong><small>Your current draft was not overwritten. Review before saving.</small></span>
           <button type="button" onClick={()=>showConflictDialog(activeTabId)}>Review / Resync</button>
         </div>}
-        {page === 'tester' ? <RequestWorkbench key={activeTabId} {...{        AUTH_OPTIONS, ChevronRight, Code2, Columns2, History, KeyValueEditor,
+        {page === 'tester' ? <RequestWorkbench key={activeTabId} responseMode={responseMode} setResponseMode={setResponseMode} {...{        AUTH_OPTIONS, ChevronRight, Code2, Columns2, History, KeyValueEditor,
         LayoutPanelTop, Link2, METHODS, Pencil, RequestBody, ResponsePane,
         RetroSelect, Save, ScriptEditor, Send, ShieldCheck, Suspense,
         TextEditor, VariableAwareInput, VariableUrlInput, activeRequestName, activeTabId, apiKeyIn,
@@ -173,7 +183,14 @@ export function WorkbenchView({ model }) {
 /></Suspense> : null}
       </main>
     </div>
-    <footer className="pp-global-footer"><span><span className="pp-footer-dot"/> Pakpost | Made with ♡ by cigetbudi</span><span className="pp-footer-center">{interceptorMode==='native'?'Desktop Native · Direct from this computer':interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
+    {consoleOpen && <Suspense fallback={<div className="pp-adaptive-console-loading" role="status">Opening Console…</div>}>
+      <PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents} onNavigate={navigateConsoleEvent}/>
+    </Suspense>}
+    <footer className="pp-global-footer"><div className="pp-bottom-tools">
+      <button type="button" className={consoleOpen?'active':''} aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={14}/> Console</button>
+      <button type="button" disabled={runnerLoading} onClick={openRunnerForCurrentCollection} title="Run saved requests from a Collection"><Play size={14}/> {runnerLoading?'Loading…':'Runner'}</button>
+      <span className="pp-bottom-brand">PakPost</span>
+    </div><span className="pp-footer-center">{interceptorMode==='native'?'Desktop Native · Direct from this computer':interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
       <WorkbenchOverlays model={model}/>
   </div>;
 }

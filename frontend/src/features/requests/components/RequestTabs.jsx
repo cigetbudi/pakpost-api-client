@@ -1,14 +1,13 @@
 import React,{useState} from 'react';
 import { useStore } from 'zustand';
-import { AlertTriangle, History, Layers3, Play, Plus, Terminal, X } from 'lucide-react';
+import { AlertTriangle, History, Layers3, Plus, X } from 'lucide-react';
 import { hasUnsavedMarker, freshRequest } from '../services/draftLifecycle';
 import { reorderTabs } from '../services/tabActions';
 import { STORAGE_WORKSPACE } from '../../import-export/services/storageScope';
 
 export function RequestTabs({ store, page, remoteAlerts, snapshot, draftsRef,
   tabDragRef, selectTab, closeTab, showTabContext, setTabMenu, addTab,
-  navigate, runnerLoading, openRunnerForCurrentCollection, consoleOpen,
-  setConsoleOpen, token, collectionsScope, realtimeStatus, openRequestHistory }) {
+  navigate, token, collectionsScope, realtimeStatus, openRequestHistory }) {
   // Select individual store slices so only relevant tab mutations notify this UI.
   const openTabs = useStore(store, state => state.openTabs);
   const activeTabId = useStore(store, state => state.activeTabId);
@@ -32,7 +31,7 @@ export function RequestTabs({ store, page, remoteAlerts, snapshot, draftsRef,
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
           </div>
-          <div className="pp-tabs-actions"><button type="button" className="pp-runner-toolbar" onClick={openRunnerForCurrentCollection} disabled={runnerLoading} title="Run saved requests from a Collection"><Play size={15}/> {runnerLoading?'Loading…':'Runner'}</button><button type="button" className={consoleOpen?'pp-console-toggle active':'pp-console-toggle'} title="Toggle PakPost Console" aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={15}/> Console</button><span><span className="pp-working-dot"/> {token&&collectionsScope===STORAGE_WORKSPACE?({'live':'Live','syncing':'Auto-sync ~5s','connecting':'Connecting…','reconnecting':'Reconnecting…','offline':'Offline'}[realtimeStatus]||'Offline'):token?'Local':'Guest'}</span><button title="Request Version History" disabled={openTabs.find(t=>t.id===activeTabId)?.source?.scope!=='workspace'||openTabs.find(t=>t.id===activeTabId)?.source?.pending} onClick={()=>openRequestHistory(activeTabId)}><History size={16}/> Versions</button></div>
+          <div className="pp-tabs-actions"><span><span className="pp-working-dot"/> {token&&collectionsScope===STORAGE_WORKSPACE?({'live':'Live','syncing':'Auto-sync ~5s','connecting':'Connecting…','reconnecting':'Reconnecting…','offline':'Offline'}[realtimeStatus]||'Offline'):token?'Local':'Guest'}</span><button title="Request Version History" disabled={openTabs.find(t=>t.id===activeTabId)?.source?.scope!=='workspace'||openTabs.find(t=>t.id===activeTabId)?.source?.pending} onClick={()=>openRequestHistory(activeTabId)}><History size={16}/> Versions</button></div>
         </div>
   );
 }
