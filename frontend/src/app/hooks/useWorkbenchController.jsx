@@ -59,6 +59,7 @@ import { reconcileRequestTabs, synchronizeWorkspaceChanges } from '../../feature
 import { executeWorkbenchRequest } from '../../features/requests/services/executeWorkbenchRequest.js';
 import { buildRequestCommand, buildRedactedCodeRequest, buildRequestPreview } from '../../features/requests/services/requestCommand.js';
 import { useWorkspaceRealtimeLifecycle } from '../../features/realtime/hooks/useWorkspaceRealtimeLifecycle.js';
+import { pollDesktopWorkspace } from '../../features/realtime/services/desktopWorkspacePolling.js';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import {api} from '../../services/httpClient.js';
@@ -513,6 +514,19 @@ export function useWorkbenchController() {
     token, workspaceId:selectedWs, sessionRevision:authSessionRevision,
     onEvent:enqueueWorkspaceChange,
     onStatus:setRealtimeStatus,
+    onDesktopPoll:(checkpoint,active)=>{
+      const auth=currentTokenRef.current, ws=selectedWorkspaceRef.current;
+      return pollDesktopWorkspace({workspaceId:ws,token:auth,checkpoint,
+        isCurrent:()=>active() && auth===currentTokenRef.current && ws===selectedWorkspaceRef.current,
+        fetchCollections:getWorkspaceCollections,fetchRequests:getWorkspaceRequests,
+        selectedCollectionId:selectedColRef.current,openTabs:openTabsRef.current,
+        requestLists:workspaceRequestLists,setCollections,setSelectedCollectionId:setSelectedCol,
+        setRequestLists:setWorkspaceRequestLists,setSelectedRequests:setSavedRequests,
+        reconcile:reconcileCloudRequests,
+        markConflict:(id,value)=>setRemoteAlerts(old=>({...old,[id]:value})),
+      });
+    },
+
     onReset:()=>{
       realtimeQueueRef.current=[];
       if(realtimeTimerRef.current){clearTimeout(realtimeTimerRef.current);realtimeTimerRef.current=null;}

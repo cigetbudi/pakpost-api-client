@@ -76,7 +76,12 @@ public sealed class DesktopAuthController(
             });
         }
 
-        if (!pairing.Approve(input.RequestId, currentUserId))
+        if (!HttpContext.Items.TryGetValue(typeof(BrowserSession), out var sessionValue)
+            || sessionValue is not BrowserSession browserSession
+            || browserSession.UserId != currentUserId)
+            return Forbid();
+
+        if (!pairing.Approve(input.RequestId, currentUserId, browserSession.AvatarUrl))
         {
             return BadRequest(new
             {
@@ -105,7 +110,8 @@ public sealed class DesktopAuthController(
         var status = pairing.Consume(
             input.RequestId ?? "",
             input.DeviceSecret ?? "",
-            out var userId
+            out var userId,
+            out var avatarUrl
         );
 
         if (status == DesktopPairingStore.Status.Invalid)
@@ -129,7 +135,8 @@ public sealed class DesktopAuthController(
         var fresh = await sessions.CreateAsync(
             userId,
             ct,
-            "PakPost Desktop"
+            "PakPost Desktop",
+            avatarUrl
         );
 
         Response.Headers.CacheControl = "no-store";

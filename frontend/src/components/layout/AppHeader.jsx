@@ -1,4 +1,5 @@
 import {ProfileMenu} from './ProfileMenu.jsx';
+import {isTauriDesktop} from '../../features/collections/services/desktopLocalRepository.js';
 
 // Presentation-only composition: state, API calls and mutation stay in App until their controllers are extracted.
 // Each dependency is explicit so this component can be tested independently.
@@ -8,7 +9,7 @@ export function AppHeader(props) {
     Search, Settings2, activeEnvId, activeWorkspace, currentEnvironments, envScope, googleLinked,
     isDarkAppearance, logout, me, openContext, selectedWs, setActiveEnvId, setAuthOpen,
     setCommandIndex, setCommandOpen, setCommandQuery, setGoogleLinkError, setGoogleLinkOpen, setGoogleLinkPassword, storageScope,
-    theme, token, updateStorageScope, workspaces, onOpenSecurity,
+    theme, token, updateStorageScope, workspaces, setPage, setSettingsCategory, onOpenSecurity,
   } = props;
   return <>
     <header className="pp-top">
@@ -27,7 +28,14 @@ export function AppHeader(props) {
         {me ? <ProfileMenu me={me} logout={logout} onOpenSecurity={onOpenSecurity}
           canLinkGoogle={!!GOOGLE_CLIENT_ID&&!googleLinked}
           onConnectGoogle={()=>{setGoogleLinkError('');setGoogleLinkPassword('');setGoogleLinkOpen(true);}}/>
-          : <button className="pp-signin" onClick={() => setAuthOpen(true)}><LogIn size={15}/> Sign in</button>}
+          : <button className="pp-signin" onClick={() => {
+              if (isTauriDesktop()) {
+                setSettingsCategory('connections');
+                setPage('settings');
+              } else {
+                setAuthOpen(true);
+              }
+            }}><LogIn size={15}/> Sign in</button>}
 
       </div>
     </header>
