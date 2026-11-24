@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {createPortal} from 'react-dom';
+import {WorkbenchButton} from '../../../components/ui/WorkbenchButton.jsx';
 import {CheckCircle2,ChevronDown,ChevronRight, CircleX, Play, Square, X} from 'lucide-react';
 import {executeCollectionRun,RUNNER_MAX_ITERATIONS,RUNNER_MAX_DELAY_MS,RUNNER_MAX_STEPS} from '../services/collectionRunnerEngine.js';
 import {runSandbox} from '../../requests/services/runScript.js';
@@ -40,11 +40,10 @@ export default function CollectionRunner({target,requests=[],environmentVariable
   }
   function close(){controller.current?.abort();onClose();}
   function toggle(id){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);setConfirmWrites(false);}
-  return createPortal(<div className="pp-runner-overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!running)close()}}>
-    <section className="pp-runner-dialog" role="dialog" aria-modal="true" aria-label={`Collection Runner · ${target.name}`}>
+  return <section className="pp-runner-dialog pp-runner-docked" role="region" aria-label={`Collection Runner · ${target.name}`}>
       <header className="pp-runner-header">
-        <div><span className="pp-runner-kicker">COLLECTION RUNNER · V8.2</span><h2>{target.name}</h2><p>{target.scope==='workspace'?'Cloud Workspace':'Local Collection'} · Environment: {target.environmentName||'None'} · Session-only variables</p></div>
-        <button className="icon-btn" onClick={close} disabled={running} title={running?'Stop the run before closing':'Close Runner'} aria-label="Close Collection Runner"><X size={18}/></button>
+        <div><span className="pp-runner-kicker">COLLECTION RUNNER</span><h2>{target.name}</h2><p>{target.scope==='workspace'?'Cloud Workspace':'Local Collection'} · Environment: {target.environmentName||'None'} · Session-only variables</p></div>
+        <WorkbenchButton icon={X} onClick={close} disabled={running} title={running?'Stop the run before closing':'Close Runner'} aria-label="Close Collection Runner"/>
       </header>
       <div className="pp-runner-content">
         <div className="pp-runner-options">
@@ -66,7 +65,7 @@ export default function CollectionRunner({target,requests=[],environmentVariable
         </div>
         <div className="pp-runner-results">
           <div className="pp-runner-section-head"><strong>Run results</strong><span>{summary?.status||'Not started'}</span></div>
-          {!summary&&!failure&&<div className="pp-runner-empty-results"><Play size={28}/><strong>Ready to run</strong><p>Choose requests, then click Run. Results stay local to this dialog.</p></div>}
+          {!summary&&!failure&&<div className="pp-runner-empty-results"><Play size={28}/><strong>Ready to run</strong><p>Choose requests, then click Run. Results stay local to this panel.</p></div>}
           {failure&&<div className="form-error" role="alert">{failure}</div>}
           {summary&&<>
             <div className="pp-runner-progress" role="progressbar" aria-valuenow={summary.completed} aria-valuemin={0} aria-valuemax={summary.total}><span style={{width:`${summary.total?summary.completed/summary.total*100:0}%`}}/></div>
@@ -92,6 +91,5 @@ export default function CollectionRunner({target,requests=[],environmentVariable
           </>}
         </div>
       </div>
-    </section>
-  </div>,document.body);
+    </section>;
 }

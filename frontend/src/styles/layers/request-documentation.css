@@ -28,6 +28,4 @@
 .pp-doc-actions small{margin-right:auto;color:var(--muted);font-size:10px}
 .pp-doc-actions>button:not(.pp-modal-submit){border:1px solid var(--border);padding:10px 15px;border-radius:5px}
 .overlay:has(.pp-doc-form) .dialog{width:min(95vw,780px)}
-@media(max-width:1200px){.pp-kv-detail-heading,.pp-kv-detail-row{grid-template-columns:26px minmax(130px,1fr) minmax(155px,1fr) 25px}.pp-kv-detail-heading span:nth-child(4){display:none}.pp-kv-detail-row>input[aria-label$="description"]{grid-column:2/span 2;grid-row:2;margin-top:-5px}}
-@media(max-width:520px){.pp-kv-detail-heading,.pp-kv-detail-row{grid-template-columns:22px minmax(0,1fr) minmax(0,1fr) 24px;gap:5px}.pp-kv-detail-row input:not([type=checkbox]){font-size:11px;padding:7px}.pp-kv-detail-row>input[aria-label$="description"]{grid-column:2/span 2;grid-row:2}.pp-kv-detail-heading span:nth-child(4){display:none}}
 @media(prefers-reduced-motion:reduce){.pp-mime-suggestion{transition:none}}

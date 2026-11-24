@@ -407,7 +407,7 @@ export function useWorkbenchController() {
   function closeRunner(...args) { return runnerActions.closeRunner(...args); }
   // Switching account/workspace/storage must stop the old Runner and discard
   // its private variable snapshot, even when Cloud and Local IDs overlap.
-  useEffect(()=>{runnerFetchId.current++;setRunnerTarget(null);},[token,selectedWs,storageScope,activeEnvId]);
+  useEffect(()=>{runnerFetchId.current++;setRunnerLoading(false);setRunnerTarget(null);},[token,selectedWs,storageScope,activeEnvId]);
   function handleLocalMenu(...args) { return collectionActions.handleLocalMenu(...args); }
   function expandOrCollapseAllCollections(...args) { return collectionActions.expandOrCollapseAllCollections(...args); }
   function toggleWorkspaceCollectionById(...args) { return collectionActions.toggleWorkspaceCollectionById(...args); }
@@ -663,7 +663,7 @@ export function useWorkbenchController() {
   const runnerActions = createCollectionRunnerActions({
     STORAGE_WORKSPACE, activeEnvironment, activeTabRef, api, collectionVariableKey, collections,
     collectionsScope, getMessage, interceptorMode, localCollections, me, openTabs,
-    readCollectionVariables, readSavedCollectionVariables, runnerFetchId, savedCollectionVariableMap, selectedCol, selectedWs,
+    readCollectionVariables, readSavedCollectionVariables, runnerFetchId, runnerTarget, savedCollectionVariableMap, selectedCol, selectedWs,
     sessionCollectionVariables, setNotice, setRunnerLoading, setRunnerTarget, token, varsFromEnv,
     workspaceDraft,
   });
@@ -734,7 +734,7 @@ export function useWorkbenchController() {
     scriptTests, selectFormat, sendRequest, setApiKeyIn, setApiKeyName, setApiKeyValue, setAuthType,
     setBasicPassword, setBasicUsername, setBearerToken, setBinaryFile, setBody, setCurrentRequestName, setFormFields,
     setMethod, setOpenTabs, setParams, setPostScript, setPreScript, setReqTab, setResTab,
-    setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump, setUrl, splitPercent,
+    setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump, setUrl, splitPercent, setSplitPercent,
     url, variableUi, WorkspaceManager, canCreateWorkspace, newWs, wsTab, newCollection,
     savedRequests, canManageMembers,
     showMemberAdd, inviteOpen, workspaceMemberStats, newMember, newMemberRoles, assignableRoles, inviteEmail,

@@ -1,0 +1,83 @@
+/* Mobile workbench chrome only. Request/Authorization fields remain owned by
+   adaptive-comfort.css; no global zoom or changes to desktop theme tokens. */
+.pp-aw-mobile-pane-switch,.pp-aw-drawer-backdrop {display:none;}
+@media (max-width:960px) {
+  .pp-adaptive-workbench .pp-main-frame.pp-view-tester {position:relative;}
+  .pp-adaptive-workbench .pp-aw-drawer-backdrop {
+    display:block;position:absolute;inset:0 var(--aw-right) 0 0;
+    z-index:19;background:rgba(0,0,0,.32);border:0;border-radius:0;
+  }
+  .pp-adaptive-workbench .pp-context-rail {z-index:21;}
+  .pp-adaptive-workbench .pp-context-resizer {display:none;}
+  /* Override the legacy rule that hides Save as on smaller windows. */
+  .pp-adaptive-workbench .pp-url-bar .pp-save-as-action {display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;}
+}
+@media (max-width:760px) {
+  .pp-adaptive-workbench {--aw-left:44px;--aw-right:44px;--aw-control:44px;--aw-header:44px;--aw-footer:44px;--aw-gap:6px;}
+  .pp-adaptive-workbench .pp-top {
+    grid-template-columns:minmax(80px,108px) minmax(0,1fr) auto;
+    grid-template-rows:44px 44px;height:auto;min-height:100px;
+    padding:4px 8px;gap:4px 8px;align-items:center;flex-shrink:0;
+  }
+  .pp-adaptive-workbench .pp-top>.pp-logo {grid-area:1/1;width:100%;min-width:0;}
+  .pp-adaptive-workbench .pp-top>.pp-top-search {grid-area:1/2;height:40px;padding:0 8px;}
+  .pp-adaptive-workbench .pp-top>.pp-top-search svg {flex:none;}
+  .pp-adaptive-workbench .pp-top>.pp-top-right {display:contents;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top {
+    grid-area:2/1/3/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;
+    width:100%;max-width:none;min-width:0;gap:6px;padding:2px 4px;align-items:center;
+  }
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>:is(.pp-top-scope,.pp-top-env-local) {grid-column:1;grid-row:1;min-width:0;max-width:none;width:100%;overflow:hidden;text-overflow:ellipsis;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-environment {grid-column:2;grid-row:1;display:block!important;min-width:0;max-width:none;width:100%;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>button {grid-column:3;grid-row:1;display:grid;place-items:center;width:36px;height:36px;padding:0;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>:is(.pp-top-env-label,.pp-workspace-indicator,span:first-child) {display:none;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-env-local {display:block;}
+  .pp-adaptive-workbench .pp-top-right>:is(.pp-profile-anchor,.pp-signin) {grid-area:1/3;justify-self:end;}
+  .pp-adaptive-workbench .pp-top .pp-signin {height:40px;min-height:40px;padding:0 8px;gap:5px;}
+  .pp-adaptive-workbench .pp-top .pp-profile {height:40px;min-height:40px;min-width:44px;max-width:44px;justify-content:center;padding:4px;}
+  .pp-adaptive-workbench .pp-top .pp-profile :is(.pp-profile-name,svg) {display:none;}
+  .pp-adaptive-workbench .pp-top .pp-select-trigger {height:36px;min-height:36px;padding-inline:6px;}
+  .pp-adaptive-workbench .pp-context-rail>button {height:44px;min-height:44px;}
+  .pp-adaptive-workbench .pp-main-frame .pp-module-rail button {height:48px;min-height:48px;}
+  .pp-adaptive-workbench .pp-main-frame.pp-view-tester .pp-explorer:not(.unused) {
+    width:min(360px,calc(100% - var(--aw-right) - 24px))!important;
+    border-left:1px solid var(--border);box-shadow:-10px 0 30px #0004!important;
+  }
+  .pp-adaptive-workbench .pp-explorer .pp-side-scroll {overscroll-behavior:contain;}
+  .pp-adaptive-workbench .pp-url-bar {gap:6px;margin-block:6px 8px;}
+  .pp-adaptive-workbench .pp-url-bar .pp-save-action>span {display:inline;}
+  .pp-adaptive-workbench .pp-url-bar :is(.pp-save-action,.pp-save-as-action,.pp-send) {white-space:nowrap;padding-inline:8px;}
+  .pp-adaptive-workbench .pp-url-field>input {font-size:16px;}
+  .pp-adaptive-workbench .pp-aw-mobile-pane-switch {display:flex;gap:4px;flex:none;margin:0 var(--aw-inset) 8px;padding:3px;border:1px solid var(--border);border-radius:7px;background:var(--top);}
+  .pp-adaptive-workbench .pp-aw-mobile-pane-switch>button {flex:1;min-width:0;min-height:34px;font-size:12px;font-weight:650;border-radius:5px;color:var(--muted);}
+  .pp-adaptive-workbench .pp-aw-mobile-pane-switch>button[aria-pressed=true] {background:var(--accent-soft);color:var(--text);}
+  .pp-adaptive-workbench .pp-aw-mobile-pane-switch>button:focus-visible {outline:2px solid var(--accent);outline-offset:-2px;}
+  .pp-adaptive-workbench .pp-panes .pp-pane-heading {padding-inline:8px;gap:4px;}
+  .pp-adaptive-workbench .pp-pane-title {white-space:nowrap;}
+  .pp-adaptive-workbench .pp-panel-tabs {overscroll-behavior-x:contain;}
+  .pp-adaptive-workbench .pp-response-metrics {scrollbar-width:thin;}
+  .pp-adaptive-workbench .pp-response-empty {min-height:0;padding:12px;gap:6px;}
+  .pp-adaptive-workbench .pp-response-empty-symbol {width:36px;height:36px;}
+  .pp-adaptive-workbench .pp-global-footer {flex-shrink:0;padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:content-box;}
+  .pp-adaptive-workbench .pp-global-footer>span:last-child {display:none;}
+  .pp-adaptive-workbench .pp-settings-inner {grid-template-rows:auto minmax(0,1fr);overflow:hidden;}
+  .pp-adaptive-workbench .pp-settings-categories {flex:none;min-width:0;}
+  .pp-adaptive-workbench .pp-settings-details {min-height:0;overflow:auto;}
+  .pp-adaptive-workbench .pp-manager {padding:12px;}
+  .pp-adaptive-workbench .pp-manager-columns {grid-template-columns:minmax(0,1fr);}
+}
+@media (max-width:480px) {
+  .pp-adaptive-workbench .pp-url-bar .pp-save-action>span {display:none;}
+  .pp-adaptive-workbench .pp-url-bar .pp-save-action {min-width:44px;justify-content:center;}
+  .pp-adaptive-workbench .pp-crumb .pp-editable-request-name {min-width:0;overflow:hidden;}
+  .pp-adaptive-workbench .pp-crumb .pp-editable-request-name>span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+}
+@media (max-width:760px) and (pointer:coarse) {
+  .pp-adaptive-workbench .pp-aw-mobile-pane-switch>button {min-height:44px;}
+  .pp-adaptive-workbench .pp-explorer :is(.pp-tree-row,.pp-tree-request,.pp-local-request) {min-height:40px;}
+}
+/* Landscape / soft keyboard: keep bottom controls inside the visible viewport. */
+@media (max-height:520px) {
+  .pp-app.pp-adaptive-workbench {min-height:0;}
+  .pp-adaptive-workbench .pp-aw-runner-dock,.pp-adaptive-workbench>.pp-console-drawer {max-height:32dvh;}
+}

@@ -1,0 +1,17 @@
+/* Shared dimensions; global so portal controls use the same density. Colors
+   continue to come from the existing Light/Dark/AMOLED theme variables. */
+:root {
+  --aw-header:46px; --aw-control:34px; --aw-tab:34px; --aw-row:31px;
+  --aw-panel-head:32px; --aw-left:58px; --aw-right:42px; --aw-footer:28px;
+  --aw-gap:6px; --aw-inset:9px; --aw-font:12px; --aw-radius:6px;
+  --aw-menu-row:30px; --aw-dock-height:clamp(180px,40dvh,440px);
+}
+@media (max-height:760px) and (min-width:761px) {
+  :root {--aw-header:42px; --aw-tab:30px; --aw-panel-head:30px; --aw-inset:7px;}
+}
+@media (max-width:760px) {
+  :root {--aw-header:42px; --aw-left:42px; --aw-right:36px; --aw-control:40px; --aw-row:38px; --aw-tab:36px; --aw-panel-head:36px; --aw-footer:34px; --aw-inset:5px; --aw-gap:4px; --aw-dock-height:min(52dvh,420px);}
+}
+@media (pointer:coarse) {
+  :root {--aw-control:44px; --aw-row:44px; --aw-tab:44px; --aw-footer:44px; --aw-menu-row:44px;}
+}

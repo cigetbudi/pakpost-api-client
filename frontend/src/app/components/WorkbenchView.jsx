@@ -1,6 +1,7 @@
 import { WorkbenchOverlays } from './WorkbenchOverlays.jsx';
 import React, { useEffect, useState } from 'react';
 import { Play, Terminal } from 'lucide-react';
+import { WorkbenchButton } from '../../components/ui/WorkbenchButton.jsx';
 
 /** Pure workbench renderer. No data fetching or workspace mutations. */
 export function WorkbenchView({ model }) {
@@ -28,6 +29,7 @@ export function WorkbenchView({ model }) {
     WorkbenchSettings, setTheme, split, setSplit, interceptorMode, setInterceptorMode,
     extensionStatus, refreshExtensionStatus, RequestTabs, requestWorkbenchStore, remoteAlerts, tabDragRef,
     closeTab, showTabContext, setTabMenu, addTab, runnerLoading, openRunnerForCurrentCollection,
+    runnerTarget, CollectionRunner, closeRunner, api, dispatchRequest,
     consoleOpen, setConsoleOpen, PakpostConsole, consoleEvents, clearConsoleEvents, navigateConsoleEvent, realtimeStatus, openRequestHistory, workspaceMenu, MenuActionItem,
     handleWorkspaceMenu, setWorkspaceMenu, tabMenu, performTabAction, Copy, openSaveAs, Save,
     ArrowRight, AlertTriangle, showConflictDialog, RequestWorkbench, AUTH_OPTIONS, ChevronRight,
@@ -45,7 +47,7 @@ export function WorkbenchView({ model }) {
     setApiKeyValue, setAuthType, setBasicPassword, setBasicUsername, setBearerToken, setBinaryFile,
     setBody, setCurrentRequestName, setFormFields, setMethod, setOpenTabs, setParams,
     setPostScript, setPreScript, setReqTab, setResTab, setResponsePretty, setRows,
-    setScriptDiagnostic, setScriptError, setScriptJump, setUrl, splitPercent, url,
+    setScriptDiagnostic, setScriptError, setScriptJump, setUrl, splitPercent, setSplitPercent, url,
     variableUi, WorkspaceManager, canCreateWorkspace, newWs, wsTab, newCollection,
     savedRequests, canManageMembers, showMemberAdd, inviteOpen, workspaceMemberStats, newMember, newMemberRoles,
     assignableRoles, inviteEmail, inviteRoles, invitationBusy, invitationRows, invitationError,
@@ -57,6 +59,15 @@ export function WorkbenchView({ model }) {
     setEditingMemberId, setEditingMemberRoles, selectedWorkspaceRef, currentTokenRef,
   } = model;
   const [responseMode, setResponseMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'collapsed' : 'expanded');
+  const [wideLayout, setWideLayout] = useState(() => window.matchMedia('(min-width: 981px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 981px)');
+    const update = () => setWideLayout(query.matches);
+    query.addEventListener('change', update);
+    update();
+    return () => query.removeEventListener('change', update);
+  }, []);
+  const effectiveSplit = wideLayout ? split : 'horizontal';
   // Collapse once when entering a narrow window; manual toggles remain available.
   useEffect(() => {
     const query = window.matchMedia('(max-width: 960px)');
@@ -65,6 +76,10 @@ export function WorkbenchView({ model }) {
     query.addEventListener('change', adapt);
     return () => query.removeEventListener('change', adapt);
   }, [setSidebarCollapsed]);
+  const [runnerMinimized, setRunnerMinimized] = useState(false);
+  // A newly opened Runner opens in the bottom dock. Switching to Console
+  // hides (rather than unmounts) Runner so its run state and results survive.
+  useEffect(() => { if (runnerTarget) { setRunnerMinimized(false); setConsoleOpen(false); } }, [runnerTarget, setConsoleOpen]);
   return <div className="pp-app pp-adaptive-workbench">
 <AppHeader {...{        GOOGLE_CLIENT_ID, Link2, LogIn, LogOut, RetroSelect, STORAGE_LOCAL,
         STORAGE_WORKSPACE, Search, Settings2, activeEnvId, activeWorkspace, currentEnvironments,
@@ -80,6 +95,7 @@ export function WorkbenchView({ model }) {
         page, resizeRight, resizingRight, setPage, setRightWidth, setSidebarCollapsed,
         sidebarCollapsed,}}/>
 
+      {page==='tester' && !sidebarCollapsed && <button type="button" className="pp-aw-drawer-backdrop" aria-label="Dismiss context panel" onClick={()=>setSidebarCollapsed(true)}/>}
       {page==='tester' && !sidebarCollapsed && <WorkbenchExplorer
   data={{
     explorerTab, token, envScope, selectedWs, workspaces,
@@ -158,7 +174,7 @@ export function WorkbenchView({ model }) {
         setBearerToken, setBinaryFile, setBody, setCurrentRequestName, setFormFields, setMethod,
         setNotice, setOpenTabs, setParams, setPostScript, setPreScript, setReqTab,
         setResTab, setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump,
-        setSplit, setUrl, split, splitPercent, theme, url,
+        setSplit, setUrl, split: effectiveSplit, wideLayout, splitPercent, setSplitPercent, theme, url,
         variableUi,}}/> : page === 'workspace' ? <Suspense fallback={<div className="pp-feature-loading" role="status">Opening Workspace…</div>}><WorkspaceManager
   data={{
     activeWorkspace, workspaces, canCreateWorkspace, newWs, token,
@@ -183,14 +199,24 @@ export function WorkbenchView({ model }) {
 /></Suspense> : null}
       </main>
     </div>
+    {runnerTarget && <div className="pp-aw-runner-dock" hidden={consoleOpen||runnerMinimized}>
+      <Suspense fallback={<div className="pp-adaptive-console-loading" role="status">Opening Collection Runner…</div>}>
+        <CollectionRunner key={`${runnerTarget.scope}:${runnerTarget.workspaceId||''}:${runnerTarget.collectionId}`}
+          target={runnerTarget} requests={runnerTarget.requests} environmentVariables={runnerTarget.environmentVariables}
+          collectionVariables={runnerTarget.collectionVariables} onClose={closeRunner}
+          send={command=>runnerTarget.transport==='proxy'
+            ?api('/api/proxy/send','POST',command)
+            :dispatchRequest(command,runnerTarget.transport)}/>
+      </Suspense>
+    </div>}
     {consoleOpen && <Suspense fallback={<div className="pp-adaptive-console-loading" role="status">Opening Console…</div>}>
       <PakpostConsole events={consoleEvents} onClose={()=>setConsoleOpen(false)} onClear={clearConsoleEvents} onNavigate={navigateConsoleEvent}/>
     </Suspense>}
     <footer className="pp-global-footer"><div className="pp-bottom-tools">
-      <button type="button" className={consoleOpen?'active':''} aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}><Terminal size={14}/> Console</button>
-      <button type="button" disabled={runnerLoading} onClick={openRunnerForCurrentCollection} title="Run saved requests from a Collection"><Play size={14}/> {runnerLoading?'Loading…':'Runner'}</button>
+      <WorkbenchButton icon={Terminal} active={consoleOpen} aria-label="Toggle PakPost Console" aria-expanded={consoleOpen} onClick={()=>setConsoleOpen(v=>!v)}>Console</WorkbenchButton>
+      <WorkbenchButton icon={Play} active={!!runnerTarget&&!consoleOpen&&!runnerMinimized} aria-expanded={!!runnerTarget&&!consoleOpen&&!runnerMinimized} disabled={runnerLoading} onClick={()=>{if(!runnerTarget){openRunnerForCurrentCollection();return;}if(consoleOpen){setRunnerMinimized(false);setConsoleOpen(false);}else setRunnerMinimized(v=>!v);}} title="Open Collection Runner">{runnerLoading?'Loading…':'Runner'}</WorkbenchButton>
       <span className="pp-bottom-brand">PakPost</span>
-    </div><span className="pp-footer-center">{interceptorMode==='native'?'Desktop Native · Direct from this computer':interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {split === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
+    </div><span className="pp-footer-center">{interceptorMode==='native'?'Desktop Native · Direct from this computer':interceptorMode==='proxy'?'Secure proxy · Private networks blocked':interceptorMode==='extension'?'Browser extension · Destination access managed in popup':'Browser · CORS restrictions apply'}</span><span>UTF-8 <span className="pp-footer-divider">·</span> {effectiveSplit === 'horizontal' ? 'Stacked' : 'Side-by-side'}</span></footer>
       <WorkbenchOverlays model={model}/>
   </div>;
 }

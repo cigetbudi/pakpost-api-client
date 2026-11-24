@@ -66,8 +66,8 @@ export function ResponsePane({
 
       {mode !== 'collapsed' && <>
       <div className="pp-panel-tabs">
-        <button className={resTab === 'body' ? 'active' : ''} onClick={() => onResTabChange('body')}>Body</button>
-        <button className={resTab === 'headers' ? 'active' : ''} onClick={() => onResTabChange('headers')}>
+        <button className={resTab === 'body' ? 'active' : ''} aria-pressed={resTab === 'body'} onClick={() => onResTabChange('body')}>Body</button>
+        <button className={resTab === 'headers' ? 'active' : ''} aria-pressed={resTab === 'headers'} onClick={() => onResTabChange('headers')}>
           Headers{hasResponse && <span className="pp-tiny-count">{headerCount}</span>}
         </button>
         <div className="pp-panel-tabs-spacer" />

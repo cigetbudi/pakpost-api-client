@@ -17,7 +17,13 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'off',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: {width:1440,height:900} } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: {width:1440,height:900} } },
+    ...(process.env.PAKPOST_CROSS_BROWSER === '1' ? [
+      { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: {width:1440,height:900} } },
+      { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: {width:1440,height:900} } },
+    ] : []),
+  ],
   webServer: {
     command: 'bun run preview --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173',

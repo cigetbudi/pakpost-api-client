@@ -30,7 +30,7 @@ test('the heavy editor chunk loads only after opening Scripts', async ({page}) =
   await expect(page.locator('#root .pp-app')).toBeVisible();
   expect(loadedScripts.some(url => /\/Editors-[^/]+\.js$/.test(url))).toBe(false);
 
-  await page.locator('.pp-panel-tabs').getByRole('button', {name: 'Scripts'}).click();
+  await page.locator('.pp-panel-tabs').getByRole('button', {name: 'Pre-request', exact: true}).click();
   await expect(page.getByText('Pre-request script', {exact: true})).toBeVisible();
   await expect.poll(() => loadedScripts.some(url => /\/Editors-[^/]+\.js$/.test(url))).toBe(true);
 });
