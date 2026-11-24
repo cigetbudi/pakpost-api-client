@@ -17,6 +17,7 @@ export function createCollectionRunnerActions(dependencies) {
     readCollectionVariables,
     readSavedCollectionVariables,
     runnerFetchId,
+    runnerTarget,
     savedCollectionVariableMap,
     selectedCol,
     selectedWs,
@@ -30,6 +31,7 @@ export function createCollectionRunnerActions(dependencies) {
   } = dependencies;
 
   async function openCollectionRunner(target){
+      if(runnerTarget){setNotice('Close the current Collection Runner before opening another.');return;}
       const fetchId=++runnerFetchId.current;
       setRunnerLoading(true);
       try{
@@ -69,6 +71,6 @@ export function createCollectionRunnerActions(dependencies) {
       }
     }
 
-  function closeRunner(){runnerFetchId.current++;setRunnerTarget(null);}
+  function closeRunner(){runnerFetchId.current++;setRunnerLoading(false);setRunnerTarget(null);}
   return { openCollectionRunner, openRunnerForCurrentCollection, closeRunner };
 }

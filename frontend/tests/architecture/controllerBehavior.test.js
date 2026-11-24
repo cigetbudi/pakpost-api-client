@@ -91,6 +91,21 @@ test('runner loading cannot publish a stale collection after close/logout', asyn
   await loading;
   assert.deepEqual(events.filter(([type,value])=>type==='target'&&value!=null),[]);
   assert.equal(runnerFetchId.current,2);
+  assert.deepEqual(events.filter(([type])=>type==='loading').map(([,value])=>value),[true,false]);
+});
+
+test('an open docked runner cannot be replaced by another collection', async () => {
+  const notices=[];
+  const runnerFetchId={current:1};
+  const actions=createCollectionRunnerActions(withSetters({
+    runnerTarget:{collectionId:'existing'},runnerFetchId,
+    setNotice:notice=>notices.push(notice),
+    setRunnerTarget:()=>assert.fail('Existing runner must not be replaced'),
+    setRunnerLoading:()=>assert.fail('No new fetch should start'),
+  }));
+  await actions.openCollectionRunner({scope:'local',collectionId:'other'});
+  assert.equal(runnerFetchId.current,1);
+  assert.match(notices[0],/Close the current Collection Runner/);
 });
 
 test('invitation controller refuses a Cloud invite without permission', async () => {
@@ -147,6 +162,6 @@ test('App delegates to feature controllers and retains per-instance Zustand stor
   assert.match(app,/createRequestWorkbenchStore/);
   assert.match(app,/createCollectionWorkbenchStore/);
   assert.match(app,/createEnvironmentWorkbenchStore/);
-  assert.match(app,/localEnvironments:\s*initialLocalEnvs\(\)/);
+  assert.match(app,/localEnvironments:\s*isTauriDesktop\(\)\s*\?\s*\[\]\s*:\s*initialLocalEnvs\(\)/);
   assert.doesNotMatch(app,/localEnvironments:\s*initialLocalEnvs\s*[,}]/);
 });

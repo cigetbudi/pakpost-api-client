@@ -2,6 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWorkbenchLogoutActions} from '../../src/features/auth/controllers/createWorkbenchLogoutActions.js';
 
+// These tests exercise browser-session logout. D5 also checks the Tauri
+// window marker, so supply a browser-like window in the Node test environment.
+let previousWindow;
+test.beforeEach(() => {
+  previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { value: {}, configurable: true, writable: true });
+});
+test.afterEach(() => {
+  if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+  else delete globalThis.window;
+});
+
 const makeActions = (api, events=[]) => {
   const snapshot = {name:'Cloud private',requestName:'Cloud private',body:'private payload'};
   const refs = {

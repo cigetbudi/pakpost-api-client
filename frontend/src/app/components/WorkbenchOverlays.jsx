@@ -28,8 +28,8 @@ export function WorkbenchOverlays({ model }) {
     setCloseConfirmation, setCollectionImportDestination, setCollectionImportError, setCollectionImportFile, setCollectionImportOpen, setConflictDialog,
     setExampleDescription, setExampleName, setSaveCollection, setSaveExampleOpen, setSaveLocalCollection, setSaveName,
     setSaveOpen, setSaveScope, setSaveWs, setVersionDialog, snapshot, statusTone,
-    submitCollectionImport, versionDialog, workspaceDraft, workspaces, runnerTarget, CollectionRunner,
-    closeRunner, api, dispatchRequest, FastTooltip,
+    submitCollectionImport, versionDialog, workspaceDraft, workspaces,
+    api, FastTooltip,
   } = model;
   return <>
 <CommandPalette {...{        ArrowRight, Code2, Search, commandIndex, commandOpen, commandQuery,
@@ -67,13 +67,6 @@ export function WorkbenchOverlays({ model }) {
         setCollectionImportOpen, setConflictDialog, setExampleDescription, setExampleName, setSaveCollection, setSaveExampleOpen,
         setSaveLocalCollection, setSaveName, setSaveOpen, setSaveScope, setSaveWs, setVersionDialog,
         snapshot, statusTone, submitCollectionImport, token, versionDialog, workspaceDraft,
-        workspaces,}}/>  {runnerTarget&&<Suspense fallback={<div className="pp-console-loading">Opening Collection Runner…</div>}>
-    <CollectionRunner key={`${runnerTarget.scope}:${runnerTarget.workspaceId||''}:${runnerTarget.collectionId}`}
-      target={runnerTarget} requests={runnerTarget.requests} environmentVariables={runnerTarget.environmentVariables}
-      collectionVariables={runnerTarget.collectionVariables} onClose={closeRunner}
-      send={command=>runnerTarget.transport==='proxy'
-        ?api('/api/proxy/send','POST',command)
-        :dispatchRequest(command,runnerTarget.transport)}/>
-  </Suspense>}
+        workspaces,}}/>
   <FastTooltip/></>;
 }

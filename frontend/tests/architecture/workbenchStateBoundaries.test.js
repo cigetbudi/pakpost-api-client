@@ -56,7 +56,7 @@ test('App still uses lazy editors and never eagerly imports collection runner',(
 test('a render error shows an accessible fallback instead of a blank page',()=>{
   const main=source('main.jsx');
   const boundary=source('components/ui/WorkbenchErrorBoundary.jsx');
-  assert.match(main,/<WorkbenchErrorBoundary><App\/><\/WorkbenchErrorBoundary>/);
+  assert.match(main,/<WorkbenchErrorBoundary>\{window\.location\.pathname===\x27\/desktop-connect\x27\?<DesktopApproval\/>:<App\/>\}<\/WorkbenchErrorBoundary>/);
   assert.match(boundary,/getDerivedStateFromError/);
   assert.match(boundary,/role="alert"/);
   assert.match(boundary,/window\.location\.reload\(\)/);

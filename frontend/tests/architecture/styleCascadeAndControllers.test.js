@@ -11,10 +11,19 @@ const src = name => readFileSync(new URL(`../../src/${name}`, import.meta.url), 
 test('all former release-number styles have semantic filenames and a stable cascade', () => {
   const main = src('main.jsx');
   const cssImports = [...main.matchAll(/import ['"]\.\/(styles\/[^'"]+\.css)['"];?/g)].map(m => m[1]);
-  assert.equal(cssImports.length, 33);
-  assert.equal(cssImports.at(-2), 'styles/layers/instance-administration.css');
+  assert.equal(new Set(cssImports).size, cssImports.length, 'No duplicate CSS entry imports');
+  assert.deepEqual(cssImports.slice(-7), [
+    'styles/desktop-connections.css',
+    'styles/workbench-tokens.css',
+    'styles/workbench-utilities.css',
+    'styles/adaptive-workbench.css',
+    'styles/adaptive-controls.css',
+    'styles/adaptive-comfort.css',
+    'styles/adaptive-mobile.css',
+  ]);
+  assert.ok(cssImports.indexOf('styles/layers/instance-administration.css') < cssImports.indexOf('styles/layers/motion-system.css'));
   assert.ok(cssImports.indexOf('styles/layers/workspace-founder-delete.css') < cssImports.indexOf('styles/layers/instance-administration.css'));
-  assert.equal(cssImports.at(-1), 'styles/layers/motion-system.css');
+  assert.equal(cssImports.at(-8), 'styles/layers/motion-system.css');
   assert.ok(cssImports.indexOf('styles/layers/explorer-tree-alignment.css') < cssImports.indexOf('styles/layers/workspace-founder-delete.css'));
   assert.ok(cssImports[0] === 'styles/base.css');
   assert.ok(cssImports[1] === 'styles/clean-workbench.css');
@@ -48,7 +57,7 @@ test('factory input values are initialized before actions are constructed (blank
     ['const selfMember=', 'createCollectionVariableActions({'],
     ['const canEditCloud=', 'createDocumentationActions({'],
     ['const activeRequestName =', 'createRequestSaveActions({'],
-    ['localEnvironments: initialLocalEnvs()', 'createEnvironmentWorkbenchStore({'],
+    ['localEnvironments: isTauriDesktop() ? [] : initialLocalEnvs()', 'createEnvironmentWorkbenchStore({'],
   ]) {
     assert.ok(app.includes(value) && app.includes(consumer), `${value} or ${consumer} missing`);
     if (value.startsWith('localEnvironments:')) continue;

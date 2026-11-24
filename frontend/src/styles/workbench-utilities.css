@@ -1,0 +1,15 @@
+/* Tailwind utilities only; deliberately no Preflight or global reset. */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
+@source "../components/ui/WorkbenchButton.jsx";
+@source "../app/components/WorkbenchView.jsx";
+@source "../features/collections/components/CollectionRunner.jsx";
+@theme inline {
+  --color-pp-text: var(--text);
+  --color-pp-muted: var(--muted);
+  --color-pp-accent: var(--accent);
+  --color-pp-surface: var(--surface);
+  --color-pp-border: var(--border);
+  --radius-pp-control: var(--aw-radius);
+}

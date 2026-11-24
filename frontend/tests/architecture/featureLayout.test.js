@@ -45,7 +45,7 @@ test('critical hooks are scoped to this workbench and optional feature code rema
   const runtime=read('app/hooks/useWorkbenchController.jsx');
   const optional=read('app/components/DeferredFeatures.jsx');
   const env=read('features/environments/hooks/useEnvironmentDataLifecycle.js');
-  assert.match(runtime,/localEnvironments:\s*initialLocalEnvs\(\)/);
+  assert.match(runtime,/localEnvironments:\s*isTauriDesktop\(\)\s*\?\s*\[\]\s*:\s*initialLocalEnvs\(\)/);
   assert.match(runtime,/useState\(\(\) => createRequestWorkbenchStore\(/);
   assert.match(runtime,/useState\(\(\) => createEnvironmentWorkbenchStore\(/);
   assert.match(runtime,/useConsoleDrawer\(\)/);
