@@ -1,3 +1,5 @@
+import {useEffect, useState} from 'react';
+import {Spinner} from '../ui/AsyncFeedback.jsx';
 import React from 'react';
 import {
   ArrowDownToLine,
@@ -39,6 +41,13 @@ export function ResponsePane({
   isDark,
   Editor,
 }) {
+  const [elapsed,setElapsed]=useState(0);
+  useEffect(()=>{
+    if(!loading){setElapsed(0);return;}
+    const start=performance.now();setElapsed(0);
+    const timer=setInterval(()=>setElapsed(Math.floor((performance.now()-start)/100)/10),100);
+    return()=>clearInterval(timer);
+  },[loading]);
   const hasResponse = !!result && !result.error;
   const headerCount = hasResponse ? Object.keys(result.headers || {}).length : 0;
   const bodySize = hasResponse ? new Blob([result.body || '']).size : 0;
@@ -58,7 +67,7 @@ export function ResponsePane({
             <span><Clock3 size={13} /> {result.elapsedMs} ms</span>
             <span><ArrowDownToLine size={13} /> {bodySize.toLocaleString()} B</span>
           </div>
-        ) : <span className="pp-pane-meta">{loading ? 'Sending…' : result?.error ? 'Request failed' : 'Awaiting response'}</span>}
+        ) : <span className="pp-pane-meta">{loading ? <><Spinner size={13}/> Sending · {elapsed.toFixed(1)} s</> : result?.error ? (result.cancelled?'Cancelled':'Request failed') : 'Awaiting response'}</span>}
         <button type="button" className="pp-response-focus" aria-label={mode === 'maximized' ? 'Restore response panel' : 'Maximize response panel'} title={mode === 'maximized' ? 'Restore response panel' : 'Maximize response panel'} onClick={()=>onModeChange?.(mode === 'maximized' ? 'expanded' : 'maximized')}>
           {mode === 'maximized' ? <Minimize2 size={15}/> : <Maximize2 size={15}/>}
         </button>
@@ -88,15 +97,15 @@ export function ResponsePane({
       <div className="pp-panel-body pp-response-body">
         {!result ? (
           <div className="pp-response-empty">
-            <div className="pp-response-empty-symbol"><Terminal size={28} /></div>
+            <div className="pp-response-empty-symbol">{loading?<Spinner size={28}/>:<Terminal size={28}/>}</div>
             <strong>{loading ? 'Sending request…' : 'Ready to send a request'}</strong>
-            <p>{loading ? 'The server is processing your request.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p>
+            <p>{loading ? 'Waiting for the request to finish.' : 'Enter a URL, configure your request, and hit Send. Your response will appear here.'}</p>
             <span>⌘ / Ctrl + Enter</span>
           </div>
         ) : result.error ? (
           <div className="pp-response-error">
             <div><X size={18} /></div>
-            <strong>Request failed</strong>
+            <strong>{result.cancelled ? 'Request cancelled' : 'Request failed'}</strong>
             <p>{result.error}</p>
           </div>
         ) : (
@@ -104,6 +113,7 @@ export function ResponsePane({
             <div className="pp-response-code">
               <Editor
                 readOnly
+                outputTools
                 value={responseText}
                 lang={resTab === 'headers' ? 'json' : languageFromMime(responseType)}
                 theme={isDark ? 'dark' : 'light'}

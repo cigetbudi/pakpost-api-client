@@ -2,9 +2,9 @@
 export const APPEARANCE_KEY = 'pakpost_theme';
 
 export const APPEARANCE_THEMES = Object.freeze([
-  { id: 'light', name: 'Light', description: 'Warm ivory · pastel blue', mode: 'light', swatches: ['#faf7f1', '#fffdf9', '#d9d0c4', '#4488de'] },
-  { id: 'dark', name: 'Dark', description: 'Charcoal · soft blue', mode: 'dark', swatches: ['#1b1c21', '#282a31', '#42434c', '#8ab8ff'] },
-  { id: 'oled', name: 'AMOLED', description: 'True black · crisp accents', mode: 'dark', swatches: ['#000000', '#08090b', '#282b31', '#8ab8ff'] },
+  { id: 'light', name: 'Light', description: 'Clean light · royal blue', mode: 'light', swatches: ['#f6f8fc', '#ffffff', '#cbd3e1', '#2b4ad6'] },
+  { id: 'dark', name: 'Dark', description: 'Dark navy · blue accents', mode: 'dark', swatches: ['#0e1119', '#141925', '#303749', '#83a5ff'] },
+  { id: 'oled', name: 'AMOLED', description: 'True black · crisp accents', mode: 'dark', swatches: ['#000000', '#080a10', '#303443', '#8ab1ff'] },
 ]);
 
 export function normalizeAppearance(value) {

@@ -15,6 +15,7 @@ export function createRequestExecutionActions(dependencies) {
     canWriteEnvironment,
     collectionVariableKey,
     currentTokenRef,
+    executionRef = {current:null},
     dispatchRequest,
     draftsRef,
     envScope,
@@ -59,23 +60,27 @@ export function createRequestExecutionActions(dependencies) {
 
   async function sendRequest() {
       if(!url.trim()){setNotice('Enter a request URL first');return;}
-      if(loading)return;
+      if(loading||executionRef.current)return;
+      const controller=new AbortController();
+      const canCancel=interceptorMode==='browser'||(interceptorMode==='proxy'&&!globalThis.window?.__TAURI_INTERNALS__);
+      executionRef.current={controller,canCancel};
       const tabId=activeTabRef.current;
       const executionId=globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const startedAt=performance.now();
       const trace=(level,phase,message,details={})=>appendConsoleEvent({executionId,tabId,level,phase,message,...details});
+      const runToken=currentTokenRef.current;
+      try {
       trace('info','request','Execution started',{method});
       stashActive();setLoading(true);setResult(null);setPrettyResponse('');setResponsePretty(true);
       setScriptError('');setScriptDiagnostic(null);setScriptJump(null);setScriptLog([]);setScriptTests([]);
       // Freeze the account, workspace, environment and Collection for this Send.
       const environmentValues=varsFromEnv();
-      const runToken=currentTokenRef.current;
+      const isCurrent=()=>runToken===currentTokenRef.current&&!controller.signal.aborted;
       const runEnvironment={environment:activeEnvironment,scope:envScope,sessionKey:activeSessionEnvironmentKey,
         canWrite:canWriteEnvironment,initialValues:{...environmentValues}};
       const sourceAtSend=openTabsRef.current.find(t=>t.id===tabId)?.source;
       const collectionKey=collectionVariableKey(sourceAtSend,tabId,me?.id||'guest');
       const collectionValues=readCollectionVariables(sessionCollectionVariables.current,collectionKey);
-      try {
         const executed=await executeWorkbenchRequest({
           request:{method,url,rows,body,format,formFields,binaryFile,preScript,postScript,interceptorMode},
           environmentValues,collectionValues,trace,
@@ -85,16 +90,18 @@ export function createRequestExecutionActions(dependencies) {
           }:null,
           // In-flight responses from a previous account must never restore data
           // or write variables after logout/account switch.
-          isCurrent:()=>runToken===currentTokenRef.current,
-          saveCollectionValues:values=>{if(runToken===currentTokenRef.current)writeCollectionVariables(sessionCollectionVariables.current,collectionKey,values)},
-          saveEnvironmentValues:values=>runToken===currentTokenRef.current?applyScriptVariables(values,runEnvironment):undefined,
+          isCurrent,
+          saveCollectionValues:values=>{if(isCurrent())writeCollectionVariables(sessionCollectionVariables.current,collectionKey,values)},
+          saveEnvironmentValues:values=>isCurrent()?applyScriptVariables(values,runEnvironment):undefined,
           buildOutgoing:vars=>buildOutgoing(vars),
           dispatch:command=>{
-            if(runToken!==currentTokenRef.current)throw Error('Request cancelled: account changed');
-            return interceptorMode==='proxy'?api('/api/proxy/send','POST',command):dispatchRequest(command,interceptorMode);
+            if(!isCurrent())throw Error('Request cancelled');
+            const options={signal:controller.signal};
+            return interceptorMode==='proxy'?api('/api/proxy/send','POST',command,'',options):dispatchRequest(command,interceptorMode,options);
           },
         });
         if(runToken!==currentTokenRef.current)return;
+        if(controller.signal.aborted)throw Error('Request cancelled');
         const {response:r,command,logs,tests,scriptError,scriptDiagnostic}=executed;
         draftsRef.current[tabId]={...draftsRef.current[tabId],result:r,resTab:'body',scriptLog:logs,scriptTests:tests,scriptError,scriptDiagnostic};
         if(tabId===activeTabRef.current){setResult(r);setResTab('body');setScriptLog(logs);setScriptTests(tests);setScriptError(scriptError);setScriptDiagnostic(scriptDiagnostic);}
@@ -103,6 +110,13 @@ export function createRequestExecutionActions(dependencies) {
           setRecent(old=>[{method,url:command.url,status:r.statusCode,elapsed:r.elapsedMs,body,rows:rows.map(x=>({...x}))},...old].slice(0,20));
       }catch(e){
         if(runToken!==currentTokenRef.current)return;
+        if(controller.signal.aborted){
+          trace('info','request','Request cancelled by user');
+          const result={cancelled:true,error:'Stopped waiting for the response. The server may already have processed the request.'};
+          if(openTabsRef.current.some(t=>t.id===tabId))draftsRef.current[tabId]={...draftsRef.current[tabId],result};
+          if(tabId===activeTabRef.current)setResult(result);
+          return;
+        }
         trace('error','request','Execution failed',{errorCode:e?.name||'Error'});
         const error={error:getMessage(e)};
         const diagnostic=e?.scriptDiagnostic||null;
@@ -110,7 +124,8 @@ export function createRequestExecutionActions(dependencies) {
         const tests=e?.executionTests||[];
         draftsRef.current[tabId]={...draftsRef.current[tabId],result:error,scriptLog:logs,scriptTests:tests,scriptError:getMessage(e),scriptDiagnostic:diagnostic};
         if(tabId===activeTabRef.current){setResult(error);setScriptLog(logs);setScriptTests(tests);setScriptError(getMessage(e));setScriptDiagnostic(diagnostic);}
-      }finally{trace('info','request','Execution finished',{elapsedMs:Math.round(performance.now()-startedAt)});setLoading(false)}
+      }finally{if(executionRef.current?.controller===controller)executionRef.current=null;trace('info','request','Execution finished',{elapsedMs:Math.round(performance.now()-startedAt)});setLoading(false)}
     }
-  return { sendRequest };
+  function cancelRequest(){const run=executionRef.current;if(run?.canCancel)run.controller.abort();}
+  return { sendRequest,cancelRequest };
 }

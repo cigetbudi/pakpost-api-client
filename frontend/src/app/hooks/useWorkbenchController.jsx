@@ -156,6 +156,7 @@ export function useWorkbenchController() {
   const [authSessionRevision,setAuthSessionRevision]=useState(0);
   useEffect(()=>{if(new URLSearchParams(window.location.search).has('invite')){const u=new URL(window.location.href);u.searchParams.delete('invite');window.history.replaceState({},'',u.pathname+u.search+u.hash)}},[]);
   const currentTokenRef=useRef(token);
+  const executionRef=useRef(null);
   const authEpochRef=useRef(0);
   currentTokenRef.current=token;
   const authTabSyncRef=useRef(null);
@@ -679,7 +680,7 @@ export function useWorkbenchController() {
   const requestActions = createRequestExecutionActions({
     activeEnvironment, activeSessionEnvironmentKey, activeTabRef, api, appendConsoleEvent, applyScriptVariables,
     binaryFile, body, buildOutgoing, canEditCloud, canWriteEnvironment, collectionVariableKey,
-    currentTokenRef, dispatchRequest, draftsRef, envScope, executeWorkbenchRequest, formFields,
+    currentTokenRef, executionRef, dispatchRequest, draftsRef, envScope, executeWorkbenchRequest, formFields,
     format, getMessage, interceptorMode, isReadOnlyCloudTab, loading, me,
     method, openTabsRef, postScript, preScript, readCollectionVariables, readSavedCollectionVariables,
     rows, savedCollectionVariableMap, scriptDiagnostic, scriptError, selectedWs, sessionCollectionVariables,
@@ -731,7 +732,7 @@ export function useWorkbenchController() {
     onSplitterMove, openSaveExampleDialog, panesRef, params, postScript, preScript, reqTab,
     requestNameInputRef, resTab, resetSandboxRequest, responseExamples, responsePretty, responseText, responseType,
     result, rows, saveCurrent, scriptDiagnostic, scriptError, scriptJump, scriptLog,
-    scriptTests, selectFormat, sendRequest, setApiKeyIn, setApiKeyName, setApiKeyValue, setAuthType,
+    scriptTests, selectFormat, sendRequest, cancelRequest:requestActions.cancelRequest, canCancelRequest:!!executionRef.current?.canCancel, setApiKeyIn, setApiKeyName, setApiKeyValue, setAuthType,
     setBasicPassword, setBasicUsername, setBearerToken, setBinaryFile, setBody, setCurrentRequestName, setFormFields,
     setMethod, setOpenTabs, setParams, setPostScript, setPreScript, setReqTab, setResTab,
     setResponsePretty, setRows, setScriptDiagnostic, setScriptError, setScriptJump, setUrl, splitPercent, setSplitPercent,

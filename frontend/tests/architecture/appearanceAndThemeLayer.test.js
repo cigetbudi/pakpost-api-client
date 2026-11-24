@@ -17,7 +17,7 @@ test('reference theme layer loads last and offers light/dark/AMOLED only', () =>
 
 test('restyled workbench retains functional request and script controls', () => {
   assert.match(app, /className="pp-url-entry"/);
-  assert.match(app, /onClick=\{sendRequest\}/);
+  assert.match(app, /onClick=\{loading\?cancelRequest:sendRequest\}/);
   assert.match(app, /className="pp-save-action" onClick=\{saveCurrent\}/);
   // v14 moves appearance into a dedicated Settings page instead of the explorer.
   assert.match(app, /<WorkbenchSettings category=\{settingsCategory\} onCategoryChange=\{setSettingsCategory\} theme=\{theme\} onThemeChange=\{setTheme\}/);

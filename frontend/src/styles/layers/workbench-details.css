@@ -2,47 +2,47 @@
  Intentionally no new UI dependency. Kept separate to permit a clean rollback. */
 :root[data-theme='dark'] {
   --bg:#0e1119; --top:#10131c; --surface:#141925; --surface2:#1a2030;
-  --editor:#10141d; --hover:#22293a; --selected:#272b48;
+  --editor:#10141d; --hover:#22293a; --selected:#1d2d4a;
   --border:#303749; --border-soft:#242b3b; --text:#eef1f9; --text2:#bfc7d9;
-  --muted:#8894aa; --accent:#8d91ff; --accent-soft:rgba(126,134,244,.15);
-  --action:#7178e9; --action-hover:#8188f2;
+  --muted:#8894aa; --accent:#83a5ff; --accent-soft:rgba(92,139,255,.15);
+  --action:#2b4ad6; --action-hover:#3d5ae3;
   --green:#69d7a5; --yellow:#f2ca7c; --red:#ee8f9d;
   --pp-canvas:#0e1119; --pp-panel:#111621; --pp-sidebar:#10151f;
   --pp-request-header:#171d2a; --pp-response-header:#171d2a;
-  --pp-pink:#817df0; --pp-pink-hover:#9390fb; --pp-pink-text:#fff;
+  --pp-pink:var(--action); --pp-pink-hover:var(--action-hover); --pp-pink-text:#fff;
   --pp-yellow:#352d1f; --pp-yellow-text:#f4c77a;
   --pp-green-bg:#18372c; --pp-green-text:#85e4b2;
-  --pp-blue-control:#262c49; --pp-editor-line:#273047;
+  --pp-blue-control:#203352; --pp-editor-line:#273047;
   --shadow:0 12px 24px rgba(0,0,0,.15);
 }
 :root[data-theme='light'] {
   --bg:#f6f8fc; --top:#fff; --surface:#fff; --surface2:#f0f3fa;
-  --editor:#fff; --hover:#edf1fa; --selected:#e8eafc;
+  --editor:#fff; --hover:#edf1fa; --selected:#e6edff;
   --border:#cbd3e1; --border-soft:#e1e6f0; --text:#182235; --text2:#43516b;
-  --muted:#73819b; --accent:#515dcc; --accent-soft:rgba(81,93,204,.11);
-  --action:#525dcc; --action-hover:#414bb7;
+  --muted:#73819b; --accent:#2b4ad6; --accent-soft:rgba(43,74,214,.11);
+  --action:#2b4ad6; --action-hover:#3d5ae3;
   --green:#23805b; --yellow:#916314; --red:#bf4d62;
   --pp-canvas:#f6f8fc; --pp-panel:#fff; --pp-sidebar:#f9faff;
   --pp-request-header:#f3f5fc; --pp-response-header:#f3f5fc;
-  --pp-pink:#545dc8; --pp-pink-hover:#434cb6; --pp-pink-text:#fff;
+  --pp-pink:var(--action); --pp-pink-hover:var(--action-hover); --pp-pink-text:#fff;
   --pp-yellow:#fff0d1; --pp-yellow-text:#9b650f;
   --pp-green-bg:#e2f5ec; --pp-green-text:#176b4a;
-  --pp-blue-control:#e6eaff; --pp-editor-line:#e4e8f1;
+  --pp-blue-control:#e4edff; --pp-editor-line:#e4e8f1;
   --shadow:0 12px 24px rgba(27,40,75,.09);
 }
 :root[data-theme='oled'] {
   --bg:#000; --top:#000; --surface:#080a10; --surface2:#10131b;
-  --editor:#030407; --hover:#161a25; --selected:#1c2040;
+  --editor:#030407; --hover:#161a25; --selected:#14233d;
   --border:#303443; --border-soft:#1c202b; --text:#f4f5fb; --text2:#c1c7d6;
-  --muted:#8791a6; --accent:#a0a3ff; --accent-soft:rgba(151,155,255,.14);
-  --action:#777bef; --action-hover:#8c90ff;
+  --muted:#8791a6; --accent:#8ab1ff; --accent-soft:rgba(92,139,255,.16);
+  --action:#2b4ad6; --action-hover:#3d5ae3;
   --green:#76d9a7; --yellow:#f1cb86; --red:#f298a6;
   --pp-canvas:#000; --pp-panel:#030407; --pp-sidebar:#050609;
   --pp-request-header:#0b0d15; --pp-response-header:#0b0d15;
-  --pp-pink:#777bef; --pp-pink-hover:#9195ff; --pp-pink-text:#fff;
+  --pp-pink:var(--action); --pp-pink-hover:var(--action-hover); --pp-pink-text:#fff;
   --pp-yellow:#231e15; --pp-yellow-text:#f3cb7c;
   --pp-green-bg:#0c271b; --pp-green-text:#84dfae;
-  --pp-blue-control:#1a2042; --pp-editor-line:#232634;
+  --pp-blue-control:#152747; --pp-editor-line:#232634;
   --shadow:0 16px 28px rgba(0,0,0,.5);
 }
 :root[data-theme] {

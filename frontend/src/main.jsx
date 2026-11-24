@@ -63,3 +63,5 @@ import './styles/adaptive-controls.css';
 import './styles/adaptive-comfort.css';
 
 import './styles/adaptive-mobile.css';
+
+import './styles/ux-polish.css';

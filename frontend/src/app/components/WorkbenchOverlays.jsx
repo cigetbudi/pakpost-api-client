@@ -1,3 +1,4 @@
+import {NoticeIcon} from '../../components/ui/AsyncFeedback.jsx';
 import React from 'react';
 import { PlatformCreatorInvitationOverlay } from '../../features/auth/components/PlatformCreatorInvitationOverlay.jsx';
 
@@ -33,7 +34,7 @@ export function WorkbenchOverlays({ model }) {
   } = model;
   return <>
 <CommandPalette {...{        ArrowRight, Code2, Search, commandIndex, commandOpen, commandQuery,
-        setCommandIndex, setCommandOpen, setCommandQuery, visibleCommandItems,}}/>    {notice && createPortal(<div className="pp-toast pp-toast-note" role="status" aria-live="polite"><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
+        setCommandIndex, setCommandOpen, setCommandQuery, visibleCommandItems,}}/>    {notice && createPortal(<div className="pp-toast pp-toast-note" role="status" aria-live="polite"><NoticeIcon/><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
 <CollectionDialogs {...{        ArrowDownToLine, Braces, CollectionVariablesEditor, Dialog, DocumentationEditor, FileJson,
         Suspense, applyCollectionVariableSession, canWorkspace, collectionTargetKey, collectionVariablesBusy, collectionVariablesData,
         collectionVariablesError, collectionVariablesFetchId, collectionVariablesLoading, collectionVariablesTarget, confirmExport, docBusy,

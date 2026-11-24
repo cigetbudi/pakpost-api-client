@@ -14,7 +14,7 @@ test('motion system follows legacy layers; adaptive layers preserve reduced moti
   for (const file of imports.slice(motion + 1)) {
     const content = readFileSync(new URL(file, root), 'utf8');
     // No later nonzero !important animation or transition may defeat reduced-motion.
-    assert.doesNotMatch(content, /(?:animation|transition)(?:-[\w-]+)?\s*:[^;{}]*!important/i,
+    assert.doesNotMatch(content, /(?:animation|transition)(?:-[\w-]+)?\s*:(?!\s*none\s*!important)[^;{}]*!important/i,
       `Audit reduced-motion precedence for ${file}`);
   }
 });

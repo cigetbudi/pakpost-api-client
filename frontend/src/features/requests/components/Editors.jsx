@@ -1,3 +1,5 @@
+import {useWorkbenchPreferences} from '../../settings/services/useWorkbenchPreferences.js';
+import {Search, WrapText} from 'lucide-react';
 import React, {useEffect,useMemo,useRef,useState} from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import {json} from '@codemirror/lang-json';
@@ -43,8 +45,25 @@ const jsoncCommentHighlight=ViewPlugin.fromClass(class {
   }
 },{decorations:plugin=>plugin.decorations});
 
-export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false,variableUi=null,scriptDiagnostics=false,scriptDiagnostic=null,jumpTo=null}) {
+export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=false,lint=true,minHeight='250px',lineNumbers=true,placeholder='',fill=false,allowComments=false,variableUi=null,scriptDiagnostics=false,scriptDiagnostic=null,jumpTo=null,outputTools=false}) {
+  const preferences=useWorkbenchPreferences();
+  const [localWrap,setLocalWrap]=useState(null);
+  const wrap=localWrap??preferences.wordWrap;
+  const [findOpen,setFindOpen]=useState(false);
+  const [query,setQuery]=useState('');
+  const [findStatus,setFindStatus]=useState('');
   const editorView=useRef(null);
+  function findNext(backward=false){
+    const view=editorView.current;
+    if(!view||!query)return;
+    const source=view.state.doc.toString();
+    const selection=view.state.selection.main;
+    let index=backward?(selection.from>0?source.lastIndexOf(query,selection.from-1):-1):source.indexOf(query,selection.to);
+    if(index<0)index=backward?source.lastIndexOf(query):source.indexOf(query);
+    if(index<0){setFindStatus('No match');return;}
+    view.dispatch({selection:{anchor:index,head:index+query.length},scrollIntoView:true});
+    setFindStatus(`Line ${view.state.doc.lineAt(index).number}`);
+  }
   const diagnosticRef=useRef(scriptDiagnostic);
   diagnosticRef.current=scriptDiagnostic;
   const [hover,setHover]=useState(null);
@@ -78,7 +97,8 @@ export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=
   function handleTokenLeave(e){if(e.target.closest?.('[data-pp-variable-key]'))delayClose();}
 
   const extensions=useMemo(()=>{
-    const ex=[];
+    const ex=[EditorView.theme({'&':{fontSize:`${preferences.editorFontSize}px`},'.cm-content':{fontSize:'inherit'}})];
+    if(wrap)ex.push(EditorView.lineWrapping);
     if(lang==='json'||lang==='jsonc')ex.push(json());
     if(variableUi&&!readOnly)ex.push(codeMirrorVariableDecoration(variables,definitions));
     if(lang==='jsonc')ex.push(jsoncCommentHighlight);
@@ -120,9 +140,11 @@ export function TextEditor({value='',onChange,lang='text',theme='dark',readOnly=
       },{delay:350}));
     }
     return ex;
-  },[lang,lint,readOnly,allowComments,variableSignature,scriptDiagnostics]);
-  return <div className={'pp-editor-wrap'+(fill?' pp-editor-wrap-fill':'')} onMouseOver={handleTokenEnter} onMouseOut={handleTokenLeave}>
+  },[lang,lint,readOnly,allowComments,variableSignature,scriptDiagnostics,preferences.editorFontSize,wrap]);
+  return <div className={'pp-editor-wrap'+(fill?' pp-editor-wrap-fill':'')} style={{'--pp-editor-font':`${preferences.editorFontSize}px`}} onMouseOver={handleTokenEnter} onMouseOut={handleTokenLeave}>
     {allowComments&&!readOnly&&<button className="pp-editor-comment" type="button" title="Toggle comment on selected lines (Ctrl/Cmd+/)" aria-label="Toggle comment selection" onMouseDown={e=>e.preventDefault()} onClick={()=>{if(editorView.current)toggleLineComment(editorView.current,lang)}}><MessageSquareText size={14}/> <span>Comment</span></button>}
+    {readOnly&&outputTools&&<div className="pp-ux-editor-tools"><button type="button" aria-expanded={findOpen} title="Find in output (case sensitive)" onClick={()=>{setFindOpen(v=>!v);setFindStatus('');}}><Search size={14}/> Find</button><button type="button" aria-pressed={wrap} title="Toggle word wrap" onClick={()=>setLocalWrap(!wrap)}><WrapText size={14}/> Wrap</button></div>}
+    {readOnly&&outputTools&&findOpen&&<form className="pp-ux-editor-search" onSubmit={e=>{e.preventDefault();findNext(false);}}><input autoFocus aria-label="Find text in output" placeholder="Find text…" value={query} onChange={e=>{setQuery(e.target.value);setFindStatus('');}} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setFindOpen(false);}}}/><button type="button" disabled={!query} onClick={()=>findNext(true)}>Previous</button><button disabled={!query} type="submit">Next</button><span role="status">{findStatus}</span></form>}
     <CodeMirror value={value} theme={theme === 'dark' ? 'dark' : 'light'}
     extensions={extensions} onChange={onChange} readOnly={readOnly} onCreateEditor={view=>{editorView.current=view;}}
     basicSetup={{foldGutter:lineNumbers,lineNumbers,highlightActiveLine:!readOnly,autocompletion:!readOnly}}

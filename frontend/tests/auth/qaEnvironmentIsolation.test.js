@@ -74,7 +74,8 @@ test('Send does not call Cloud PUT for read-only QA, Writer or Developer',()=>{
   const app=readWorkbenchSource();
   assert.match(app,/if\(scope===STORAGE_WORKSPACE&&!canWrite\)\{[\s\S]*?rememberSessionValues\(sessionKey,environment,values\);[\s\S]*?return;/);
   const executor=read('frontend/src/features/requests/services/executeWorkbenchRequest.js');
-  assert.match(app,/saveEnvironmentValues:values=>runToken===currentTokenRef\.current\?applyScriptVariables\(values,runEnvironment\)/);
+  assert.match(app,/saveEnvironmentValues:values=>isCurrent\(\)\?applyScriptVariables\(values,runEnvironment\)/);
+  assert.match(app,/const isCurrent=\(\)=>runToken===currentTokenRef\.current&&!controller\.signal\.aborted/);
   assert.match(executor,/await saveEnvironmentValues\(pre\.environmentVariables \|\| variables\)/);
   assert.match(executor,/await saveEnvironmentValues\(post\.environmentVariables \|\| post\.variables\)/);
   assert.match(app,/const runEnvironment=\{environment:activeEnvironment,scope:envScope,sessionKey:activeSessionEnvironmentKey/);
