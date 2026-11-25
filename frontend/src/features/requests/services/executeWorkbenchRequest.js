@@ -36,7 +36,7 @@ export async function executeWorkbenchRequest({
       method, url,
       headers: Object.fromEntries(rows.filter(x => x.key?.trim() && x.enabled !== false).map(x => [x.key.trim(), x.value])),
       body: languageFromMime(format) === 'json' ? stripJsonComments(body) : body, format,
-    }, resolvedScriptVariables(collectionVars, variables)), null, collectionVars);
+    }, resolvedScriptVariables(collectionVars, variables)), null, {}, collectionVars);
     if (pre.error) {
       pre.logs?.forEach(line => trace(scriptConsoleLevel(line), 'pre-script', line));
       logs.push(...(pre.logs || []).map(line => 'PRE: ' + line));

@@ -77,15 +77,20 @@ public sealed class SafeHttpRequestRunner(IConfiguration configuration,IHostEnvi
                     }
                 }
             var watch=Stopwatch.StartNew();
+            // ResponseHeadersRead ends HttpClient.Timeout at headers. Bound the entire
+            // exchange (including a slow or endless response body) separately.
+            using var deadline=CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(TimeSpan.FromSeconds(15));
+            var operation=deadline.Token;
             try
             {
-                using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,ct);
-                await using var stream=await response.Content.ReadAsStreamAsync(ct);
+                using var response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,operation);
+                await using var stream=await response.Content.ReadAsStreamAsync(operation);
                 using var bytes=new MemoryStream();
                 var buffer=new byte[8192];bool truncated=false;
                 while(true)
                 {
-                    var n=await stream.ReadAsync(buffer,ct);
+                    var n=await stream.ReadAsync(buffer,operation);
                     if(n==0)break;
                     var left=MaxResponseBytes-(int)bytes.Length;
                     if(n>left){if(left>0)bytes.Write(buffer,0,left);truncated=true;break;}
@@ -101,8 +106,8 @@ public sealed class SafeHttpRequestRunner(IConfiguration configuration,IHostEnvi
             }
             catch(OperationCanceledException) when(!ct.IsCancellationRequested)
             {throw AppException.BadRequest("Target request timed out after 15 seconds");}
-            catch(HttpRequestException ex)
-            {throw AppException.BadRequest("Target request failed: "+ex.Message);}
+            catch(HttpRequestException)
+            {throw AppException.BadRequest("Target request failed");}
         }
     }
 }

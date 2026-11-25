@@ -124,11 +124,36 @@ pub fn load_connection_profiles(app: tauri::AppHandle) -> Result<ProfileStore, S
     Ok(data)
 }
 
+// Non-secret opt-in marker only. Disable it BEFORE deleting a vault entry,
+// so a locked/unavailable vault cannot cause a forgotten login to be restored.
+pub(crate) fn remembered(app: &tauri::AppHandle) -> Result<bool, String> {
+    let c = open(app)?;
+    let value = c.query_row("SELECT json FROM desktop_profiles WHERE key='remembered_session_v1'", [], |r| r.get::<_, String>(0));
+    match value {
+        Ok(v) => Ok(v == "true"),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+pub(crate) fn set_remembered(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let c = open(app)?;
+    c.execute("INSERT INTO desktop_profiles(key,json) VALUES('remembered_session_v1',?1) ON CONFLICT(key) DO UPDATE SET json=excluded.json", params![if enabled { "true" } else { "false" }]).map_err(|e|e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
-pub fn save_connection_profiles(app: tauri::AppHandle, store: ProfileStore) -> Result<(), String> {
+pub fn save_connection_profiles(app: tauri::AppHandle, state: tauri::State<'_, crate::remote::RemoteState>, store: ProfileStore) -> Result<(), String> {
+    // Serialize profile changes with native session snapshots.
+    let mut remote = state.inner.lock().map_err(|_| "Session state unavailable")?;
+    let old = load_connection_profiles(app.clone())?;
+    let old_url = old.profiles.iter().find(|p| p.id == old.active_id).and_then(|p| p.url.as_ref());
+    let new_url = store.profiles.iter().find(|p| p.id == store.active_id).and_then(|p| p.url.as_ref());
+    let changed = old.active_id != store.active_id || old_url != new_url;
     validate(&store.profiles, &store.active_id)?;
+    if changed { crate::remote::disable_remembered(&app)?; }
     let json = serde_json::to_string(&store).map_err(|e| e.to_string())?;
     let c = open(&app)?;
     c.execute("INSERT INTO desktop_profiles(key,json) VALUES('connections',?1) ON CONFLICT(key) DO UPDATE SET json=excluded.json",params![json]).map_err(|e|e.to_string())?;
+    if changed { remote.invalidate(); }
     Ok(())
 }

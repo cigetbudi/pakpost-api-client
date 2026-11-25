@@ -81,6 +81,18 @@ test('request pipeline preserves pre/post scripts, variable chaining and HTTP re
   assert.ok(traces.some(e=>e[1]==='network'));
 });
 
+test('single send passes collection variables into collection scope, not local scope',async()=>{
+  await executeWorkbenchRequest(fakeExecutorParams({sandbox:async(code,phase,env,request,response,local,collection)=>{
+    if(phase==='pre'){
+      assert.deepEqual(local,{});
+      assert.deepEqual(collection,{client:'RAYA',rrn:'100'});
+      return preSuccess;
+    }
+    assert.deepEqual(collection,preSuccess.collectionVariables);
+    return postSuccess;
+  }}));
+});
+
 test('pre-request runtime failure blocks network and retains diagnostic', async () => {
   let called=false;
   await assert.rejects(()=>executeWorkbenchRequest(fakeExecutorParams({

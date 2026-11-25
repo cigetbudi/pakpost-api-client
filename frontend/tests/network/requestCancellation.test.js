@@ -39,3 +39,8 @@ test('browser dispatch forwards cancellation to the underlying fetch signal',asy
   globalThis.fetch=async(url,init)=>{observed=init.signal;return new Promise((resolve,reject)=>{if(observed.aborted)reject(Error('aborted'));else observed.addEventListener('abort',()=>reject(Error('aborted')),{once:true});});};
   try{const c=new AbortController();const run=dispatchRequest({url:'https://example.test',method:'GET'},'browser',{signal:c.signal});c.abort();await assert.rejects(run,/aborted/);assert.equal(observed.aborted,true);}finally{globalThis.fetch=originalFetch;}
 });
+test('browser elapsedMs reports body read as well as header wait',async()=>{
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=async()=>new Response(new ReadableStream({start(controller){setTimeout(()=>{controller.enqueue(new TextEncoder().encode('hello'));controller.close();},35);}}),{status:200});
+  try{const result=await dispatchRequest({url:'https://example.test',method:'GET'},'browser');assert.equal(result.elapsedMs,result.timing.totalMs);assert.ok(result.timing.bodyMs>0);assert.equal(result.body,'hello');}finally{globalThis.fetch=originalFetch;}
+});

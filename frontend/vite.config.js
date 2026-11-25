@@ -28,6 +28,22 @@ export default defineConfig({
       '/health': apiOrigin,
     },
   },
+  build: {
+    manifest: true,
+    rollupOptions: {
+      output: {
+        onlyExplicitManualChunks: true,
+        manualChunks(id) {
+          const path = id.replaceAll('\\', '/');
+          if (!path.includes('/node_modules/')) return;
+          if (/\/node_modules\/(?:react|react-dom|scheduler)\//.test(path)) return 'vendor-react';
+          if (/\/node_modules\/@lezer\//.test(path)) return 'vendor-parser';
+          if (/\/node_modules\/@codemirror\/lang-/.test(path)) return 'vendor-editor-languages';
+          if (/\/node_modules\/(?:@codemirror|@uiw)\//.test(path)) return 'vendor-editor';
+        },
+      },
+    },
+  },
   worker: {
     format: 'es',
   },

@@ -28,5 +28,17 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls-native-roots"] }
 base64 = "0.22"
 
-tokio = { version = "1", features = ["sync"] }
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "net"] }
+futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
+
+tokio-tungstenite = { version = "=0.28.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
+
+# Explicit native backends: no in-memory mock fallback on supported platforms.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["windows-native"] }
