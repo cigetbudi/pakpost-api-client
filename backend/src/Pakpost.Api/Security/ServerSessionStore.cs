@@ -2,11 +2,12 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Pakpost.Domain.Entities;
+using Pakpost.Application.Internal.Auth.DTOs;
 using Pakpost.Infrastructure.Persistence;
 
 namespace Pakpost.Api.Security;
 
-public sealed record BrowserSession(Guid Id, Guid UserId, string CsrfHash, DateTimeOffset ExpiresAt, string? AvatarUrl = null);
+public sealed record BrowserSession(Guid Id, Guid UserId, string CsrfHash, DateTimeOffset ExpiresAt, string? AvatarUrl = null, UserProfile? Profile = null);
 public sealed record NewBrowserSession(string OpaqueToken, string CsrfToken, DateTimeOffset ExpiresAt);
 public sealed record BrowserSessionInfo(Guid Id, string UserAgent, DateTimeOffset CreatedAt,
     DateTimeOffset ExpiresAt, bool Current);
@@ -43,13 +44,23 @@ public sealed class ServerSessionStore(PakpostDbContext db, IConfiguration confi
         return new NewBrowserSession(token, csrf, until);
     }
 
-    public async Task<BrowserSession?> FindAsync(string? rawToken, CancellationToken ct)
+    public async Task<BrowserSession?> FindAsync(string? rawToken, CancellationToken ct, bool includeProfile = false)
     {
         // Validate the exact base64url length and character set before hashing.
         if (rawToken is not { Length: 43 } || rawToken.Any(c =>
             !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))) return null;
         var hash = Hash(rawToken);
         var now = DateTimeOffset.UtcNow;
+        if (includeProfile)
+        {
+            // One read for session bootstrap; no cross-request authorization cache.
+            return await (from s in db.UserSessions.AsNoTracking()
+                          join u in db.Users.AsNoTracking() on s.UserId equals u.Id
+                          where s.TokenHash == hash && s.ExpiresAt > now && s.RevokedAt == null && !u.IsDisabled
+                          select new BrowserSession(s.Id, s.UserId, s.CsrfHash, s.ExpiresAt, s.AvatarUrl,
+                              new UserProfile(u.Id, u.Email, u.DisplayName, s.AvatarUrl, u.IsSuperAdmin)))
+                .SingleOrDefaultAsync(ct);
+        }
         return await db.UserSessions.AsNoTracking()
             .Where(s => s.TokenHash == hash && s.ExpiresAt > now && s.RevokedAt == null && db.Users.Any(u => u.Id == s.UserId && !u.IsDisabled))
             .Select(s => new BrowserSession(s.Id, s.UserId, s.CsrfHash, s.ExpiresAt, s.AvatarUrl))

@@ -1,8 +1,8 @@
-import React,{useState} from 'react';
+import React,{useLayoutEffect,useRef,useState} from 'react';
 import { useStore } from 'zustand';
 import { AlertTriangle, History, Layers3, Plus, Pin, X } from 'lucide-react';
 import { hasUnsavedMarker, freshRequest } from '../services/draftLifecycle';
-import { reorderTabs } from '../services/tabActions';
+import { reorderTabs, activeTabScrollDelta } from '../services/tabActions';
 import { STORAGE_WORKSPACE } from '../../import-export/services/storageScope';
 
 export function RequestTabs({ store, page, remoteAlerts, snapshot, draftsRef,
@@ -13,13 +13,26 @@ export function RequestTabs({ store, page, remoteAlerts, snapshot, draftsRef,
   const activeTabId = useStore(store, state => state.activeTabId);
   const setOpenTabs = useStore(store, state => state.setOpenTabs);
   const [dropTarget,setDropTarget]=useState(null);
+  const tabStripRef=useRef(null);
+  // Scroll only the horizontal tab strip, never the workbench/page itself.
+  useLayoutEffect(()=>{
+    const strip=tabStripRef.current;
+    if(!strip||page!=='tester')return;
+    const active=strip.querySelector('[aria-selected="true"]');
+    if(!active)return;
+    const bounds=strip.getBoundingClientRect(),tab=active.getBoundingClientRect();
+    const plus=strip.querySelector('.pp-new-tab');
+    const plusBounds=active===plus?.previousElementSibling?plus.getBoundingClientRect():null;
+    const delta=activeTabScrollDelta(bounds,tab,plusBounds);
+    if(delta)strip.scrollLeft+=delta;
+  },[activeTabId,openTabs.length,page]);
   const position=e=>{
     const bounds=e.currentTarget.getBoundingClientRect();
     return e.clientX < bounds.left + bounds.width/2?'before':'after';
   };
   return (
         <div className="pp-tabs-bar">
-          <div className="pp-open-tabs" role="tablist" aria-label="Open requests"
+          <div ref={tabStripRef} className="pp-open-tabs" role="tablist" aria-label="Open requests"
             onDragEnd={()=>setDropTarget(null)} onDrop={()=>setDropTarget(null)}>
             {openTabs.map(t => <button role="tab" aria-selected={page === 'tester' && activeTabId === t.id} key={t.id} className={`pp-open-tab ${page === 'tester' && activeTabId === t.id ? 'current' : ''} ${dropTarget?.id===t.id?`pp-tab-drop-${dropTarget.placement}`:''}`} onClick={() => selectTab(t.id)} draggable onDragStart={e=>{tabDragRef.current=t.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',t.id);}} onDragOver={e=>{if(!tabDragRef.current||tabDragRef.current===t.id)return;
               e.preventDefault();e.dataTransfer.dropEffect='move';setDropTarget({id:t.id,placement:position(e)});}}
@@ -31,7 +44,7 @@ export function RequestTabs({ store, page, remoteAlerts, snapshot, draftsRef,
             {page === 'workspace' && <button className="pp-open-tab current pp-manage-tab" onClick={() => navigate('workspace')}><Layers3 size={14}/> Workspace</button>}
             <button className="pp-new-tab" title="New request tab" onClick={() => addTab(freshRequest('Untitled Request'))}><Plus size={17}/></button>
           </div>
-          <div className="pp-tabs-actions"><span><span className="pp-working-dot"/> {token&&collectionsScope===STORAGE_WORKSPACE?({'live':'Live','syncing':'Auto-sync ~5s','connecting':'Connecting…','reconnecting':'Reconnecting…','offline':'Offline'}[realtimeStatus]||'Offline'):token?'Local':'Guest'}</span><button title="Request Version History" disabled={openTabs.find(t=>t.id===activeTabId)?.source?.scope!=='workspace'||openTabs.find(t=>t.id===activeTabId)?.source?.pending} onClick={()=>openRequestHistory(activeTabId)}><History size={16}/> Versions</button></div>
+          <div className="pp-tabs-actions"><span><span className="pp-working-dot"/> {token&&collectionsScope===STORAGE_WORKSPACE?({'live':'Live','syncing':'Auto-sync ~5s','connecting':'Connecting…','reconnecting':'Reconnecting…','offline':'Offline'}[realtimeStatus]||'Offline'):token?'Local':'Guest'}</span><button className="pp-versions-action" aria-label="Request Version History" title="Request Version History" disabled={openTabs.find(t=>t.id===activeTabId)?.source?.scope!=='workspace'||openTabs.find(t=>t.id===activeTabId)?.source?.pending} onClick={()=>openRequestHistory(activeTabId)}><History size={15} aria-hidden="true"/><span>Versions</span></button></div>
         </div>
   );
 }

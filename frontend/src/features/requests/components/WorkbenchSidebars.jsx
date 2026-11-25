@@ -29,7 +29,7 @@ export function CodeSidebar({request,buildResolved,theme='dark'}){
     <label className="pp-side-check"><input type="checkbox" disabled={!resolve} checked={secrets} onChange={e=>setSecrets(e.target.checked)}/> Include secret values</label>
     {secrets&&<p className="pp-side-alert"><ShieldAlert size={14}/> This snippet may contain credentials. Review before sharing.</p>}
     <div className="pp-side-code-toolbar"><span>{language.toUpperCase()} · preview</span><button disabled={!!error} onClick={onCopy}>{copied?<Check size={13}/>:<Copy size={13}/>} {copied?'Copied':'Copy'}</button></div>
-    {error?<p className="pp-side-alert">{error}</p>:<div className="pp-side-code pp-highlighted-code" aria-label="Generated request code"><TextEditor value={code} readOnly lint={false} theme={theme} lang={language==='curl'?'shell':language==='fetch'||language==='axios'?'javascript':language} minHeight="215px" lineNumbers={false}/></div>}
+    {error?<p className="pp-side-alert">{error}</p>:<div className="pp-side-code pp-highlighted-code" aria-label="Generated request code"><TextEditor value={code} readOnly lint={false} theme={theme} lang={language==='curl'?'shell':language==='fetch'||language==='axios'?'javascript':language} minHeight="0px" lineNumbers={false}/></div>}
   </div>;
 }
 

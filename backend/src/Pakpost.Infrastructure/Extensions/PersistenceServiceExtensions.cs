@@ -30,6 +30,10 @@ public static class PersistenceServiceExtensions
             MaxPoolSize = Math.Clamp(configuration.GetValue("Database:MaxPoolSize", 30), 1, 200)
         };
 
+        // Opt-in for password/TLS deployments (e.g. Neon); do not alter SSL settings.
+        if (configuration.GetValue<bool>("Database:DisableGssEncryption"))
+            connectionOptions.GssEncryptionMode = GssEncryptionMode.Disable;
+
         services.AddSingleton<WorkspaceCryptography>();
 
         services.AddDbContext<PakpostDbContext>(options => options.UseNpgsql(connectionOptions.ConnectionString));

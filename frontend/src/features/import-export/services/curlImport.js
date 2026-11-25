@@ -31,6 +31,17 @@ export function splitQuery(input){
   for(const [key,value] of new URLSearchParams(query))rows.push({key,value});
   return {url:input.slice(0,idx)+(hashIdx<0?'':input.slice(hashIdx)),params:rows.length?rows:[EMPTY()]};
 }
+/** Default only a recognizable, scheme-less host to HTTPS. Never rewrite
+ * explicit HTTP, non-HTTP schemes, or variable placeholders. */
+export function normalizeCurlUrl(input){
+  if(/^https?:\/\//i.test(input)||/^\{\{[^{}]+\}\}/.test(input))return input;
+  const authority=input.split(/[/?#]/,1)[0];
+  const hostPattern=/^(?:localhost|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[[0-9a-f:.]+\])(?::[0-9]+)?$/i;
+  if(!hostPattern.test(authority)||/\s|\\/.test(input))throw Error('Only HTTP(S) URLs and {{baseUrl}} placeholders are supported.');
+  const normalized='https://'+input;
+  try{new URL(normalized);}catch{throw Error('Invalid cURL URL.');}
+  return normalized;
+}
 export function parseCurl(input){
   const args=shellWords(input);
   if(!args.length||args[0].toLowerCase()!=='curl')throw Error('Paste a cURL command beginning with curl.');
@@ -64,7 +75,7 @@ export function parseCurl(input){
     if(!url)url=tok;else throw Error('Multiple URLs in one cURL command are not supported.');
   }
   if(!url)throw Error('cURL command has no URL.');
-  if(!/^https?:\/\//i.test(url)&&!/^\{\{[^{}]+\}\}/.test(url))throw Error('Only HTTP(S) URLs and {{baseUrl}} placeholders are supported.');
+  url=normalizeCurlUrl(url);
   if(user&&typeof btoa==='function')headers.push({key:'Authorization',value:'Basic '+btoa(user)});
   const mime=mimeFromHeaders(headers);
   const draft=blankDraft();draft.method=method||(get?'GET':hasBody?'POST':'GET');

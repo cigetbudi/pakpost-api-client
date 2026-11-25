@@ -40,6 +40,7 @@ import { createRequestTabActions } from '../../features/requests/controllers/cre
 import { createCollectionActions } from '../../features/collections/controllers/createCollectionActions.js';
 import { createCollectionRunnerActions } from '../../features/collections/controllers/createCollectionRunnerActions.js';
 import { createInvitationActions } from '../../features/workspace/controllers/createInvitationActions.js';
+import { queueWorkspaceMemberJoined } from '../../features/workspace/services/workspaceMemberJoined.js';
 import { useWorkspaceInvitationListing } from '../../features/workspace/hooks/useWorkspaceInvitationListing.js';
 import { createRequestExecutionActions } from '../../features/requests/controllers/createRequestExecutionActions.js';
 import { createDocumentationActions } from '../../features/collections/controllers/documentationActions.js';
@@ -235,6 +236,15 @@ export function useWorkbenchController() {
   },[recent,desktopHistoryReady]);
   const [workspaceUiStore] = useState(createWorkspaceUiStore);
   const { workspaces, setWorkspaces, selectedWs, setSelectedWs, members, setMembers, membersWorkspaceId, setMembersWorkspaceId, wsTab, setWsTab, newWs, setNewWs, newCollection, setNewCollection, newMember, setNewMember, newMemberRoles, setNewMemberRoles, editingMemberId, setEditingMemberId, editingMemberRoles, setEditingMemberRoles, memberSearch, setMemberSearch, memberRoleFilter, setMemberRoleFilter, showMemberAdd, setShowMemberAdd, inviteOpen, setInviteOpen, inviteEmail, setInviteEmail, inviteRoles, setInviteRoles, invitationRows, setInvitationRows, invitationError, setInvitationError, invitationBusy, setInvitationBusy, expandedMemberAccess, setExpandedMemberAccess, canCreateWorkspace, setCanCreateWorkspace } = useStore(workspaceUiStore);
+  const membersLoadVersion=useRef(0);
+  const [membershipRevision,setMembershipRevision]=useState(0);
+  const memberJoinScope=useRef(null);
+  const membershipEnabled=collectionsScope===STORAGE_WORKSPACE||page==='workspace';
+  const previousJoinScope=memberJoinScope.current;
+  if(!previousJoinScope||previousJoinScope.workspaceId!==selectedWs||previousJoinScope.token!==token||
+    previousJoinScope.sessionRevision!==authSessionRevision||previousJoinScope.enabled!==membershipEnabled){
+    memberJoinScope.current={workspaceId:selectedWs,token,sessionRevision:authSessionRevision,enabled:membershipEnabled,seen:new Set(),queue:Promise.resolve()};
+  }
   const selectedWorkspaceRef=useRef(selectedWs);
   selectedWorkspaceRef.current=selectedWs;
   useWorkspaceViewPreferencePersistence({
@@ -513,12 +523,27 @@ export function useWorkbenchController() {
     setMe, setStorageScope, setToken,
   });
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
+  function onWorkspaceMemberJoined(event){
+    const scope=memberJoinScope.current;
+    const authEpoch=authEpochRef.current;
+    return queueWorkspaceMemberJoined(scope,event,{
+      isCurrent:()=>memberJoinScope.current===scope&&authEpochRef.current===authEpoch&&
+        currentTokenRef.current===scope.token&&selectedWorkspaceRef.current===scope.workspaceId,
+      fetchMembers:()=>api(`/api/workspaces/${scope.workspaceId}/members`,'GET',undefined,scope.token),
+      version:membersLoadVersion,
+      commit:data=>{setMembers(data);setMembersWorkspaceId(scope.workspaceId);setMembershipRevision(v=>v+1);},
+      currentUserId:()=>currentUserRef.current?.id,
+      notify:setNotice,
+    });
+  }
   useWorkspaceRealtimeLifecycle({
-    enabled: collectionsScope===STORAGE_WORKSPACE,
+    enabled: membershipEnabled,
     token, workspaceId:selectedWs, sessionRevision:authSessionRevision,
-    onEvent:enqueueWorkspaceChange,
+    onEvent:event=>{if(collectionsScope===STORAGE_WORKSPACE)enqueueWorkspaceChange(event);},
+    onMemberJoined:onWorkspaceMemberJoined,
     onStatus:setRealtimeStatus,
     onDesktopPoll:(checkpoint,active)=>{
+      if(collectionsScope!==STORAGE_WORKSPACE)return;
       const auth=currentTokenRef.current, ws=selectedWorkspaceRef.current;
       return pollDesktopWorkspace({workspaceId:ws,token:auth,checkpoint,
         isCurrent:()=>active() && auth===currentTokenRef.current && ws===selectedWorkspaceRef.current,
@@ -535,14 +560,18 @@ export function useWorkbenchController() {
       realtimeQueueRef.current=[];
       if(realtimeTimerRef.current){clearTimeout(realtimeTimerRef.current);realtimeTimerRef.current=null;}
     },
-    onAccessChanged:(workspaceId,auth)=>api(`/api/workspaces/${workspaceId}/members`,'GET',undefined,auth)
-      .then(data=>{if(auth===currentTokenRef.current&&workspaceId===selectedWorkspaceRef.current){setMembers(data);setMembersWorkspaceId(workspaceId)}})
+    onAccessChanged:(workspaceId,auth)=>{
+      const version=++membersLoadVersion.current;
+      const epoch=authEpochRef.current;
+      return api(`/api/workspaces/${workspaceId}/members`,'GET',undefined,auth)
+      .then(data=>{if(epoch===authEpochRef.current&&version===membersLoadVersion.current&&auth===currentTokenRef.current&&workspaceId===selectedWorkspaceRef.current){setMembers(data);setMembersWorkspaceId(workspaceId);setMembershipRevision(v=>v+1)}})
       .catch(error=>{
-        if(auth!==currentTokenRef.current||workspaceId!==selectedWorkspaceRef.current)return;
+        if(epoch!==authEpochRef.current||version!==membersLoadVersion.current||auth!==currentTokenRef.current||workspaceId!==selectedWorkspaceRef.current)return;
         setMembers([]);
         setMembersWorkspaceId('');
         if(error.status===403||error.status===404)loadWorkspaces(auth);
-      }),
+      });
+    },
   });
 
   useGoogleConnectionStatus({token,setGoogleLinked,api});
@@ -555,7 +584,7 @@ export function useWorkbenchController() {
     setNewMemberRoles, setNotice, setSaveCollection, setSaveCols, setSavedRequests,
     setSelectedCol, setShowMemberAdd, setWorkspaceRequestLists, token,
     workspaceCollectionKey, workspaceFetchEpoch, workspaceRequestLists,
-    workspaceRequestsPending,
+    workspaceRequestsPending, membersLoadVersion,
   });
   useWorkbenchKeyboardShortcuts({
     page, loading, busyAction, saveOpen, saveExampleOpen, actionDialog,
@@ -571,7 +600,7 @@ export function useWorkbenchController() {
   const canManageMembers=canWorkspace(selfMember,'member.manage');
   useWorkspaceInvitationListing({
     api, canManageMembers, getMessage, selectedWorkspaceRef, selectedWs,
-    setInvitationError, setInvitationRows, token,
+    setInvitationError, setInvitationRows, token, membershipRevision,
   });
   async function inviteMember(...args) { return invitationActions.inviteMember(...args); }
   async function actOnInvitation(...args) { return invitationActions.actOnInvitation(...args); }

@@ -62,3 +62,13 @@ test('supports HEAD without content', async () => {
   assert.equal(response.status, 200);
   assert.equal(await response.text(), '');
 });
+
+// Run last: verifies a Docker SIGTERM exits gracefully, including idle keepalive.
+test('SIGTERM gracefully closes static server', async () => {
+  const exited = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('graceful shutdown timeout')), 12000);
+    child.once('exit', (code, signal) => { clearTimeout(timeout); resolve({code, signal}); });
+  });
+  child.kill('SIGTERM');
+  assert.deepEqual(await exited, {code: 0, signal: null});
+});

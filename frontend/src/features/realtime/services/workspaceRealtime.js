@@ -1,12 +1,12 @@
 /** SignalR transport, loaded only for an authenticated Cloud workspace. */
-import { validWorkspaceEvent } from './workspaceEventPolicy.js';
+import { validWorkspaceEvent, validWorkspaceMemberJoined } from './workspaceEventPolicy.js';
 import { getBrowserCsrf } from '../../../services/httpClient.js';
 
 // Keep the public helpers re-exported for existing callers/tests. The module
 // itself must never be statically imported by startup/reconciliation code.
 export { WORKSPACE_KINDS, validWorkspaceEvent, shouldRefreshRequestList } from './workspaceEventPolicy.js';
 
-export async function connectWorkspaceRealtime({workspaceId,getToken,onEvent,onStatus,onAccessChanged}){
+export async function connectWorkspaceRealtime({workspaceId,getToken,onEvent,onStatus,onAccessChanged,onMemberJoined}){
   const {HubConnectionBuilder,LogLevel}=await import('@microsoft/signalr');
   const hub=new HubConnectionBuilder()
     // The browser supplies the HttpOnly cookie; only negotiate needs a CSRF header.
@@ -32,6 +32,9 @@ export async function connectWorkspaceRealtime({workspaceId,getToken,onEvent,onS
     onStatus?.('offline');
     window.dispatchEvent(new Event('pakpost:browser-session-revoked'));
     hub.stop().catch(()=>{});
+  });
+  hub.on('WorkspaceMemberJoined',event=>{
+    if(!disposed&&validWorkspaceMemberJoined(event,workspaceId))onMemberJoined?.(event);
   });
   hub.on('WorkspaceChanged',event=>{
     if(!disposed && validWorkspaceEvent(event,workspaceId)) onEvent(event);

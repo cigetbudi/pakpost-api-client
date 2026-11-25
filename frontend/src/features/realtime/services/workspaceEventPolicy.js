@@ -17,3 +17,10 @@ export function shouldRefreshRequestList(event,{selectedCol='',cached=false,hasO
   return !!event?.kind?.startsWith('request.') &&
     (cached||hasOpenTab||expanded||selectedCol===event.collectionId);
 }
+
+// Membership notifications carry identifiers only; read names and roles via
+// the authorized members endpoint, never from the hub message.
+export function validWorkspaceMemberJoined(event,workspaceId){
+  const guid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  return !!event&&event.workspaceId===workspaceId&&guid(workspaceId)&&guid(event.userId)&&guid(event.eventId);
+}

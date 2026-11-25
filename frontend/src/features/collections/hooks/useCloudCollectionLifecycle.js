@@ -16,7 +16,7 @@ export function useCloudCollectionLifecycle({
   setNewMemberRoles, setNotice, setSaveCollection, setSaveCols, setSavedRequests,
   setSelectedCol, setShowMemberAdd, setWorkspaceRequestLists, token,
   workspaceCollectionKey, workspaceFetchEpoch, workspaceRequestLists,
-  workspaceRequestsPending,
+  workspaceRequestsPending, membersLoadVersion,
 }) {
   // Role editor state is scoped to the selected Workspace.
   useEffect(()=>{setEditingMemberId('');setEditingMemberRoles([]);setNewMemberRoles(['Developer']);setInviteOpen(false);setInviteEmail('');setInviteRoles(['Developer']);setInvitationRows([]);setInvitationError('');setMemberSearch('');setMemberRoleFilter('all');setShowMemberAdd(false);setExpandedMemberAccess('');},[selectedWs]);
@@ -24,6 +24,7 @@ export function useCloudCollectionLifecycle({
     if (!token || !selectedWs) { setCollections([]); setMembers([]); setMembersWorkspaceId(''); return; }
     let cancelled=false;
     const epoch=workspaceFetchEpoch.current;
+    const memberVersion=membersLoadVersion?.current;
     // Show no stale metadata while another workspace is loading.
     setCollections([]);setMembers([]);setMembersWorkspaceId('');
     Promise.all([
@@ -31,7 +32,8 @@ export function useCloudCollectionLifecycle({
       api(`/api/workspaces/${selectedWs}/members`, 'GET', undefined, token),
     ]).then(([cols, mems]) => {
       if(cancelled||epoch!==workspaceFetchEpoch.current)return;
-      setCollections(cols); setMembers(mems); setMembersWorkspaceId(selectedWs);
+      setCollections(cols);
+      if(membersLoadVersion?.current===memberVersion){setMembers(mems);setMembersWorkspaceId(selectedWs);}
       setSelectedCol(current => cols.some(x => x.id === current) ? current : cols[0]?.id || '');
     }).catch(e => {if(!cancelled&&epoch===workspaceFetchEpoch.current)setNotice(getMessage(e));});
     return()=>{cancelled=true;};

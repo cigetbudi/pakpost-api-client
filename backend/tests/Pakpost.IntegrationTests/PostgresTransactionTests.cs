@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Pakpost.Infrastructure.Services;
+using Pakpost.Api.Security;
 using Npgsql;
 using Pakpost.Domain.Entities;
 using Pakpost.Infrastructure.Persistence;
@@ -418,6 +419,43 @@ public sealed class PostgresTransactionTests
             })
             .Build());
     });
+
+    [Fact]
+    public async Task BootstrapProjectsProfileAndStillRejectsRevokedOrDisabledSessions()
+    {
+        var options = await CreateMigratedOptionsAsync();
+        await using var db = NewContext(options);
+        var user = new User($"bootstrap-{Guid.NewGuid():N}@example.test", "Bootstrap fixture", "test-hash");
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:SigningKey"] = new string('x', 48)
+        }).Build();
+        var store = new ServerSessionStore(db, configuration);
+        try
+        {
+            var first = await store.CreateAsync(user.Id, CancellationToken.None, avatarUrl: "https://example.test/avatar");
+            var bootstrap = await store.FindAsync(first.OpaqueToken, CancellationToken.None, includeProfile: true);
+            Assert.NotNull(bootstrap);
+            Assert.NotNull(bootstrap.Profile);
+            Assert.Equal(user.Email, bootstrap.Profile.Email);
+            Assert.Equal(user.DisplayName, bootstrap.Profile.DisplayName);
+            Assert.Equal("https://example.test/avatar", bootstrap.Profile.AvatarUrl);
+            Assert.Null((await store.FindAsync(first.OpaqueToken, CancellationToken.None))!.Profile);
+            await store.RevokeAsync(first.OpaqueToken, CancellationToken.None);
+            Assert.Null(await store.FindAsync(first.OpaqueToken, CancellationToken.None, includeProfile: true));
+            var second = await store.CreateAsync(user.Id, CancellationToken.None);
+            user.SetDisabled(true);
+            await db.SaveChangesAsync();
+            Assert.Null(await store.FindAsync(second.OpaqueToken, CancellationToken.None, includeProfile: true));
+        }
+        finally
+        {
+            await db.UserSessions.Where(s => s.UserId == user.Id).ExecuteDeleteAsync();
+            await db.Users.Where(u => u.Id == user.Id).ExecuteDeleteAsync();
+        }
+    }
 
     private static PakpostDbContext NewContext(DbContextOptions<PakpostDbContext> options) =>
         new(options, TestCryptography.Value);
