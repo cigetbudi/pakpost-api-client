@@ -103,6 +103,7 @@ export async function connectDesktopSignalR({workspaceId,context,onEvent,onStatu
     joined=true;notify('live');onJoined?.();
   };
   hub.on('WorkspaceMemberJoined',event=>{if(!stopped&&joined&&validWorkspaceMemberJoined(event,workspaceId))onMemberJoined?.(event);});
+  hub.on('WorkspaceMemberRemoved',event=>{if(!stopped&&joined&&validWorkspaceMemberJoined(event,workspaceId))onMemberJoined?.({...event,removed:true});});
   hub.on('WorkspaceChanged',event=>{if(!stopped&&joined&&validWorkspaceEvent(event,workspaceId))onEvent?.(event);});
   hub.on('WorkspaceAccessChanged',payload=>{
     if(stopped||payload?.workspaceId!==workspaceId)return;

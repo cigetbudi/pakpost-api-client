@@ -14,7 +14,7 @@ namespace Pakpost.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/workspaces")]
-public sealed class WorkspacesController(ISender sender,WorkspaceConnectionRegistry connections,IHubContext<WorkspaceHub> hub) : ControllerBase
+public sealed class WorkspacesController(ISender sender,WorkspaceConnectionRegistry connections,IHubContext<WorkspaceHub> hub, ILogger<WorkspacesController> logger) : ControllerBase
 {
     public sealed record CreateWorkspaceRequest(string Name);
     public sealed record AddMemberRequest(string Email, WorkspaceRole Role=WorkspaceRole.Member, IReadOnlyList<WorkspaceAccessRole>? Roles=null);
@@ -47,6 +47,25 @@ public sealed class WorkspacesController(ISender sender,WorkspaceConnectionRegis
     [HttpPost("{workspaceId:guid}/members")]
     public async Task<ActionResult<MemberDto>> AddMember(Guid workspaceId, [FromBody] AddMemberRequest body, CancellationToken ct)
         => Ok(await sender.Send(new AddWorkspaceMemberCommand(User.GetUserId(), workspaceId, body.Email, body.Role, body.Roles), ct));
+
+    [HttpDelete("{workspaceId:guid}/members/{userId:guid}"), EnableRateLimiting("auth")]
+    public async Task<IActionResult> RemoveMember(Guid workspaceId, Guid userId, CancellationToken ct)
+    {
+        await sender.Send(new RemoveWorkspaceMemberCommand(User.GetUserId(), workspaceId, userId), ct);
+        // The deletion is committed. Revoke this workspace group, not the account session.
+        await connections.ReauthorizeUserAsync(hub, workspaceId, userId);
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await hub.Clients.Group(WorkspaceHub.GroupName(workspaceId)).SendAsync(
+                "WorkspaceMemberRemoved", new { workspaceId, userId, eventId = Guid.NewGuid() }, timeout.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Workspace membership refresh failed after removal");
+        }
+        return NoContent();
+    }
 
     [HttpPut("{workspaceId:guid}/members/{userId:guid}/roles")]
     public async Task<ActionResult<MemberDto>> SetRoles(Guid workspaceId,Guid userId,

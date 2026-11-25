@@ -23,9 +23,22 @@ public sealed class WorkspaceHub(IWorkspaceRepository workspaces,WorkspaceConnec
         var target=GroupName(workspaceId);
         if(Context.Items.TryGetValue("workspace",out var previous) && previous is string old && old!=target)
             await Groups.RemoveFromGroupAsync(Context.ConnectionId,old,Context.ConnectionAborted);
-        await Groups.AddToGroupAsync(Context.ConnectionId,target,Context.ConnectionAborted);
-        Context.Items["workspace"]=target;
         registry.Register(Context.ConnectionId,Context.User!.GetUserId(),workspaceId,sessionId);
+        try
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId,target,Context.ConnectionAborted);
+            // Close the common join/revoke race: membership may have changed while adding the group.
+            await WorkspacePermissions.RequireAsync(workspaces,workspaceId,Context.User!.GetUserId(),
+                WorkspacePermissions.CollectionRead,Context.ConnectionAborted);
+            Context.Items["workspace"]=target;
+        }
+        catch
+        {
+            registry.Remove(Context.ConnectionId);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId,target,CancellationToken.None);
+            Context.Abort();
+            throw;
+        }
     }
     public override Task OnDisconnectedAsync(Exception? exception)
     {

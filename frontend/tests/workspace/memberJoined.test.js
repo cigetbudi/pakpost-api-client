@@ -29,3 +29,13 @@ test('failed authorized read and self join never show a misleading toast',async(
  const f=fixture();f.options.fetchMembers=async()=>{throw Error('403')};await queueWorkspaceMemberJoined(f.scope,event,f.options);assert.deepEqual(f.notices,[]);assert.deepEqual(f.commits,[]);
  f.options.fetchMembers=async()=>[{userId,displayName:'Acha'}];f.options.currentUserId=()=>userId;await queueWorkspaceMemberJoined(f.scope,event,f.options);assert.equal(f.commits.length,1);assert.deepEqual(f.notices,[]);
 });
+test('member removal refreshes the roster without a false join toast',async()=>{
+ const f=fixture();f.options.fetchMembers=async()=>[];
+ await queueWorkspaceMemberJoined(f.scope,{...event,removed:true},f.options);
+ assert.deepEqual(f.commits,[[]]);assert.deepEqual(f.notices,[]);
+});
+test('late removal notification cannot change a different workspace',async()=>{
+ const f=fixture();f.options.fetchMembers=async()=>{f.stale();return []};
+ await queueWorkspaceMemberJoined(f.scope,{...event,removed:true},f.options);
+ assert.deepEqual(f.commits,[]);
+});

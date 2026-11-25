@@ -523,6 +523,29 @@ export function useWorkbenchController() {
     setMe, setStorageScope, setToken,
   });
   useEffect(() => { if (token) loadWorkspaces(token); }, [token]);
+  async function removeWorkspaceMember(member){
+    const scope=memberJoinScope.current;
+    const epoch=authEpochRef.current;
+    const isCurrent=()=>memberJoinScope.current===scope&&authEpochRef.current===epoch&&
+      currentTokenRef.current===scope.token&&selectedWorkspaceRef.current===scope.workspaceId;
+    if(!scope?.enabled||!scope.token||!isCurrent())return;
+    await api(`/api/workspaces/${scope.workspaceId}/members/${member.userId}`,'DELETE',undefined,scope.token);
+    if(!isCurrent())return;
+    membersLoadVersion.current++;
+    setMembers(items=>items.filter(item=>item.userId!==member.userId));
+    setMembershipRevision(v=>v+1);
+    setEditingMemberId('');setEditingMemberRoles([]);setExpandedMemberAccess('');
+    setNotice(`${member.displayName||'Member'} has been removed from the workspace`);
+    // Reconcile with concurrent membership changes. A failed refresh must not
+    // make a committed removal appear to have failed.
+    const version=membersLoadVersion.current;
+    try {
+      const refreshed=await api(`/api/workspaces/${scope.workspaceId}/members`,'GET',undefined,scope.token);
+      if(isCurrent()&&version===membersLoadVersion.current&&Array.isArray(refreshed)){
+        membersLoadVersion.current++;setMembers(refreshed);setMembersWorkspaceId(scope.workspaceId);
+      }
+    }catch{}
+  }
   function onWorkspaceMemberJoined(event){
     const scope=memberJoinScope.current;
     const authEpoch=authEpochRef.current;
@@ -569,7 +592,11 @@ export function useWorkbenchController() {
         if(epoch!==authEpochRef.current||version!==membersLoadVersion.current||auth!==currentTokenRef.current||workspaceId!==selectedWorkspaceRef.current)return;
         setMembers([]);
         setMembersWorkspaceId('');
-        if(error.status===403||error.status===404)loadWorkspaces(auth);
+        if(error.status===403||error.status===404){
+          setStorageScope(STORAGE_LOCAL);
+          setNotice('You no longer have access to this workspace');
+          loadWorkspaces(auth);
+        }
       });
     },
   });
@@ -785,7 +812,7 @@ export function useWorkbenchController() {
     canAssignRoles, expandedMemberAccess, editingMemberId, editingMemberRoles, doAction, setNewWs, loadWorkspaces,
     setNewCollection, setCollections, setSelectedCol, setSavedRequests, setShowMemberAdd, setInviteOpen, setNewMember, setNewMemberRoles, setMembers, inviteMember,
     setInviteEmail, setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess, setEditingMemberId,
-    setEditingMemberRoles, selectedWorkspaceRef, currentTokenRef, CommandPalette, commandIndex, commandOpen, commandQuery,
+    setEditingMemberRoles, removeWorkspaceMember, selectedWorkspaceRef, currentTokenRef, CommandPalette, commandIndex, commandOpen, commandQuery,
     visibleCommandItems, notice, undoLocalDelete, undoDeletedLocalRequest, setUndoLocalDelete, createPortal, CollectionDialogs, ArrowDownToLine, Braces, CollectionVariablesEditor,
     Dialog, DocumentationEditor, FileJson, applyCollectionVariableSession, canWorkspace, collectionTargetKey, collectionVariablesBusy,
     collectionVariablesData, collectionVariablesError, collectionVariablesFetchId, collectionVariablesLoading, collectionVariablesTarget, confirmExport, docBusy,

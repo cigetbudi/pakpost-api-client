@@ -247,6 +247,8 @@ sealed class FakeWorkspaces(Guid workspaceId,Guid userId,WorkspaceRole role,Work
     {
         throw new NotSupportedException("Security test fake does not support workspace deletion.");
     }
+    public Task<int> DeleteMemberAsync(Guid workspaceId, Guid userId, CancellationToken ct)
+        => throw new NotSupportedException();
     public void Add(Workspace value){}
     public void AddMember(WorkspaceMember value){}
 }
