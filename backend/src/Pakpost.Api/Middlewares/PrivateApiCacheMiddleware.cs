@@ -8,6 +8,9 @@ public sealed class PrivateApiCacheMiddleware(RequestDelegate next)
 
         if (path.StartsWithSegments("/api/workspaces") ||
             path.StartsWithSegments("/api/auth") ||
+            path.StartsWithSegments("/api/desktop-auth") ||
+            path.StartsWithSegments("/api/proxy") ||
+            path.StartsWithSegments("/hubs/workspace") ||
             path.StartsWithSegments("/api/invitations") ||
             path.StartsWithSegments("/api/admin"))
         {

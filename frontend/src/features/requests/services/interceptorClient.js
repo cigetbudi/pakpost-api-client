@@ -110,7 +110,7 @@ export async function sendBrowserRequest(command,{signal}={}){
   const abort=()=>controller.abort(signal?.reason);
   if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
   const timeout=setTimeout(()=>controller.abort(),20000);
-  try{const start=performance.now();const response=await fetch(url,init);const headersMs=Math.round(performance.now()-start);const decoded=await decodeBrowserResponse(response,headersMs);const totalMs=Math.round(performance.now()-start);return {...decoded,timing:{headersMs,bodyMs:Math.max(0,totalMs-headersMs),totalMs}}}
+  try{const start=performance.now();const response=await fetch(url,init);const headersMs=Math.round(performance.now()-start);const decoded=await decodeBrowserResponse(response,headersMs);const totalMs=Math.round(performance.now()-start);return {...decoded,elapsedMs:totalMs,timing:{headersMs,bodyMs:Math.max(0,totalMs-headersMs),totalMs}}}
   catch(error){throw Error(`Browser request failed (${error.message}). Check CORS or use the Browser Extension interceptor.`)}
   finally{clearTimeout(timeout);signal?.removeEventListener('abort',abort)}
 }

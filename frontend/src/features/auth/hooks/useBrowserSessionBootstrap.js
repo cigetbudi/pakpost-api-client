@@ -1,6 +1,6 @@
 import { isTauriDesktop } from '../../collections/services/desktopLocalRepository.js';
 import { useEffect } from 'react';
-import { BROWSER_SESSION, getBrowserCsrf, setBrowserCsrf } from '../../../services/httpClient.js';
+import { BROWSER_SESSION, getBrowserCsrf, setBrowserCsrf, getDesktopContext, setDesktopContext } from '../../../services/httpClient.js';
 import { createAuthTabSync } from '../services/authTabSync.js';
 import { readWorkspaceViewPreference } from '../../workspace/services/workspaceViewPreference.js';
 
@@ -24,24 +24,34 @@ export function useBrowserSessionBootstrap({
         if(!mounted||checking)return;
         checking=true;const epoch=authEpochRef.current;
         const current=()=>mounted&&epoch===authEpochRef.current;
-        async function expire(invoke){
+        function expire(){
           if(!current())return;
+          setDesktopContext(null);
           window.__PAKPOST_DESKTOP_REMOTE__=false;
           if(currentTokenRef.current)performLogout(false);
-          // Remove expired native credentials as well. Local data stays untouched.
-          try{await invoke('disconnect_remote');}catch{}
+          // Rust already evicts a rejected lease. Do not disconnect a newer session.
         }
         try {
           const {invoke}=await import('@tauri-apps/api/core');
-          const connected=await invoke('desktop_remote_status');
+          let connected=await invoke('desktop_remote_status');
+          if(!connected&&current()&&!currentTokenRef.current)connected=await invoke('restore_remote_session');
           if(!current())return;
-          if(!connected){if(currentTokenRef.current)await expire(invoke);return;}
+          if(!connected){expire();return;}
+          const context=await invoke('desktop_remote_context');
+          if(!current())return;
+          const prior=getDesktopContext();
+          if(prior && (prior.generation!==context.generation || prior.origin!==context.origin || prior.profileId!==context.profileId)){
+            setDesktopContext(null);window.__PAKPOST_DESKTOP_REMOTE__=false;
+            window.location.reload();return;
+          }
+          if(!prior)setDesktopContext(context);
           window.__PAKPOST_DESKTOP_REMOTE__=true;
           let result;
           try{result=await api('/api/auth/session','GET');}
-          catch(e){if(e?.status===401)await expire(invoke);return;}
+          catch(e){if(e?.status===401)expire();return;}
           if(!current())return;
-          if(!result?.authenticated||!result.user){await expire(invoke);return;}
+          if(result?.authenticated===false){expire();return;}
+          if(!result?.authenticated||!result.user)return; // Malformed/network response is not proof of logout.
           if(currentTokenRef.current===BROWSER_SESSION&&currentUserRef.current?.id===result.user.id)return;
           if(currentTokenRef.current&&currentUserRef.current?.id&&currentUserRef.current.id!==result.user.id)performLogout(false);
           currentTokenRef.current=BROWSER_SESSION;

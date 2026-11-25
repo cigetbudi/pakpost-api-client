@@ -50,7 +50,7 @@ public sealed class BrowserSessionSecurityMiddleware(
     internal static bool IsTrustedOrigin(string origin, HttpRequest request, IConfiguration configuration)
     {
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
-            uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) ||
+            uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) ||
             !string.IsNullOrEmpty(uri.Fragment) || uri.Scheme is not ("http" or "https")) return false;
         var normalized = uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
         var own = $"{request.Scheme}://{request.Host}".TrimEnd('/');

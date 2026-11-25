@@ -25,6 +25,25 @@ export function collectBundleMetrics(distDir) {
     const path=tag.match(/\b(?:src|href)=["']([^"']+)["']/i)?.[1];
     if(path)initialUrls.add(path.split('?')[0].replace(/^\//,''));
   }
+  // Walk static imports transitively. Dynamic imports are deliberately excluded.
+  const manifestPath=join(distDir,'.vite','manifest.json');
+  const editorUrls=new Set();
+  if(existsSync(manifestPath)){
+    const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
+    const addStatic=(key,urls,seen)=>{
+      if(seen.has(key))return;
+      seen.add(key);
+      const chunk=manifest[key];
+      if(!chunk)throw Error(`Missing manifest import: ${key}`);
+      if(chunk.file)urls.add(chunk.file);
+      for(const css of chunk.css||[])urls.add(css);
+      for(const dependency of chunk.imports||[])addStatic(dependency,urls,seen);
+    };
+    const entries=Object.keys(manifest).filter(key=>manifest[key].isEntry);
+    if(!entries.length)throw Error('No entry found in Vite manifest');
+    for(const key of entries)addStatic(key,initialUrls,new Set());
+    for(const key of Object.keys(manifest).filter(key=>/(?:^|\/)Editors\.jsx$/.test(key)))addStatic(key,editorUrls,new Set());
+  }
   const initial=files.filter(f=>initialUrls.has(f.name));
   const js=files.filter(f=>f.name.endsWith('.js'));
   const css=files.filter(f=>f.name.endsWith('.css'));
@@ -36,7 +55,8 @@ export function collectBundleMetrics(distDir) {
     allJsGzipBytes:sum(js,'gzipBytes'),
     allCssGzipBytes:sum(css,'gzipBytes'),
     consoleChunkGzipBytes:sum(js.filter(f=>/PakpostConsole/i.test(f.name)),'gzipBytes'),
-    editorChunkGzipBytes:sum(js.filter(f=>/(?:^|\/)Editors-[^/]+\.js$/i.test(f.name)),'gzipBytes'),
+    editorChunkGzipBytes:sum(js.filter(f=>!initialUrls.has(f.name)&&(editorUrls.has(f.name)||/(?:^|\/)Editors-[^/]+\.js$/i.test(f.name))),'gzipBytes'),
+    largestJsChunks:js.slice().sort((a,b)=>b.bytes-a.bytes).slice(0,5),
     toolsChunkGzipBytes:sum(js.filter(f=>/(?:^|\/)WorkbenchSidebars-[^/]+\.js$/i.test(f.name)),'gzipBytes'),
     initialAssets:initial.map(f=>f.name),
     jsFiles:js.length,
@@ -66,6 +86,7 @@ export function reportBundleMetrics(metrics,baseline=null){
     `  Console chunk:    ${KiB(metrics.consoleChunkGzipBytes)} (loads on demand)`,
     `  Editor chunk:     ${KiB(metrics.editorChunkGzipBytes||0)} (loads on Body / Scripts / Response)`,
     `  Tools chunk:      ${KiB(metrics.toolsChunkGzipBytes||0)} (loads on Code / Import-Export)`,
+    ...(metrics.largestJsChunks||[]).map(f=>`  Chunk: ${f.name} — ${KiB(f.bytes)} raw / ${KiB(f.gzipBytes)} gzip`),
     `  Entry assets:     ${metrics.initialAssets.join(', ')||'not detected'}`
   ];
   if(metrics.initialJsGzipBytes>300*1024)lines.push('  NOTE: Initial JS exceeds the provisional 300 KiB target. Profile before adjusting the budget.');

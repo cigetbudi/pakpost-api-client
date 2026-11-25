@@ -29,7 +29,8 @@ internal static class ProxyAddressPolicy
             if((b[0]&0xe0)!=0x20 || ip.IsIPv6LinkLocal || ip.IsIPv6Multicast || ip.IsIPv6SiteLocal)
                 return false;
             if(b[0]==0x20 && b[1]==0x02) return false; // 2002::/16 6to4 (embedded IPv4)
-            if(b[0]==0x20 && b[1]==0x01 && b[2]==0x00 && b[3]==0x00) return false; // 2001::/32 Teredo
+            if(b[0]==0x20 && b[1]==0x01 && b[2]<0x02) return false; // 2001::/23 special-purpose (incl. Teredo)
+            if(b[0]==0x3f && b[1]==0xff && (b[2]&0xf0)==0) return false; // 3fff::/20 documentation
             if(b[0]==0x20 && b[1]==0x01 && b[2]==0x0d && b[3]==0xb8) return false; // documentation
             return true;
         }

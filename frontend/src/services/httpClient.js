@@ -4,6 +4,10 @@
 // session credentials live exclusively in HttpOnly cookies, not JavaScript.
 export const BROWSER_SESSION = 'pakpost:cookie-session';
 let csrfProof = '';
+// Only non-secret routing metadata. The actual opaque credential stays in Rust.
+let desktopContext = null;
+export function setDesktopContext(value) { desktopContext = value || null; }
+export function getDesktopContext() { return desktopContext; }
 export function setBrowserCsrf(proof) { csrfProof = typeof proof === 'string' ? proof : ''; }
 export function getBrowserCsrf() { return csrfProof; }
 
@@ -22,13 +26,17 @@ export async function api(path, method = 'GET', body, token = '', {signal} = {})
     }
     // All authenticated API requests are made by Rust to the selected HTTPS
     // origin. The opaque session token never enters the JS or WebView runtime.
+    const context = desktopContext;
+    if (!context) throw new Error('Desktop session is not connected. Sign in again.');
     let result;
     try {
       const {invoke} = await import('@tauri-apps/api/core');
-      result = await invoke('remote_api', {path, method, body: body === undefined ? null : body});
+      result = await invoke('remote_api', {context, path, method, body: body === undefined ? null : body});
     } catch (reason) {
       throw new Error(String(reason));
     }
+    if (context !== desktopContext) throw new Error('Remote connection changed');
+    if (result.status === 401) window.dispatchEvent(new Event('pakpost:desktop-session-expired'));
     if (result.status < 200 || result.status >= 300) {
       const data=result.data;
       const message=data?.message || data?.detail || data?.title || `HTTP ${result.status}`;

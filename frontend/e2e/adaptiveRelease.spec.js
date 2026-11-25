@@ -45,3 +45,21 @@ for (const theme of ['light', 'dark', 'oled']) {
     }
   });
 }
+
+test('header controls fit their contents without a trailing gap', async ({page}) => {
+  await page.goto('/');
+  for (const width of [1920, 1440, 1280, 1024, 800, 760, 390, 320]) {
+    await page.setViewportSize({width,height:900});
+    const group = page.locator('.pp-unified-storage-top');
+    const manage = group.getByTitle('Manage environments');
+    await expect(manage).toBeVisible();
+    await expect(group.getByRole('combobox', {name:'Active environment'})).toBeVisible();
+    await expect(page.locator('.pp-top-search')).toBeVisible();
+    const box = await group.boundingBox();
+    const button = await manage.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x+box.width).toBeLessThanOrEqual(width+1);
+    expect(box.x+box.width-button.x-button.width).toBeLessThanOrEqual(12);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1)).toBe(true);
+  }
+});

@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {selectJsonPath,compareJsonResponses} from '../../features/requests/services/responseAnalysis.js';
+import {selectJsonPath,compareJsonResponses,parseAnalysisJson} from '../../features/requests/services/responseAnalysis.js';
 import '../../styles/features/response-analysis.css';
 export function ResponseAnalysis({result,variableUi}){
   const [path,setPath]=useState('$');const [output,setOutput]=useState(null);
@@ -9,7 +9,8 @@ export function ResponseAnalysis({result,variableUi}){
   const valid=result&&!result.error&&!result.truncated&&!result.isBinary;
   const currentOutput=output?.result===result?output.values:null;
   const currentDiff=diff?.result===result?diff.changes:null;
-  const format=value=>JSON.stringify(value,null,2);
+  const format=value=>{const compact=JSON.stringify(value);return compact.length>100000?compact:JSON.stringify(value,null,2);};
+  async function copy(value){setError('');setNotice('');try{await navigator.clipboard.writeText(format(value));setNotice('Copied to clipboard.');}catch{setError('Clipboard unavailable. Select and copy the output manually.');}}
   function filter(){setError('');setOutput(null);try{if(!valid)throw Error('A complete JSON response is required.');setOutput({result,values:selectJsonPath(result.body,path)});}catch(e){setError(e.message);}}
   function compare(){setError('');setDiff(null);try{if(!valid||baseline===null)throw Error('Capture a baseline first.');setDiff({result,changes:compareJsonResponses(baseline,result.body)});}catch(e){setError(e.message);}}
   async function save(){
@@ -24,10 +25,11 @@ export function ResponseAnalysis({result,variableUi}){
   return <div className="pp-response-analysis">
     {valid&&<div><strong>Request timing</strong><p>{result.timing?`Headers: ${result.timing.headersMs} ms · Body read: ${result.timing.bodyMs} ms · Total: ${result.timing.totalMs} ms`:`Reported duration: ${result.elapsedMs??'Unavailable'} ms`}</p><small>DNS, TCP and TLS timings are not exposed by all transports. Headers time is not a raw TTFB measurement.</small></div>}
     <div className="pp-analysis-actions"><label>JSONPath <input value={path} maxLength={512} onChange={e=>{setPath(e.target.value);setOutput(null);}} placeholder="$.data[*].name"/></label><button disabled={!valid} onClick={filter}>Filter</button></div>
-    <small>Supports $.key, [0], [*], .*, ["key"]. No script expressions.</small>
-    {currentOutput&&<><pre>{format(currentOutput)}</pre><div className="pp-analysis-actions"><label>Save as variable<input value={key} onChange={e=>setKey(e.target.value)} placeholder="variableName"/></label><button disabled={saving||!currentOutput.length||!variableUi?.onEditVariable} onClick={save}>{saving?'Saving…':'Save variable'}</button></div><small>{variableUi?.source||'Select an environment first.'}</small></>}
-    <div className="pp-analysis-actions"><button disabled={!valid} onClick={()=>{setError('');try{JSON.parse(result.body);setBaseline(result.body);setDiff(null);}catch{setError('Baseline must be JSON.');}}}>Capture baseline</button><button disabled={!valid||baseline===null} onClick={compare}>Compare latest</button><button disabled={baseline===null} onClick={()=>{setBaseline(null);setDiff(null);}}>Clear baseline</button><small>{baseline!==null?'Baseline captured in this tab':'No baseline'}</small></div>
-    {currentDiff&&<><strong>{currentDiff.length} changes</strong>{currentDiff.map(change=><div className="pp-analysis-change" key={change.path}><strong>{change.kind} · {change.path}</strong><div>{Object.hasOwn(change,'before')&&<pre className="before">{format(change.before)}</pre>}{Object.hasOwn(change,'after')&&<pre className="after">{format(change.after)}</pre>}</div></div>)}</>}
+    <small>Supports keys, negative indexes, wildcards, unions, slices, recursive descent and simple filters (no script expressions).</small>
+    <div className="pp-analysis-actions">{['$.data[*]','$..id','$.data[-1]','$.data[0:3]','$.data[?(@.active == true)]'].map(example=><button type="button" key={example} onClick={()=>{setPath(example);setOutput(null);setError('');}}>{example}</button>)}</div>
+    {currentOutput&&<><div className="pp-analysis-actions"><small>{currentOutput.length} matches</small><button onClick={()=>copy(currentOutput)}>Copy result</button></div><pre>{format(currentOutput)}</pre><div className="pp-analysis-actions"><label>Save as variable<input value={key} onChange={e=>setKey(e.target.value)} placeholder="variableName"/></label><button disabled={saving||!currentOutput.length||!variableUi?.onEditVariable} onClick={save}>{saving?'Saving…':'Save variable'}</button></div><small>{variableUi?.source||'Select an environment first.'}</small></>}
+    <div className="pp-analysis-actions"><button disabled={!valid} onClick={()=>{setError('');try{parseAnalysisJson(result.body);setBaseline(result.body);setDiff(null);}catch{setError('Baseline must be valid JSON within the analysis limits.');}}}>Capture baseline</button><button disabled={!valid||baseline===null} onClick={compare}>Compare latest</button><button disabled={baseline===null} onClick={()=>{setBaseline(null);setDiff(null);}}>Clear baseline</button><small>{baseline!==null?'Baseline captured in this tab':'No baseline'}</small></div>
+    {currentDiff&&<><div className="pp-analysis-actions"><strong>{currentDiff.length} changes</strong><button onClick={()=>copy(currentDiff)}>Copy diff</button></div>{currentDiff.map(change=><div className="pp-analysis-change" key={change.path}><strong>{change.kind} · {change.path}</strong><div>{Object.hasOwn(change,'before')&&<pre className="before">{format(change.before)}</pre>}{Object.hasOwn(change,'after')&&<pre className="after">{format(change.after)}</pre>}</div></div>)}</>}
     {error&&<p role="alert" className="form-error">{error}</p>}{notice&&<p role="status">{notice}</p>}
   </div>;
 }

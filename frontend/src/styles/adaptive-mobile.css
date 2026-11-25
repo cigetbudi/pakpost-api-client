@@ -7,6 +7,15 @@
     display:block;position:absolute;inset:0 var(--aw-right) 0 0;
     z-index:19;background:rgba(0,0,0,.32);border:0;border-radius:0;
   }
+  /* Desktop places the explorer in grid column 4. The mobile grid has only
+     three tracks: reset the absolute grid containing block to the full frame. */
+  .pp-adaptive-workbench .pp-main-frame.pp-view-tester>.pp-explorer:not(.unused) {
+    grid-area:auto!important;
+    left:auto!important;right:var(--aw-right)!important;
+    top:0!important;bottom:0!important;
+    display:flex!important;visibility:visible;opacity:1;
+    z-index:20;
+  }
   .pp-adaptive-workbench .pp-context-rail {z-index:21;}
   .pp-adaptive-workbench .pp-context-resizer {display:none;}
   /* Override the legacy rule that hides Save as on smaller windows. */
@@ -52,6 +61,15 @@
   .pp-adaptive-workbench .pp-aw-mobile-pane-switch>button {flex:1;min-width:0;min-height:34px;font-size:12px;font-weight:650;border-radius:5px;color:var(--muted);}
   .pp-adaptive-workbench .pp-aw-mobile-pane-switch>button[aria-pressed=true] {background:var(--accent-soft);color:var(--text);}
   .pp-adaptive-workbench .pp-aw-mobile-pane-switch>button:focus-visible {outline:2px solid var(--accent);outline-offset:-2px;}
+  /* The mobile switch is a single-pane view. Expanded is the default
+     desktop mode, but maps to Request on narrow screens. */
+  .pp-adaptive-workbench .pp-panes:is(.pp-response-expanded,.pp-response-collapsed,.pp-response-maximized) {
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-template-rows:minmax(0,1fr)!important;
+  }
+  .pp-adaptive-workbench .pp-panes>.pp-splitter,
+  .pp-adaptive-workbench .pp-panes:not(.pp-response-maximized)>.pp-response-pane,
+  .pp-adaptive-workbench .pp-panes.pp-response-maximized>.pp-request-pane {display:none!important;}
   .pp-adaptive-workbench .pp-panes .pp-pane-heading {padding-inline:8px;gap:4px;}
   .pp-adaptive-workbench .pp-pane-title {white-space:nowrap;}
   .pp-adaptive-workbench .pp-panel-tabs {overscroll-behavior-x:contain;}
@@ -80,4 +98,61 @@
 @media (max-height:520px) {
   .pp-app.pp-adaptive-workbench {min-height:0;}
   .pp-adaptive-workbench .pp-aw-runner-dock,.pp-adaptive-workbench>.pp-console-drawer {max-height:32dvh;}
+}
+
+/* Desktop header: keep the context group compact rather than stretching it
+   across the entire right-hand grid track. Mobile retains its two-row layout. */
+@media (min-width:761px) {
+  .pp-adaptive-workbench .pp-top {
+    grid-template-columns:minmax(100px,1fr) minmax(120px,1fr) max-content;
+    column-gap:12px;
+  }
+  .pp-adaptive-workbench .pp-top>.pp-top-search {max-width:360px;}
+  .pp-adaptive-workbench .pp-top>.pp-top-right {
+    width:max-content;max-width:100%;justify-self:end;gap:8px;
+  }
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top {
+    flex:0 0 auto;width:max-content;gap:5px;padding:2px 5px;
+    min-height:34px;overflow:visible;border-radius:7px;
+  }
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-scope {
+    flex:0 1 126px;width:126px;min-width:104px;max-width:126px;
+  }
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-environment {
+    flex:0 1 156px;width:156px;min-width:100px;max-width:156px;
+  }
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-workspace-indicator {
+    display:block;flex:0 1 auto;max-width:120px;min-width:0;
+    padding:4px 7px;line-height:18px;
+  }
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>span:first-child {display:block;padding-left:2px;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-env-label {padding-left:8px;margin-left:1px;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-env-local {color:var(--text2);padding:0 5px;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>button {
+    display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;padding:0;border-radius:5px;
+  }
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>button:hover {background:var(--hover);color:var(--accent);}
+  .pp-adaptive-workbench .pp-top .pp-select-trigger {height:28px;min-height:28px;gap:5px;padding-inline:5px;}
+  .pp-adaptive-workbench .pp-top .pp-select-chevron,.pp-adaptive-workbench .pp-top-search>svg {flex:none;}
+  .pp-adaptive-workbench .pp-top .pp-select-trigger:focus-visible {outline-offset:-2px;}
+  .pp-adaptive-workbench .pp-top :is(.pp-profile,.pp-signin,.pp-top-search) {height:34px;min-height:34px;}
+  .pp-adaptive-workbench .pp-top .pp-profile {width:auto;max-width:165px;padding-inline:8px;gap:7px;}
+  .pp-adaptive-workbench .pp-top .pp-profile-name {min-width:0;overflow:hidden;text-overflow:ellipsis;}
+}
+/* Enough space for an exactly centered search without stretching the controls. */
+@media (min-width:1900px) {
+  .pp-adaptive-workbench .pp-top {grid-template-columns:minmax(0,1fr) minmax(180px,360px) minmax(0,1fr);}
+}
+@media (min-width:761px) and (max-width:1150px) {
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-workspace-indicator,
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>span:first-child {display:none;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-env-local {display:block;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-environment {width:136px;flex-basis:136px;}
+  .pp-adaptive-workbench .pp-top>.pp-top-search kbd {display:none;}
+}
+@media (min-width:761px) and (max-width:960px) {
+  .pp-adaptive-workbench .pp-top {column-gap:8px;}
+  .pp-adaptive-workbench .pp-top .pp-profile {width:42px;justify-content:center;padding:4px;}
+  .pp-adaptive-workbench .pp-top .pp-profile :is(.pp-profile-name,svg) {display:none;}
+  .pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>.pp-top-env-label {display:none;}
 }

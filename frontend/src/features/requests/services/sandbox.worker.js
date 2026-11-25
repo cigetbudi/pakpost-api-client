@@ -1,3 +1,4 @@
+import {parseScriptOutput,validateScriptInput,SANDBOX_LIMITS} from './sandboxLimits.js';
 import {scriptDiagnostic, formatScriptDiagnostic} from './scriptDiagnostics.js';
 import {newQuickJSWASMModuleFromVariant} from 'quickjs-emscripten-core';
 import releaseVariant from '@jitl/quickjs-singlefile-browser-release-sync';
@@ -7,6 +8,7 @@ self.onmessage = async ({data}) => {
   let runtime, vm;
   let sourceStartLine=1;
   try {
+    validateScriptInput({code,phase,variables,collectionVariables,localVariables,request,response,iterationData,iterationInfo});
     const QuickJS = await newQuickJSWASMModuleFromVariant(releaseVariant);
     runtime = QuickJS.newRuntime();
     runtime.setMemoryLimit(48 * 1024 * 1024);
@@ -31,14 +33,16 @@ self.onmessage = async ({data}) => {
     // Code executes inside QuickJS, not the JS worker's host/global context.
     const prefix=String.raw`(function(){
       'use strict';
-      const input=${initial};
-      const __environment={...input.variables};
-      const __collection={...(input.collectionVariables||{})};
-      const __local={...input.localVariables};
+      const input=JSON.parse(${JSON.stringify(initial)});
+      const __environment=Object.assign(Object.create(null),input.variables||{});
+      const __collection=Object.assign(Object.create(null),input.collectionVariables||{});
+      const __local=Object.assign(Object.create(null),input.localVariables||{});
       const __data=Object.assign(Object.create(null),input.iterationData||{});
       const __logs=[]; const __tests=[];
-      const __request=input.request ? {...input.request,headers:{...(input.request.headers||{})}} : null;
-      const __headerOverrides={};
+      const __record=(list,value)=>{if(list.length>=${SANDBOX_LIMITS.records})throw Error('Script record limit exceeded');list.push(value)};
+      const __line=value=>String(value).slice(0,${SANDBOX_LIMITS.line});
+      const __request=input.request ? {...input.request,headers:Object.assign(Object.create(null),input.request.headers||{})} : null;
+      const __headerOverrides=Object.create(null);
       const __has=(o,k)=>Object.prototype.hasOwnProperty.call(o,String(k));
       const __allVars=()=>({...__collection,...__environment,...__data,...__local});
       const __get=(key)=>__has(__local,key)?__local[String(key)]:__has(__data,key)?__data[String(key)]:__has(__environment,key)?__environment[String(key)]:__collection[String(key)];
@@ -70,7 +74,7 @@ self.onmessage = async ({data}) => {
         },
         add:({key,value})=>__headerMethods.upsert({key,value})
       };
-      if(__request)__request.headers=Object.assign(__headerMethods,__request.headers);
+      if(__request)__request.headers=Object.assign(__request.headers,__headerMethods);
       const __status=input.response?.statusCode;
       const pm={
         iterationData:{get:k=>__data[String(k)],has:k=>__has(__data,k),toObject:()=>({...__data})},
@@ -103,21 +107,42 @@ self.onmessage = async ({data}) => {
           headers:{...(input.response.headers||{}),get:k=>Object.entries(input.response.headers||{}).find(([name])=>name.toLowerCase()===String(k).toLowerCase())?.[1],has:k=>Object.keys(input.response.headers||{}).some(name=>name.toLowerCase()===String(k).toLowerCase())},
           to:{have:{status:(n)=>{if(__status!==n)throw Error('Expected status '+n+', received '+__status)}}}
         }:null,
-        test:(name,fn)=>{try{fn();__tests.push({name:String(name),passed:true})}catch(e){__tests.push({name:String(name),passed:false,error:String(e&&e.message||e)})}},
-        expect:(actual)=>({to:{
-          equal:(expected)=>{if(actual!==expected)throw Error('Expected '+JSON.stringify(expected)+' but received '+JSON.stringify(actual))},
-          have:{property:(name)=>{if(actual==null||!Object.prototype.hasOwnProperty.call(actual,name))throw Error('Expected property: '+name)}},
-          be:{
-            true:()=>{if(actual!==true)throw Error('Expected true')},
-            false:()=>{if(actual!==false)throw Error('Expected false')},
-            get null(){if(actual!==null)throw Error('Expected null but received '+JSON.stringify(actual));return true},
-            get undefined(){if(actual!==undefined)throw Error('Expected undefined but received '+JSON.stringify(actual));return true}
-          },
-          not:{be:{
-            get null(){if(actual===null)throw Error('Expected value not to be null');return true},
-            get undefined(){if(actual===undefined)throw Error('Expected value not to be undefined');return true}
-          }}
-        }}),
+        test:(name,fn)=>{try{fn();__record(__tests,{name:__line(name),passed:true})}catch(e){__record(__tests,{name:__line(name),passed:false,error:__line(e&&e.message||e)})}},
+        expect:(actual)=>{
+          const equalDeep=(a,b)=>{
+            if(a===b)return true;
+            if(a===null||b===null||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
+            const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(k=>__has(b,k)&&equalDeep(a[k],b[k]));
+          };
+          const chain=(value,negated=false,deep=false)=>{
+            const check=(pass,message)=>{if(negated?pass:!pass)throw Error((negated?'Unexpected: ':'Expected: ')+message);return chain(value)};
+            const same=(a,b)=>deep?equalDeep(a,b):a===b;
+            const property=(key,...expected)=>{
+              const exists=value!=null&&__has(Object(value),key);
+              check(exists&&(!expected.length||same(value[key],expected[0])),'property '+key);
+              return chain(exists?value[key]:undefined);
+            };
+            const lengthOf=n=>check(value!=null&&typeof value.length==='number'&&value.length===n,'length '+n);
+            const typeOf=t=>check(t==='array'?Array.isArray(value):t==='null'?value===null:t==='object'?value!==null&&typeof value==='object'&&!Array.isArray(value):typeof value===t,'type '+t);
+            const range=(n,op)=>check(typeof value==='number'&&typeof n==='number'&&op(value,n),'numeric comparison');
+            const api={
+              get not(){return chain(value,!negated,deep)},get deep(){return chain(value,negated,true)},
+              equal:n=>check(same(value,n),'equal value'),eql:n=>check(equalDeep(value,n),'deep equal value'),
+              property,lengthOf,length:lengthOf,a:typeOf,an:typeOf,
+              include:n=>check(typeof value==='string'?typeof n==='string'&&value.includes(n):Array.isArray(value)?value.some(x=>same(x,n)):value!==null&&typeof value==='object'&&n!==null&&typeof n==='object'&&!Array.isArray(n)?Object.keys(n).every(k=>__has(value,k)&&same(value[k],n[k])):false,'included value'),
+              match:re=>check(typeof value==='string'&&re instanceof RegExp&&re.test(value),'matching pattern'),
+              above:n=>range(n,(a,b)=>a>b),below:n=>range(n,(a,b)=>a<b),least:n=>range(n,(a,b)=>a>=b),most:n=>range(n,(a,b)=>a<=b),
+              within:(lo,hi)=>check(typeof value==='number'&&typeof lo==='number'&&typeof hi==='number'&&value>=lo&&value<=hi,'value within range'),
+              get true(){return check(value===true,'true')},get false(){return check(value===false,'false')},
+              get null(){return check(value===null,'null')},get undefined(){return check(value===undefined,'undefined')},
+              get ok(){return check(Boolean(value),'truthy value')},get exist(){return check(value!=null,'existing value')},
+              get empty(){return check(typeof value==='string'||Array.isArray(value)?value.length===0:value!==null&&typeof value==='object'&&Object.keys(value).length===0,'empty value')}
+            };
+            for(const word of ['to','be','been','is','that','which','and','has','have','with','at','of','same'])Object.defineProperty(api,word,{get:()=>api});
+            return api;
+          };
+          return chain(actual);
+        },
         require:(name)=>require(name)
       };
       const require=(name)=>{
@@ -129,16 +154,16 @@ self.onmessage = async ({data}) => {
         throw Error('Package not available in Pakpost: '+name);
       };
       const console={
-        log:(...args)=>__logs.push(args.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ')),
-        warn:(...args)=>__logs.push('WARN: '+args.join(' ')),
-        error:(...args)=>__logs.push('ERROR: '+args.join(' '))
+        log:(...args)=>__record(__logs,__line(args.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' '))),
+        warn:(...args)=>__record(__logs,__line('WARN: '+args.join(' '))),
+        error:(...args)=>__record(__logs,__line('ERROR: '+args.join(' ')))
       };
       let __scriptError=null;
       try{(function(){
 `;
     sourceStartLine=prefix.split('\n').length;
     const suffix=String.raw`
-})();}catch(e){__scriptError={name:String(e?.name||'Error'),message:String(e?.message||e),stack:String(e?.stack||'')}}
+})();}catch(e){__scriptError={name:__line(e?.name||'Error'),message:__line(e?.message||e),stack:__line(e?.stack||'')}}
       return JSON.stringify({
         variables:__allVars(),
         environmentVariables:__environment,
@@ -156,8 +181,12 @@ self.onmessage = async ({data}) => {
       self.postMessage({id,ok:true,data:{logs:[],tests:[],error:formatScriptDiagnostic(diagnostic),diagnostic}});
       return;
     }
-    const output=vm.dump(result.value);result.value.dispose();
-    const data=JSON.parse(output);
+    let output;
+    try {
+      if(vm.typeof(result.value)!=='string')throw new Error('Invalid script output.');
+      output=vm.getString(result.value);
+    } finally {result.value.dispose();}
+    const data=parseScriptOutput(output);
     if(data.scriptFault){
       data.diagnostic=scriptDiagnostic(data.scriptFault,{phase,code,sourceStartLine});
       data.error=formatScriptDiagnostic(data.diagnostic);

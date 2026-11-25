@@ -1,3 +1,4 @@
+mod credential_vault;
 mod database;
 mod http;
 mod profiles;
@@ -6,11 +7,22 @@ mod remote;
 pub fn run() {
     tauri::Builder::default()
         .manage(remote::RemoteState::default())
+        .manage(remote::socket::HubSockets::default())
         .manage(http::NativeCancellation::default())
         .invoke_handler(tauri::generate_handler![
             remote::begin_remote_sign_in,
             remote::poll_remote_sign_in,
             remote::desktop_remote_status,
+            remote::restore_remote_session,
+            remote::remember_remote_session,
+            remote::forget_remote_session,
+            remote::desktop_remembered_status,
+            remote::desktop_remote_context,
+            remote::cancel_remote_sign_in,
+            remote::remote_hub_http,
+            remote::socket::open_hub_socket,
+            remote::socket::send_hub_socket,
+            remote::socket::close_hub_socket,
             remote::remote_api,
             remote::disconnect_remote,
             database::load_local_collections,

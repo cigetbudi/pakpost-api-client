@@ -1,5 +1,5 @@
 /** Server-revoked logout; keep credential invalidation before reading cached drafts. */
-import {setBrowserCsrf} from '../../../services/httpClient.js';
+import {setBrowserCsrf,setDesktopContext} from '../../../services/httpClient.js';
 import {invalidateBrowserSession,planSignedOutWorkbench} from '../services/logoutWorkbench.js';
 import {clearWorkbenchCache} from '../../workspace/services/workspaceCache.js';
 import {clearWorkspaceCollectionDocs} from '../../collections/services/documentationStore.js';
@@ -19,7 +19,8 @@ export function createWorkbenchLogoutActions({
     try {
       await api('/api/auth/logout','POST',{},currentTokenRef.current);
       if(window.__TAURI_INTERNALS__ && window.__PAKPOST_DESKTOP_REMOTE__){
-        try{const {invoke}=await import('@tauri-apps/api/core');await invoke('disconnect_remote');}catch{}
+        // The successful native logout already invalidated its own lease.
+        setDesktopContext(null);
         window.__PAKPOST_DESKTOP_REMOTE__=false;
       }
       performLogout(true);
@@ -33,6 +34,7 @@ export function createWorkbenchLogoutActions({
   function performLogout(broadcast) {
     authEpochRef.current += 1;
     if(broadcast)authTabSyncRef.current?.announceLogout();
+    if(typeof window!=='undefined' && window.__TAURI_INTERNALS__){setDesktopContext(null);window.__PAKPOST_DESKTOP_REMOTE__=false;}
     setBrowserCsrf('');
     // Auth invalidation must happen BEFORE reading any cached draft: missing
     // Local snapshots previously threw inside restoreDraft and aborted logout.

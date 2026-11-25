@@ -14,7 +14,8 @@ test('JSONPath supports keys, index, wildcard and quoted keys without evaluation
   assert.deepEqual(selectJsonPath(body,'$["a.b"]'),[3]);
   assert.deepEqual(selectJsonPath(body,'$.missing'),[]);
   assert.deepEqual(selectJsonPath('{}','$.constructor'),[]);
-  assert.throws(()=>selectJsonPath(body,'$.data[?(@.name)]'),/Supported/);
+  assert.deepEqual(selectJsonPath(body,'$.data[?(@.name)].name'),['A','B']);
+  assert.throws(()=>selectJsonPath(body,'$.data[?(@.name.toString())]'),/Supported/);
   assert.throws(()=>selectJsonPath(JSON.stringify(Array(1001).fill(0)),'$[*]'),/Too many/);
 });
 test('JSON diff is structural and distinguishes missing from null',()=>{
