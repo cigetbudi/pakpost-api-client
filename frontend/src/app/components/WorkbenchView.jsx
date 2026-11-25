@@ -58,7 +58,7 @@ export function WorkbenchView({ model }) {
     setSelectedCol, setSavedRequests,
     setShowMemberAdd, setInviteOpen, setNewMember, setNewMemberRoles, setMembers, inviteMember,
     setInviteEmail, setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess,
-    setEditingMemberId, setEditingMemberRoles, selectedWorkspaceRef, currentTokenRef,
+    setEditingMemberId, setEditingMemberRoles, removeWorkspaceMember, selectedWorkspaceRef, currentTokenRef,
   } = model;
   const [responseMode, setResponseMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'collapsed' : 'expanded');
   const preferences=useWorkbenchPreferences();
@@ -206,7 +206,7 @@ export function WorkbenchView({ model }) {
     loadSavedRequest, setSavedRequests, setShowMemberAdd, setInviteOpen, setNewMember,
     setNewMemberRoles, setMembers, inviteMember, setInviteEmail, setInviteRoles,
     actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess, setEditingMemberId,
-    setEditingMemberRoles,
+    setEditingMemberRoles, removeWorkspaceMember,
   }}
   refs={{
     selectedWorkspaceRef, currentTokenRef,

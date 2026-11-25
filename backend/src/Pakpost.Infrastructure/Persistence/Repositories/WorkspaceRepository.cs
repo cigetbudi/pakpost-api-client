@@ -62,6 +62,10 @@ public sealed class WorkspaceRepository(PakpostDbContext db) : IWorkspaceReposit
             .ExecuteDeleteAsync(ct);
     }
 
+    public Task<int> DeleteMemberAsync(Guid workspaceId, Guid userId, CancellationToken ct) =>
+        db.WorkspaceMembers.Where(member => member.WorkspaceId == workspaceId && member.UserId == userId)
+            .ExecuteDeleteAsync(ct);
+
     public void Add(Workspace workspace) => db.Workspaces.Add(workspace);
 
     public void AddMember(WorkspaceMember member) => db.WorkspaceMembers.Add(member);

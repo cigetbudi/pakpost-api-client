@@ -36,6 +36,9 @@ export async function connectWorkspaceRealtime({workspaceId,getToken,onEvent,onS
   hub.on('WorkspaceMemberJoined',event=>{
     if(!disposed&&validWorkspaceMemberJoined(event,workspaceId))onMemberJoined?.(event);
   });
+  hub.on('WorkspaceMemberRemoved',event=>{
+    if(!disposed&&validWorkspaceMemberJoined(event,workspaceId))onMemberJoined?.({...event,removed:true});
+  });
   hub.on('WorkspaceChanged',event=>{
     if(!disposed && validWorkspaceEvent(event,workspaceId)) onEvent(event);
   });

@@ -56,3 +56,11 @@
 @media(max-width:640px){.pp-roles-member-buttons{width:100%;margin-left:45px}.pp-roles-toolbar{align-items:stretch}.pp-roles-filter{flex:1}.pp-roles-tags{padding-left:0}.pp-roles-search{min-width:160px}}
 .pp-roles-filter.pp-retro-select{padding:0;min-width:165px}
 .pp-roles-filter .pp-select-trigger{width:100%;min-height:39px;padding:7px 10px;font-size:12px;text-align:left}
+
+.pp-roles-member-buttons .pp-member-remove{color:var(--red);}
+.pp-roles-member-buttons .pp-member-remove:hover:not(:disabled){border-color:var(--red);}
+.pp-member-remove-confirm{margin:12px 0 0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);}
+.pp-member-remove-confirm strong{font-size:13px;}
+.pp-member-remove-confirm p{margin:8px 0;color:var(--text2);font-size:12px;line-height:1.6;overflow-wrap:anywhere;}
+.pp-member-remove-confirm .pp-env-error{color:var(--red);}
+.pp-member-remove-confirm .pp-workspace-delete-actions{flex-wrap:wrap;}

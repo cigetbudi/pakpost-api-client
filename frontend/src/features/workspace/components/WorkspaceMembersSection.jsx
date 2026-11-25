@@ -1,5 +1,7 @@
 /** Member roles and invitations only; workspace creation never depends on team membership. */
-import {Plus, Mail, Search, Pencil, ShieldCheck} from 'lucide-react';
+import {useState} from 'react';
+import {Plus, Mail, Search, Pencil, ShieldCheck, UserMinus} from 'lucide-react';
+import {canRemoveWorkspaceMember} from '../services/workspaceMemberRemoval.js';
 import {api} from '../../../services/httpClient.js';
 import {WorkspaceRolePicker} from './WorkspaceRolePicker.jsx';
 import {WorkspaceAccessBreakdown} from './WorkspaceAccessBreakdown.jsx';
@@ -15,8 +17,19 @@ export function WorkspaceMembersSection({data,actions,refs,maxSeats,reservedSeat
     expandedMemberAccess,editingMemberId,editingMemberRoles}=data;
   const {doAction,setShowMemberAdd,setInviteOpen,setNewMember,setNewMemberRoles,setMembers,
     inviteMember,setInviteEmail,setInviteRoles,actOnInvitation,setMemberSearch,setMemberRoleFilter,
-    setExpandedMemberAccess,setEditingMemberId,setEditingMemberRoles,setNotice}=actions;
+    setExpandedMemberAccess,setEditingMemberId,setEditingMemberRoles,setNotice,removeWorkspaceMember}=actions;
   const {selectedWorkspaceRef,currentTokenRef}=refs;
+  const [removing,setRemoving]=useState(null);
+  const [removeBusy,setRemoveBusy]=useState(false);
+  const [removeError,setRemoveError]=useState('');
+  const canRemove=m=>canRemoveWorkspaceMember({canManageMembers,workspace:activeWorkspace,actor:me,actorRoles:assignableRoles,member:m});
+  const confirmRemove=async m=>{
+    if(removeBusy||busyAction||!canRemove(m)||removing!==m.userId)return;
+    setRemoveBusy(true);setRemoveError('');
+    try{await removeWorkspaceMember(m);setRemoving(null);}
+    catch(error){setRemoveError(error?.message||'Could not remove member');}
+    finally{setRemoveBusy(false);}
+  };
   return (
 <div className="pp-manager-section">
                 <div className="pp-roles-hero">
@@ -87,11 +100,22 @@ export function WorkspaceMembersSection({data,actions,refs,maxSeats,reservedSeat
                           {canModify&&<button type="button" aria-expanded={editorOpen} onClick={()=>{
                             if(editorOpen){setEditingMemberId('');setEditingMemberRoles([]);}else{setEditingMemberId(m.userId);setEditingMemberRoles(normalizeRoles(m.roles));}
                           }}><Pencil size={13}/>{editorOpen?'Cancel edit':'Manage roles'}</button>}
+                          {canRemove(m)&&<button type="button" className="pp-member-remove" disabled={busyAction||removeBusy}
+                            aria-expanded={removing===m.userId} onClick={()=>{setRemoving(m.userId);setRemoveError('');}}><UserMinus size={14}/> Remove</button>}
                         </div>
                       </div>
                       <div className="pp-roles-tags">{(m.roles||[]).map(roleId=><span className="pp-roles-tag" key={roleId}>{WORKSPACE_ROLES.find(role=>role.id===roleId)?.label||roleId}</span>)}
                         {founder&&<span className="pp-roles-tag muted">Founder · protected</span>}{self&&<span className="pp-roles-tag muted">You</span>}
                       </div>
+                      {canRemove(m)&&removing===m.userId&&<section className="pp-member-remove-confirm" aria-label="Confirm member removal">
+                        <strong>Remove {m.displayName||m.email}?</strong>
+                        <p>They will lose access to this workspace. Their PakPost account and shared requests will not be deleted.</p>
+                        {removeError&&<p role="alert" className="pp-env-error">{removeError}</p>}
+                        <div className="pp-workspace-delete-actions">
+                          <button type="button" disabled={removeBusy} onClick={()=>setRemoving(null)}>Cancel</button>
+                          <button type="button" className="danger" disabled={removeBusy||busyAction} onClick={()=>confirmRemove(m)}><UserMinus size={14}/>{removeBusy?'Removing…':'Remove member'}</button>
+                        </div>
+                      </section>}
                       {accessOpen&&<WorkspaceAccessBreakdown permissions={m.permissions||[]}/>}
                       {editorOpen&&<div className="pp-roles-role-edit">
                         <div className="pp-roles-role-edit-heading"><strong>Assign roles to {m.displayName||m.email}</strong><span>Changes affect only {activeWorkspace?.name}</span></div>

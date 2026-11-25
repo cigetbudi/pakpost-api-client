@@ -15,7 +15,7 @@ export function queueWorkspaceMemberJoined(scope,event,{isCurrent,fetchMembers,v
     version.current++;
     commit(data);
     const member=data.find(item=>item.userId===event.userId);
-    if(member&&member.userId!==currentUserId())notify(`${member.displayName||'A new member'} has joined the workspace`);
+    if(!event.removed&&member&&member.userId!==currentUserId())notify(`${member.displayName||'A new member'} has joined the workspace`);
   }).catch(()=>{scope.seen.delete(event.eventId);});
   return scope.queue;
 }
