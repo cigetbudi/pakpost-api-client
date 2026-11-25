@@ -26,3 +26,20 @@
 **/.DS_Store
 *.zip
 *.patch
+
+# Never send local secrets / superseded desktop tree / patch backups to builders.
+**/kunci
+**/kunci.pub
+**/id_rsa
+**/id_ed25519
+**/id_ecdsa
+**/.ssh
+.pakpost-patch-backups
+frontend/src-tauri
+**/src-tauri.backup-*
+**/target
+**/*.sqlite*
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.dump

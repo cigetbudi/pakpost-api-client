@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 const root = new URL('../../',import.meta.url);
 const read = name => readFileSync(new URL(name,root),'utf8');
 
-test('unit tests stay scoped to tests/ so Bun never treats Playwright specs as unit tests', () => {
+test('unit tests stay scoped to tests/ so the Node runner never treats Playwright specs as unit tests', () => {
   const manifest = JSON.parse(read('package.json'));
-  assert.equal(manifest.scripts.test, 'bun test ./tests');
+  assert.equal(manifest.scripts.test, 'node --test tests/*/*.test.js');
   assert.equal(manifest.scripts['test:e2e'], 'playwright test');
   assert.ok(manifest.devDependencies['@playwright/test']);
 });

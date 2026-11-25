@@ -1,5 +1,5 @@
 # Pakpost - ASP.NET Core + React/Vite (Node.js/Bun) + Tauri/Rust
-# Place this file at the root of the pakpost-starter repository.
+# Repository-wide ignore rules.
 
 # ------------------------------------------------------------
 # Secrets / environment variables (Neon connection strings, OIDC)
@@ -14,6 +14,7 @@
 !**/.env.example
 !**/.env.sample
 !**/.env.template
+!**/.env.integration.example
 .envrc
 **/.envrc
 .vscode
@@ -108,10 +109,34 @@ pakpost-migrations.sql
 .pakpost-last-backup*
 
 # IMPORTANT: Keep these versioned in Git:
-# - pakpost-backend/**/Data/Migrations/*.cs (EF Core migrations)
+# - backend/src/Pakpost.Infrastructure/Persistence/Migrations/*.cs (EF Core migrations)
 # - package-lock.json / pnpm-lock.yaml / yarn.lock / bun.lock
-# - apps/desktop/src-tauri/Cargo.lock
+# - desktop/src-tauri/Cargo.lock
 # - .env.example and non-secret configuration templates
 
 # Generated unsigned extension release archives
 extension/releases/
+
+# Local SSH keys, patch backups, database and browser artifacts
+**/kunci
+**/kunci.pub
+**/id_rsa
+**/id_ed25519
+**/id_ecdsa
+.pakpost-patch-backups/
+**/src-tauri.backup-*/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.db-wal
+*.db-shm
+*.dump
+**/playwright-report/
+**/test-results/
+
+# Superseded Tauri tree (canonical project is desktop/src-tauri)
+/frontend/src-tauri/

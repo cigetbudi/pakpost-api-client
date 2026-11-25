@@ -19,6 +19,6 @@ done
 docker exec "$container" pg_isready -U postgres -d pakpost_verify -h 127.0.0.1 >/dev/null
 docker exec -i "$container" pg_restore --exit-on-error --single-transaction --no-owner --no-privileges -U postgres -d pakpost_verify < "$backup"
 # Structural verification only; no rows or credentials printed.
-docker exec "$container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pakpost_verify -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'" | grep -Eq '^[1-9][0-9]*$'
-echo 'PASS: trusted archive restored into disposable PostgreSQL and contains public tables.'
+docker exec "$container" psql -X -v ON_ERROR_STOP=1 -U postgres -d pakpost_verify -Atc "SELECT CASE WHEN to_regclass('auth.users') IS NOT NULL AND to_regclass('organization.workspaces') IS NOT NULL THEN 'ok' ELSE 'missing' END" | grep -qx ok
+echo 'PASS: trusted archive restored into disposable PostgreSQL and contains the required PakPost auth/users and organization/workspaces relations.'
 echo 'Application-level validation, encryption keys, and recovery-point verification remain separate.'

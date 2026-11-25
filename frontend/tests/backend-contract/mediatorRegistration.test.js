@@ -48,7 +48,7 @@ test('Bun migration keeps React, Vite, QuickJS and existing dev/build scripts', 
   assert.equal(pkg.packageManager, 'bun@1.4.4')
   assert.equal(pkg.scripts.dev, 'vite --host 127.0.0.1')
   assert.equal(pkg.scripts.build, 'vite build')
-  assert.match(pkg.scripts.test, /^bun test(?:\s|$)/)
+  assert.equal(pkg.scripts.test, 'node --test tests/*/*.test.js')
   assert.equal(pkg.dependencies['quickjs-emscripten-core'], '0.32.0')
   assert.equal(pkg.dependencies['@jitl/quickjs-singlefile-browser-release-sync'], '0.32.0')
   assert.equal(pkg.dependencies['crypto-js'], '4.2.0')

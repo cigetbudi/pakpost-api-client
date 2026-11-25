@@ -36,7 +36,7 @@ paths = sorted(set(os.fsdecode(p) for p in proc.stdout.split(b'\x00') if p))
 
 # Explicitly reject local config, databases, certs and credentials regardless of Git tracking.
 skip_dirs = {
-    '.git', 'node_modules', 'target', 'bin', 'obj', 'dist', 'build', 'out', 'publish',
+    '.git', '.ssh', '.pakpost-patch-backups', 'node_modules', 'target', 'bin', 'obj', 'dist', 'build', 'out', 'publish',
     'coverage', 'test-results', 'playwright-report', '.next', '.nuxt', '.output',
     '.turbo', '.vite', '.cache', '.venv', 'venv', '__pycache__', '.idea', '.vs',
     '.vscode-test', '.terraform', '.gradle', 'debug', 'release', 'artifacts',
@@ -45,7 +45,7 @@ skip_dirs = {
 skip_exact = {
     '.npmrc', '.pypirc', '.netrc', '.pgpass', '.env', '.env.local',
     'secrets.json', 'credentials.json', 'token.json', 'service-account.json',
-    'id_rsa', 'id_ed25519', 'known_hosts', 'launchsettings.json',
+    'id_rsa', 'id_ed25519', 'id_ecdsa', 'kunci', 'kunci.pub', 'known_hosts', 'launchsettings.json',
 }
 skip_extensions = {
     '.db', '.sqlite', '.sqlite3', '.pem', '.key', '.pfx', '.p12', '.p8',
@@ -67,12 +67,12 @@ source_filenames = {
     'dockerfile', 'makefile', 'license', 'readme', 'caddyfile',
     'bun.lock', 'cargo.lock', 'package-lock.json', 'pnpm-lock.yaml',
     'yarn.lock', 'global.json', 'nuget.config', 'compose.yaml', 'compose.yml',
-    '.env.example', '.env.sample', '.env.template',
+    '.env.example', '.env.sample', '.env.template', '.env.integration.example',
 }
 # Only include binaries essential for runtime/build (icons, fonts, assets).
 asset_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.ico', '.icns', '.gif', '.woff', '.woff2', '.ttf', '.otf', '.wasm'}
 asset_prefixes = (
-    'frontend/public/', 'frontend/src/assets/', 'frontend/src-tauri/icons/',
+    'frontend/public/', 'frontend/src/assets/',
     'desktop/src-tauri/icons/', 'extension/common/icons/',
     'backend/src/Pakpost.Infrastructure/Services/EmailTemplates/',
 )
@@ -81,12 +81,14 @@ MAX_FILE = 12 * 1024 * 1024
 # Known high-risk filenames/patterns across the repo.
 def reason_to_skip(rel: Path) -> str | None:
     parts = rel.parts
+    if rel.as_posix().startswith('frontend/src-tauri/') or any(p.startswith('src-tauri.backup-') for p in parts):
+        return 'superseded desktop tree'
     if any(p.lower() in {x.lower() for x in skip_dirs} for p in parts[:-1]):
         return 'generated/third-party directory'
     name = rel.name.lower()
-    if name in skip_exact:
+    if name in skip_exact or name.startswith(('kunci', 'id_rsa', 'id_ed25519', 'id_ecdsa')):
         return 'sensitive filename'
-    if name.startswith('.env') and name not in {'.env.example', '.env.sample', '.env.template'}:
+    if name.startswith('.env') and name not in {'.env.example', '.env.sample', '.env.template', '.env.integration.example'}:
         return 'environment file'
     if (name.startswith('appsettings') and name.endswith('.json') and
             name not in {'appsettings.example.json', 'appsettings.sample.json', 'appsettings.template.json'}):
@@ -95,7 +97,7 @@ def reason_to_skip(rel: Path) -> str | None:
         return 'potential credential filename'
     if name.endswith(('-wal', '-shm')) or rel.suffix.lower() in skip_extensions:
         return 'database/credential/build/archive file'
-    if name in source_filenames or rel.suffix.lower() in source_extensions:
+    if name in source_filenames or name.endswith('.dockerfile') or rel.suffix.lower() in source_extensions:
         return None
     if rel.suffix.lower() in asset_extensions and rel.as_posix().startswith(asset_prefixes):
         return None
@@ -123,6 +125,9 @@ with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compressleve
                 if b'\0' in fh.read(4096):
                     invalid.append(entry)
                     continue
+        if re.search(rb'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----', path.read_bytes()):
+            ignored.append((entry, 'private key material'))
+            continue
         z.write(path, entry)
         included.append(entry)
 
@@ -145,7 +150,7 @@ with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compressleve
         f'Skipped size limit: {len(large)}',
         f'Skipped binary sniff: {len(invalid)}',
         '',
-        '## Desktop D5 files missing from archive',
+        '## Canonical desktop files missing from archive',
         *(f'- {m}' for m in missing),
         '' if missing else '- None',
         '',
@@ -171,12 +176,12 @@ print(f'Size     : {output.stat().st_size / 1024 / 1024:.2f} MiB')
 print('Integrity: OK')
 print('Project  : NOT MODIFIED')
 if missing:
-    print('\nWARNING: Expected D5 desktop files missing:')
+    print('\nWARNING: Expected desktop files missing:')
     for p in missing:
         print('  -', p)
     print('Check that you are on the latest desktop branch and that files are not ignored.')
 else:
-    print('Desktop D5: expected core files present')
+    print('Desktop: expected core files present')
 if large:
     print('\nWARNING: Large files excluded:')
     for p in large[:12]:

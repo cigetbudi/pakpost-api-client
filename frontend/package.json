@@ -7,14 +7,14 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "bun test ./tests",
+    "test": "node --test tests/*/*.test.js",
     "test:node": "node scripts/check-source-imports.mjs && node --test tests/*/*.test.js",
     "audit": "bun audit",
     "perf:audit": "node scripts/performance-audit.mjs",
     "verify:imports": "node scripts/check-source-imports.mjs",
     "test:e2e": "playwright test",
     "perf:check": "node scripts/performance-budget.mjs",
-    "quality:check": "bun run verify:imports && bun run test && bun run build && bun run perf:check"
+    "quality:check": "bun run test:node && bun run build && bun run perf:check"
   },
   "dependencies": {
     "@codemirror/lang-html": "^6.4.0",
