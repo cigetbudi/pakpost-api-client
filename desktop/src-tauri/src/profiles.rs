@@ -4,6 +4,8 @@ use std::{fs, path::PathBuf};
 use tauri::Manager;
 
 const MAX_PROFILES: usize = 20;
+const PUBLIC_ORIGIN: &str = "https://app.pakpostapi.com";
+const LEGACY_PUBLIC_ORIGIN: &str = "https://pakpost.duckdns.org";
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +50,7 @@ fn validate(profiles: &[ConnectionProfile], active: &str) -> Result<(), String> 
         match p.kind.as_str() {
             "local" if p.id == "local" && p.url.is_none() => {}
             "public"
-                if p.id == "public" && p.url.as_deref() == Some("https://pakpost.duckdns.org") => {}
+                if p.id == "public" && p.url.as_deref() == Some(PUBLIC_ORIGIN) => {}
             "selfhosted" => {
                 let u = p.url.as_deref().ok_or("Missing server URL")?;
                 // Require HTTPS, DNS host, no username, password, query, fragment, or path.
@@ -101,9 +103,20 @@ fn default_store() -> ProfileStore {
                 id: "public".into(),
                 name: "PakPost Cloud".into(),
                 kind: "public".into(),
-                url: Some("https://pakpost.duckdns.org".into()),
+                url: Some(PUBLIC_ORIGIN.into()),
             },
         ],
+    }
+}
+
+// Migrate only the built-in public profile. Self-hosted origins and the active ID
+// remain unchanged. The next normal save persists the normalized profile.
+fn migrate_public_origin(store: &mut ProfileStore) {
+    for profile in &mut store.profiles {
+        if profile.id == "public" && profile.kind == "public"
+            && profile.url.as_deref() == Some(LEGACY_PUBLIC_ORIGIN) {
+            profile.url = Some(PUBLIC_ORIGIN.into());
+        }
     }
 }
 
@@ -119,7 +132,8 @@ pub fn load_connection_profiles(app: tauri::AppHandle) -> Result<ProfileStore, S
         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(default_store()),
         Err(e) => return Err(e.to_string()),
     };
-    let data: ProfileStore = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    let mut data: ProfileStore = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    migrate_public_origin(&mut data);
     validate(&data.profiles, &data.active_id)?;
     Ok(data)
 }
@@ -156,4 +170,35 @@ pub fn save_connection_profiles(app: tauri::AppHandle, state: tauri::State<'_, c
     c.execute("INSERT INTO desktop_profiles(key,json) VALUES('connections',?1) ON CONFLICT(key) DO UPDATE SET json=excluded.json",params![json]).map_err(|e|e.to_string())?;
     if changed { remote.invalidate(); }
     Ok(())
+}
+
+#[cfg(test)]
+mod domain_migration_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_public_profile_migrates_without_touching_custom_servers() {
+        let mut store = default_store();
+        store.active_id = "public".into();
+        store.profiles[1].url = Some(LEGACY_PUBLIC_ORIGIN.into());
+        store.profiles.push(ConnectionProfile {
+            id: "custom".into(), name: "Custom".into(), kind: "selfhosted".into(),
+            url: Some(LEGACY_PUBLIC_ORIGIN.into()),
+        });
+        migrate_public_origin(&mut store);
+        assert_eq!(store.active_id, "public");
+        assert_eq!(store.profiles[1].url.as_deref(), Some(PUBLIC_ORIGIN));
+        assert_eq!(store.profiles[2].url.as_deref(), Some(LEGACY_PUBLIC_ORIGIN));
+        assert!(validate(&store.profiles, &store.active_id).is_ok());
+        migrate_public_origin(&mut store);
+        assert_eq!(store.profiles[1].url.as_deref(), Some(PUBLIC_ORIGIN));
+    }
+
+    #[test]
+    fn unknown_public_origin_is_not_rewritten_or_accepted() {
+        let mut store = default_store();
+        store.profiles[1].url = Some("https://unexpected.example".into());
+        migrate_public_origin(&mut store);
+        assert!(validate(&store.profiles, &store.active_id).is_err());
+    }
 }

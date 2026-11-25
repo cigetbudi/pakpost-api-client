@@ -1,0 +1,10 @@
+# Optional: attach existing Caddy to the separately deployed product website.
+services:
+  caddy:
+    networks:
+      website_edge: {}
+
+networks:
+  website_edge:
+    external: true
+    name: pakpost-website-edge

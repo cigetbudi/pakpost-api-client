@@ -4,7 +4,11 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/../.."
 ./scripts/production/preflight.sh
 # Validate the public endpoint before changing images or containers.
-url="${PAKPOST_HEALTH_URL:-https://pakpost.duckdns.org/health/ready}"
+# Read only the two non-secret settings from Compose's interpolation environment.
+# Never print the complete environment (it includes production credentials).
+public_url="$(docker compose config --environment | sed -n 's/^PAKPOST_PUBLIC_URL=//p')"
+site_address="$(docker compose config --environment | sed -n 's/^PAKPOST_SITE_ADDRESS=//p')"
+url="${PAKPOST_HEALTH_URL:-${public_url%/}/health/ready}"
 if [[ "$url" != https://*/health/ready ]]; then echo 'PAKPOST_HEALTH_URL must be HTTPS and end with /health/ready'; exit 1; fi
 origin="${url%/health/ready}"
 # Validate candidate Caddy config using the existing image, without exposing ports.
@@ -16,7 +20,7 @@ else
 fi
 # Avoid inheriting Caddy's fixed bridge IP or binding its production ports.
 docker run --rm --network none \
-  -e "PAKPOST_SITE_ADDRESS=${origin#https://}" -e PAKPOST_ACME_EMAIL=validate@example.invalid \
+  -e "PAKPOST_SITE_ADDRESS=${site_address:-:80}" -e PAKPOST_ACME_EMAIL=validate@example.invalid \
   -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" \
   "$caddy_image" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 release="$(date -u +%Y%m%dT%H%M%SZ)"

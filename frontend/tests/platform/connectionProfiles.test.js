@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createLocalProfile, createPublicProfile, createSelfHostedProfile, normalizeServerOrigin } from '../../src/platform/connections/connectionProfiles.js';
 test('local mode has no server origin and public mode uses fixed origin',()=>{
   assert.equal(createLocalProfile().origin,null);
-  assert.equal(createPublicProfile().origin,'https://pakpost.duckdns.org');
+  assert.equal(createPublicProfile().origin,'https://app.pakpostapi.com');
 });
 test('self hosted accepts strict HTTPS origins only',()=>{
   assert.equal(createSelfHostedProfile({id:'office',name:' Office ',origin:'https://api.example.com/'}).origin,'https://api.example.com');

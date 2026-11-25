@@ -51,3 +51,15 @@ bun run build --bundles dmg --target universal-apple-darwin
 Output is under `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`. Names depend on the bundler. These commands do not publish a release. The manual `desktop-build.yml` workflow builds platform installers, but signing, notarization and auto-update are not configured as release guarantees. Gatekeeper may reject unsigned downloads. Do not bypass system security globally.
 
 If AppImage download stalls, specify `--bundles deb` rather than building every Linux format. Close development instances before starting a packaged build against the same local database. Local database and keyring are not deleted by building an installer.
+
+## Install a downloaded package
+
+Use the official PakPost download center or the application repository’s published release assets to obtain installers and SHA-256 checksums. Only install a verified artifact for your OS and architecture. On Linux, download the appropriate package and check its hash (`sha256sum <file>`). For Debian/Ubuntu use `sudo apt install ./<actual-file>.deb`; for Fedora use `sudo dnf install ./<actual-file>.rpm`. Install system dependencies through your distribution.
+
+On macOS, check `shasum -a 256 <file>`, mount the DMG and copy PakPost to Applications. Choose Apple Silicon, Intel or universal as appropriate. Follow macOS security policy; unsigned or unnotarized builds may be blocked. On Windows, compare `Get-FileHash <file> -Algorithm SHA256` in PowerShell and run the verified NSIS setup executable. WebView2 is required. Windows SmartScreen or organizational policy may block unsigned installers. No official signing or notarization guarantee is made.
+
+To build RPM on Linux: `cd desktop && bun run build --bundles rpm`. To build NSIS on Windows, install the required MSVC and Tauri toolchain first, then run `bun run build --bundles nsis` in `desktop/`.
+
+## Official Cloud domain transition
+
+New desktop builds use https://app.pakpostapi.com as the built-in PakPost Cloud origin. Existing built-in profiles using https://pakpost.duckdns.org are normalized on load; self-hosted profiles and local data are unchanged. Sign in again at the new origin: saved credentials are origin-bound and must not be forwarded. Older desktop builds can continue using the legacy origin while it is served. Before downgrading, back up the local database and review the public profile URL; older builds do not accept the new built-in URL.

@@ -1,5 +1,5 @@
 /** Non-secret connection profiles. Authentication tokens MUST NEVER be stored here. */
-export const PUBLIC_ORIGIN = 'https://pakpost.duckdns.org';
+export const PUBLIC_ORIGIN = 'https://app.pakpostapi.com';
 export const MODES = Object.freeze({ LOCAL: 'local', PUBLIC: 'public', SELF_HOSTED: 'selfHosted' });
 
 /** Validate the authority only; no URL path, query, fragment, credentials or insecure HTTPS downgrade. */

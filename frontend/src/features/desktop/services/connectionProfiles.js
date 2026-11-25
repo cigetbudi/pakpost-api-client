@@ -2,7 +2,7 @@ import {isTauriDesktop} from '../../collections/services/desktopLocalRepository.
 const invoke = async (name, args) => (await import('@tauri-apps/api/core')).invoke(name,args);
 export const DEFAULT_PROFILES = Object.freeze({activeId:'local',profiles:[
   {id:'local',name:'Local Workspace',kind:'local',url:null},
-  {id:'public',name:'PakPost Cloud',kind:'public',url:'https://pakpost.duckdns.org'},
+  {id:'public',name:'PakPost Cloud',kind:'public',url:'https://app.pakpostapi.com'},
 ]});
 export async function getDesktopProfiles(){
   if(!isTauriDesktop())return DEFAULT_PROFILES;
