@@ -115,9 +115,28 @@ async function serve(req, res) {
 }
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   void serve(req, res).catch(() => {
     if (!res.headersSent) res.writeHead(500);
     res.end();
   });
-}).listen(port, '0.0.0.0');
+});
+server.listen(port, '0.0.0.0');
+
+// Stop accepting new requests and give active static responses time to drain.
+let stopping = false;
+function shutdown() {
+  if (stopping) return;
+  stopping = true;
+  const deadline = setTimeout(() => {
+    server.closeAllConnections();
+    process.exit(1);
+  }, 10_000);
+  deadline.unref();
+  server.close(error => {
+    clearTimeout(deadline);
+    if (error) process.exitCode = 1;
+  });
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

@@ -7,12 +7,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Pakpost.Api.Extensions;
 using Pakpost.Domain.Enums;
+using Pakpost.Api.Realtime;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Pakpost.Api.Controllers;
 [ApiController]
 [Authorize]
 [EnableRateLimiting("auth")]
-public sealed class WorkspaceInvitationsController(ISender sender):ControllerBase
+public sealed class WorkspaceInvitationsController(ISender sender, IHubContext<WorkspaceHub> hub,
+    ILogger<WorkspaceInvitationsController> logger):ControllerBase
 {
     public sealed record InviteRequest(string Email,IReadOnlyList<WorkspaceAccessRole> Roles);
     public sealed record AcceptRequest(string Token);
@@ -30,5 +33,21 @@ public sealed class WorkspaceInvitationsController(ISender sender):ControllerBas
     {await sender.Send(new RevokeWorkspaceInvitationCommand(User.GetUserId(),workspaceId,invitationId),ct);return NoContent();}
     [HttpPost("api/invitations/accept")]
     public async Task<ActionResult<WorkspaceDto>> Accept(AcceptRequest request,CancellationToken ct)
-        =>Ok(await sender.Send(new AcceptWorkspaceInvitationCommand(User.GetUserId(),request.Token),ct));
+    {
+        var userId = User.GetUserId();
+        var workspace = await sender.Send(new AcceptWorkspaceInvitationCommand(userId,request.Token),ct);
+        // The handler has committed membership and invitation acceptance. A
+        // transient SignalR failure must not report the committed join as failed.
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await hub.Clients.Group(WorkspaceHub.GroupName(workspace.Id)).SendAsync(
+                "WorkspaceMemberJoined", new { workspaceId = workspace.Id, userId, eventId = Guid.NewGuid() }, timeout.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Workspace member joined notification failed after commit");
+        }
+        return Ok(workspace);
+    }
 }

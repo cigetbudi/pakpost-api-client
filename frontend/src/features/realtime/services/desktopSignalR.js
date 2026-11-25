@@ -1,4 +1,4 @@
-import {validWorkspaceEvent} from './workspaceEventPolicy.js';
+import {validWorkspaceEvent,validWorkspaceMemberJoined} from './workspaceEventPolicy.js';
 
 // Use the existing SignalR protocol implementation, not a hand-written hub
 // parser. HTTP transport is native and the desktop bearer never enters JS.
@@ -83,7 +83,7 @@ export function createNativeHubWebSocket(invoke, createChannel, context, onUnaut
   };
 }
 
-export async function connectDesktopSignalR({workspaceId,context,onEvent,onStatus,onAccessChanged,onUnauthorized,onJoined}) {
+export async function connectDesktopSignalR({workspaceId,context,onEvent,onStatus,onAccessChanged,onUnauthorized,onJoined,onMemberJoined}) {
   const [{invoke,Channel},signalR]=await Promise.all([import('@tauri-apps/api/core'),import('@microsoft/signalr')]);
   const {HubConnectionBuilder,LogLevel,HttpTransportType}=signalR;
   let stopped=false,joined=false;
@@ -102,6 +102,7 @@ export async function connectDesktopSignalR({workspaceId,context,onEvent,onStatu
     if(stopped)return;
     joined=true;notify('live');onJoined?.();
   };
+  hub.on('WorkspaceMemberJoined',event=>{if(!stopped&&joined&&validWorkspaceMemberJoined(event,workspaceId))onMemberJoined?.(event);});
   hub.on('WorkspaceChanged',event=>{if(!stopped&&joined&&validWorkspaceEvent(event,workspaceId))onEvent?.(event);});
   hub.on('WorkspaceAccessChanged',payload=>{
     if(stopped||payload?.workspaceId!==workspaceId)return;

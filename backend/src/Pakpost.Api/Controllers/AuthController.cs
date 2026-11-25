@@ -74,12 +74,14 @@ public sealed class AuthController(
         var raw = HttpContext.Items.ContainsKey("pakpost_desktop_auth")
             ? Request.Headers.Authorization.ToString()["PakpostDesktop ".Length..]
             : Request.Cookies[BrowserSessionCookies.Name(Request, environment)];
-        var found = HttpContext.Items.TryGetValue(typeof(BrowserSession), out var cached)
-            ? cached as BrowserSession : await sessions.FindAsync(raw, ct);
-        if (found is null)
+        // Authentication middleware has already validated the session. Never retry a
+        // rejected authentication mode (mixed cookie/header, revoked or expired token).
+        var found = CurrentSession();
+        if (User.Identity?.IsAuthenticated != true || found is null || string.IsNullOrEmpty(raw))
             return Ok(new BrowserSessionResponse(false, null, null, null));
-        // Confirm this user still exists (deleting an account cascades to sessions).
-        var user = await sender.Send(new GetMeQuery(found.UserId), ct);
+        // Bootstrap reads the profile alongside the validated session. Retain the
+        // handler fallback for an alternate route spelling or test authentication.
+        var user = found.Profile ?? await sender.Send(new GetMeQuery(found.UserId), ct);
         var csrf = sessions.CsrfProof(raw!);
         if (!ServerSessionStore.VerifyCsrf(found, csrf))
             return Unauthorized();

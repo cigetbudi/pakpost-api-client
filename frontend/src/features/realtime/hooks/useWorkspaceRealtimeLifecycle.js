@@ -6,9 +6,9 @@ import {getDesktopContext} from '../../../services/httpClient.js';
  * storage; callback ref prevents reconnection on unrelated React renders.
  */
 export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, sessionRevision=0, onEvent,
-  onAccessChanged, onStatus, onReset, onDesktopPoll }) {
-  const callbacks = useRef({onEvent,onAccessChanged,onStatus,onReset,onDesktopPoll});
-  callbacks.current = {onEvent,onAccessChanged,onStatus,onReset,onDesktopPoll};
+  onAccessChanged, onStatus, onReset, onDesktopPoll, onMemberJoined }) {
+  const callbacks = useRef({onEvent,onAccessChanged,onStatus,onReset,onDesktopPoll,onMemberJoined});
+  callbacks.current = {onEvent,onAccessChanged,onStatus,onReset,onDesktopPoll,onMemberJoined};
   useEffect(() => {
     callbacks.current.onReset?.();
     if (!enabled || !token || !workspaceId) {
@@ -52,6 +52,7 @@ export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, ses
           if(!active())return;
           const cleanup=await connectDesktopSignalR({workspaceId,context,
             onEvent:event=>{if(active())callbacks.current.onEvent?.(event);},
+            onMemberJoined:event=>{if(active())callbacks.current.onMemberJoined?.(event);},
             onAccessChanged:()=>{if(active())callbacks.current.onAccessChanged?.(workspaceId,token);},
             onUnauthorized:()=>{if(active())window.dispatchEvent(new Event('pakpost:desktop-session-expired'));},
             onJoined:()=>{if(active()){live=true;schedule(100);}},
@@ -75,6 +76,7 @@ export function useWorkspaceRealtimeLifecycle({ enabled, token, workspaceId, ses
     import('../services/workspaceRealtime.js').then(({connectWorkspaceRealtime}) =>
       connectWorkspaceRealtime({workspaceId, getToken: () => token,
         onEvent: event => { if (!disposed) callbacks.current.onEvent?.(event); },
+        onMemberJoined: event => { if (!disposed) callbacks.current.onMemberJoined?.(event); },
         onAccessChanged: () => { if (!disposed) callbacks.current.onAccessChanged?.(workspaceId, token); },
         onStatus: status => { if (!disposed) callbacks.current.onStatus?.(status); },
       })

@@ -1,0 +1,43 @@
+# Opt-in VPS overlay. Keep the existing Compose file and .env secrets intact.
+# Set COMPOSE_FILE=compose.yaml:compose.production-hardening.yaml on the VPS.
+x-production-logging: &production-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  backend:
+    environment:
+      DataProtection__KeyDirectory: /run/pakpost/data-protection/keys
+      DataProtection__CertificatePath: /run/pakpost/data-protection/certificate/cert.pem
+      DataProtection__PrivateKeyPath: /run/pakpost/data-protection/certificate/key.pem
+      Infrastructure__ShutdownSeconds: "35"
+      Database__DisableGssEncryption: ${DB_DISABLE_GSS_ENCRYPTION:-false}
+      Logging__LogLevel__Default: Information
+      Logging__LogLevel__Microsoft.AspNetCore: Warning
+      Logging__LogLevel__Microsoft.AspNetCore.Hosting.Diagnostics: Warning
+      Logging__LogLevel__Microsoft.EntityFrameworkCore: Warning
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
+      Logging__LogLevel__Microsoft.Hosting.Lifetime: Information
+      Logging__LogLevel__Pakpost.Api.Middlewares.RequestLoggingMiddleware: Information
+    volumes:
+      - type: bind
+        source: /var/lib/pakpost/data-protection/keys
+        target: /run/pakpost/data-protection/keys
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/lib/pakpost/data-protection/certificate
+        target: /run/pakpost/data-protection/certificate
+        read_only: true
+        bind:
+          create_host_path: false
+    stop_grace_period: 45s
+    logging: *production-logging
+  frontend:
+    stop_grace_period: 15s
+    logging: *production-logging
+  caddy:
+    stop_grace_period: 30s
+    logging: *production-logging

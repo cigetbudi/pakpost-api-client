@@ -22,3 +22,11 @@ export function reorderTabs(tabs,sourceId,targetId,placement='after'){
   next.splice(target+(placement==='after'?1:0),0,item);
   return next;
 }
+
+/** Keep the active tab visible without scrolling a parent or stealing focus. */
+export function activeTabScrollDelta(bounds,tab,plus=null){
+  if(tab.left<bounds.left)return tab.left-bounds.left;
+  const right=plus?.right??tab.right;
+  if(right<=bounds.right)return 0;
+  return Math.min(right-bounds.right,Math.max(0,tab.left-bounds.left));
+}

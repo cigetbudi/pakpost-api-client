@@ -37,7 +37,8 @@ public sealed class BrowserSessionAuthenticationHandler(
             raw = cookie;
         }
         if (string.IsNullOrEmpty(raw)) return AuthenticateResult.NoResult();
-        var session = await sessions.FindAsync(raw, Context.RequestAborted);
+        var session = await sessions.FindAsync(raw, Context.RequestAborted,
+            includeProfile: Request.Path.Equals(new PathString("/api/auth/session"), StringComparison.OrdinalIgnoreCase));
         if (session is null) return AuthenticateResult.Fail("Session expired or revoked");
         Context.Items[typeof(BrowserSession)] = session;
         var claims = new[] { new Claim("sub", session.UserId.ToString()),

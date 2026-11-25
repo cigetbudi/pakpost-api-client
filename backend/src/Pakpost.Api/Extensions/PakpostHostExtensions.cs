@@ -19,6 +19,11 @@ public static class PakpostHostExtensions
             options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
         });
 
+        builder.Services.Configure<HostOptions>(options =>
+            options.ShutdownTimeout = TimeSpan.FromSeconds(Math.Clamp(
+                builder.Configuration.GetValue("Infrastructure:ShutdownSeconds", 30), 10, 120)));
+        builder.Services.AddPakpostPersistentDataProtection(builder.Configuration);
+
         // Resolve the actual client IP for per-IP rate limiting, and HTTPS for
         // secure cookie issuance. ONLY trust explicitly configured proxy IPs.
         // Do NOT enable blanket forwarded-header trust on a public interface.

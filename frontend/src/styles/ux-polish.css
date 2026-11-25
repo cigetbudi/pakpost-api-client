@@ -43,3 +43,34 @@
 .pp-command-results button[role="option"]>svg{justify-self:center;flex:none}
 .pp-command-results button[role="option"]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 @media(max-width:480px){.pp-command-results button[role="option"]{grid-template-columns:52px minmax(0,1fr) 14px;gap:8px;padding-inline:8px}}
+
+
+/* Final compact chrome and content-sized code preview. */
+.pp-adaptive-workbench .pp-tabs-actions {gap:8px;align-items:center;font-size:11px;line-height:16px;}
+.pp-adaptive-workbench .pp-tabs-actions>.pp-versions-action {
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:4px 6px;min-height:28px;font-size:11px;line-height:16px;white-space:nowrap;
+}
+.pp-adaptive-workbench .pp-tabs-actions>.pp-versions-action>svg {flex:none;display:block;width:15px;height:15px;}
+.pp-adaptive-workbench .pp-tabs-actions>.pp-versions-action>span {line-height:16px;}
+.pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top {
+  align-items:center;
+}
+.pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top>:is(span:first-child,.pp-top-env-label) {
+  font-family:inherit;font-size:11px;font-weight:600;line-height:18px;letter-spacing:.025em;
+}
+.pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top :is(.pp-select-label,.pp-top-env-local,.pp-workspace-indicator) {
+  font-family:inherit;font-size:12px;font-weight:600;line-height:18px;letter-spacing:normal;
+}
+.pp-adaptive-workbench .pp-top-right>.pp-unified-storage-top .pp-select-trigger {align-items:center;}
+.pp-adaptive-workbench .pp-side-code.pp-highlighted-code {
+  flex:0 0 auto;min-height:0;max-height:none;height:auto;overflow:hidden;
+  border-radius:0 0 6px 6px;
+}
+.pp-adaptive-workbench .pp-highlighted-code :is(.pp-editor-wrap,.pp-cm-editor,.cm-editor) {min-height:0;height:auto;border:0;border-radius:0;}
+.pp-adaptive-workbench .pp-highlighted-code .cm-content {padding-right:5px;}
+.pp-adaptive-workbench .pp-highlighted-code .cm-scroller {max-height:min(55dvh,560px);overflow:auto;}
+@media(max-width:760px){
+  .pp-adaptive-workbench .pp-tabs-actions>.pp-versions-action {gap:0;padding:0 4px;}
+  .pp-adaptive-workbench .pp-tabs-actions>.pp-versions-action>span {display:none;}
+}
