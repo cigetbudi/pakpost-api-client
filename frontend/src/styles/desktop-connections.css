@@ -1,4 +1,51 @@
-.pp-desktop-connections{display:grid;gap:14px;max-width:740px}.pp-desktop-connections h2,.pp-desktop-connections h3{margin:0}.pp-desktop-profile{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:8px}.pp-desktop-profile div:first-child{display:grid;gap:4px;min-width:0}.pp-desktop-profile small{color:var(--muted);overflow-wrap:anywhere}.pp-desktop-profile-actions{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}.pp-desktop-profile button,.pp-desktop-profile-form button{border:1px solid var(--border);border-radius:6px;padding:8px 12px}.pp-desktop-profile-form{display:grid;gap:12px}.pp-desktop-profile-form label{display:grid;gap:6px}.pp-desktop-profile-form input{width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)}
+/* Desktop settings use the same width, theme tokens and control density as Appearance. */
+.pp-desktop-connections{display:grid;gap:12px;max-width:590px;width:100%;min-width:0;font-size:13px;container-type:inline-size}
+.pp-desktop-connections h2,.pp-desktop-connections h3{margin:0}
+.pp-desktop-settings-heading,.pp-desktop-settings-subheading{display:grid;gap:5px}
+.pp-desktop-settings-heading p,.pp-desktop-settings-subheading p{font-size:12px;color:var(--muted);line-height:1.6}
+.pp-desktop-section-label{margin-top:7px;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.07em}
+.pp-desktop-profile-list{display:grid;gap:9px;min-width:0}
+.pp-desktop-profile{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:8px;background:transparent;min-width:0;transition:background-color var(--pp-motion-color,125ms),border-color var(--pp-motion-color,125ms)}
+.pp-desktop-profile:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--border));background:var(--surface)}
+.pp-desktop-profile.is-selected{border-color:var(--accent);background:var(--accent-soft)}
+.pp-desktop-profile-icon{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--muted);flex:none}
+.pp-desktop-profile.is-selected .pp-desktop-profile-icon{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--border));background:var(--accent-soft)}
+.pp-desktop-profile-copy{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.pp-desktop-profile-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.pp-desktop-profile-copy strong{font-size:13px;font-weight:650;line-height:1.4}
+.pp-desktop-profile small{font-size:11px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
+.pp-desktop-selected,.pp-desktop-connected{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--accent);font-weight:600;line-height:1.4}
+.pp-desktop-connected{color:var(--green)}.pp-desktop-connected>span{width:6px;height:6px;border-radius:50%;background:currentColor}
+.pp-desktop-profile-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.pp-desktop-connections .pp-desktop-control{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:var(--aw-control,34px);padding:5px 10px;border:1px solid var(--border);border-radius:var(--aw-radius,6px);font:inherit;font-size:12px;font-weight:600;line-height:1.3;background:var(--surface);color:var(--text2);transition:background-color var(--pp-motion-color,125ms),border-color var(--pp-motion-color,125ms),color var(--pp-motion-color,125ms),transform var(--pp-motion-press,85ms)}
+.pp-desktop-connections .pp-desktop-control svg{flex:none}
+.pp-desktop-connections .pp-desktop-control.is-primary{border-color:color-mix(in srgb,var(--accent) 65%,var(--border));color:var(--accent);background:var(--accent-soft)}
+.pp-desktop-connections .pp-desktop-control:hover:not(:disabled){border-color:var(--accent);background:var(--hover);color:var(--text)}
+.pp-desktop-connections .pp-desktop-control.is-primary:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--accent)}
+.pp-desktop-connections .pp-desktop-control.is-danger:hover:not(:disabled){border-color:var(--red);color:var(--red);background:color-mix(in srgb,var(--red) 10%,var(--surface))}
+.pp-desktop-connections .pp-desktop-control:active:not(:disabled){transform:translateY(1px)}
+.pp-desktop-connections .pp-desktop-control:disabled{opacity:.48;cursor:not-allowed}
+.pp-desktop-connections .pp-desktop-control:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pp-desktop-settings-divider{border-top:1px solid var(--border);margin:12px 0 6px}
+.pp-desktop-profile-form{display:grid;gap:12px;min-width:0}
+.pp-desktop-profile-form label{display:grid;gap:6px;font-size:12px;font-weight:600;min-width:0;color:var(--text)}
+.pp-desktop-field{display:flex;align-items:center;gap:8px;min-width:0;min-height:var(--aw-control,34px);padding:0 10px;border:1px solid var(--border);border-radius:var(--aw-radius,6px);background:var(--editor);color:var(--muted);transition:border-color var(--pp-motion-color,125ms),box-shadow var(--pp-motion-color,125ms)}
+.pp-desktop-field>svg{flex:none}.pp-desktop-field:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--border))}
+.pp-desktop-field:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);color:var(--accent)}
+.pp-desktop-profile-form .pp-desktop-field input{width:100%;min-width:0;padding:8px 0;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-weight:400;line-height:1.4;box-shadow:none}
+.pp-desktop-profile-form input::placeholder{color:var(--muted);opacity:1}
+.pp-desktop-form-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.pp-desktop-form-footer>span{font-size:11px;color:var(--muted)}
+.pp-desktop-feedback{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border:1px solid var(--border);border-radius:6px;color:var(--text2);background:var(--surface);font-size:12px;min-width:0}
+.pp-desktop-feedback>svg{color:var(--accent);flex:none}.pp-desktop-feedback>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.pp-desktop-feedback.is-error{border-color:color-mix(in srgb,var(--red) 45%,var(--border));color:var(--red)}.pp-desktop-feedback.is-error>svg{color:var(--red)}
+.pp-desktop-approval-link{display:grid;gap:4px;color:var(--muted);min-width:0}.pp-desktop-approval-link code{font-size:11px;overflow-wrap:anywhere;user-select:text;color:var(--text2)}
+.pp-desktop-settings-note{display:flex;align-items:flex-start;gap:9px;margin-top:8px;padding-top:14px;border-top:1px solid var(--border);color:var(--muted);font-size:11px;line-height:1.65}
+.pp-desktop-settings-note>svg{flex:none;color:var(--accent);margin-top:2px}.pp-desktop-settings-note>div{min-width:0}.pp-desktop-settings-note strong{color:var(--text2);font-size:12px}.pp-desktop-settings-note p{margin-top:4px}.pp-desktop-settings-note details{margin-top:6px}.pp-desktop-settings-note summary{cursor:pointer;color:var(--text2)}.pp-desktop-settings-note summary:hover{color:var(--accent)}
+.pp-desktop-spinner{animation:pp-desktop-spin .8s linear infinite}@keyframes pp-desktop-spin{to{transform:rotate(360deg)}}
+@container (max-width:460px){.pp-desktop-profile{grid-template-columns:36px minmax(0,1fr)}.pp-desktop-profile-actions{grid-column:1/-1;justify-content:flex-start}.pp-desktop-profile-actions .pp-desktop-control{flex:1 1 auto}}
+@container (max-width:270px){.pp-desktop-form-footer .pp-desktop-control{width:100%}}
+@media(prefers-reduced-motion:reduce){.pp-desktop-connections *{transition:none!important;animation:none!important}}
 .pp-desktop-approval-page{min-height:100vh;display:grid;place-items:center;padding:32px 16px;background:radial-gradient(circle at top, color-mix(in srgb,var(--accent) 10%, transparent), transparent 30%),var(--bg)}
 .pp-desktop-approval-card{width:min(100%,760px);display:grid;gap:18px;padding:24px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(180deg,color-mix(in srgb,var(--surface) 88%, transparent),var(--surface));box-shadow:0 18px 60px rgba(0,0,0,.16)}
 .pp-desktop-approval-badge{justify-self:start;padding:7px 11px;border-radius:999px;border:1px solid var(--border);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
