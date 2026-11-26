@@ -140,3 +140,7 @@ extension/releases/
 
 # Superseded Tauri tree (canonical project is desktop/src-tauri)
 /frontend/src-tauri/
+
+# Release candidates and clean demo captures
+/release-output/
+/release-screenshots/

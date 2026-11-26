@@ -1,48 +1,100 @@
-name: PakPost desktop installer smoke build
+name: PakPost v0.1.0 distribution build
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 scripts/release/audit-tracked.py HEAD
+      - run: python3 scripts/release/test_release.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: make test-frontend test-docker
   build:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
-            bundles: deb,appimage
+            bundles: deb,rpm
+            target: x86_64-unknown-linux-gnu
+            slots: deb rpm
           - os: windows-latest
             bundles: nsis
-          - os: macos-14
+            target: x86_64-pc-windows-msvc
+            slots: windows
+          - os: macos-15
             bundles: dmg
+            target: universal-apple-darwin
+            slots: mac-universal
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: '1.4.4'
       - uses: dtolnay/rust-toolchain@stable
       - name: Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev
-      - name: Frontend dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev libdbus-1-dev patchelf rpm
+      - name: Rust targets
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          else
+            rustup target add '${{ matrix.target }}'
+          fi
+      - run: bun install --frozen-lockfile
         working-directory: frontend
-        run: bun install --frozen-lockfile
-      - name: Desktop dependencies
+      - run: bun install --frozen-lockfile
         working-directory: desktop
-        run: bun install --frozen-lockfile
-      - name: Rust checks
+      - run: bun run build
+        working-directory: frontend
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native tests
         working-directory: desktop/src-tauri
-        run: cargo check --locked
+        run: cargo test --locked --lib
       - name: Build installer
         working-directory: desktop
-        run: bun run build --bundles "${{ matrix.bundles }}"
+        run: bun run build --bundles "${{ matrix.bundles }}" --target "${{ matrix.target }}"
+      - name: Collect exact release filenames
+        shell: bash
+        run: python scripts/release/collect.py desktop/src-tauri/target/${{ matrix.target }}/release/bundle release-output ${{ matrix.slots }}
       - uses: actions/upload-artifact@v4
         with:
-          name: pakpost-desktop-${{ matrix.os }}
-          path: |
-            desktop/src-tauri/target/release/bundle/**/*.deb
-            desktop/src-tauri/target/release/bundle/**/*.AppImage
-            desktop/src-tauri/target/release/bundle/**/*.exe
-            desktop/src-tauri/target/release/bundle/**/*.dmg
+          name: pakpost-${{ matrix.target }}
+          path: release-output/*
+          if-no-files-found: error
+  extensions:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test frontend/tests/network/interceptorPermissionModes.test.js frontend/tests/network/interceptorOriginDiscovery.test.js frontend/tests/network/interceptorTransport.test.js
+      - run: bash extension/release.sh
+      - run: python3 scripts/release/collect.py extension/releases release-output chromium firefox
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pakpost-interceptor
+          path: release-output/*
           if-no-files-found: error
