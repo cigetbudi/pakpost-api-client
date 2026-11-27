@@ -12,5 +12,6 @@ for browser in chrome firefox; do
   cp ../LICENSE "$out/LICENSE.txt"
   cp ../NOTICE "$out/NOTICE.txt"
   cp ../ADDITIONAL_TERMS.md "$out/ADDITIONAL_TERMS.txt"
+  cp ../THIRD_PARTY_NOTICES.md "$out/THIRD_PARTY_NOTICES.md"
   echo "Prepared $out"
 done

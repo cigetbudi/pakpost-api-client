@@ -16,6 +16,7 @@ REQUIRED = {
     'popup.css', 'popup.js', 'icons/icon-16.png', 'icons/icon-32.png',
     'icons/icon-48.png', 'icons/icon-128.png',
     'LICENSE.txt', 'NOTICE.txt', 'ADDITIONAL_TERMS.txt',
+    'THIRD_PARTY_NOTICES.md',
 }
 
 
