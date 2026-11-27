@@ -91,4 +91,14 @@ See [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURI
 
 ## Project status
 
-v0.1.0 is feature-frozen. The next changes should prioritize bug fixes, compatibility, security and documentation. GraphQL, gRPC, standalone WebSocket testing and signed auto-updates are not part of this release. No project license is declared in the supplied repository; do not assume redistribution rights.
+v0.1.0 is feature-frozen. The next changes should prioritize bug fixes, compatibility, security and documentation. GraphQL, gRPC, standalone WebSocket testing and signed auto-updates are not part of this release.
+
+## License and attribution
+
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+
+PakPost is open source under [GPL-3.0-only](LICENSE). Copyright © 2026 [cigetbudi](https://github.com/cigetbudi). Originally developed by **cigetbudi**.
+
+Use, modify and self-host PakPost for personal or commercial purposes. Private internal modifications do not need to be published merely because they are used internally or over a network. If you convey covered copies, comply with the GPL's corresponding-source and notice requirements.
+
+Preserve the original attribution and mark modified versions as such; see [NOTICE](NOTICE), [additional terms](ADDITIONAL_TERMS.md) and [branding policy](TRADEMARK.md). Third-party material retains its own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md). For upstream contributions, please fork the [official GitHub repository](https://github.com/cigetbudi/pakpost-api-client) and open a pull request. Other lawful redistribution is permitted under the GPL.

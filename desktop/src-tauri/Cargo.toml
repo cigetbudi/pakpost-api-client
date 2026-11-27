@@ -2,9 +2,9 @@
 name = "pakpost-desktop"
 version = "0.1.0"
 description = "PakPost API Workbench Desktop"
-authors = []
-license = ""
-repository = ""
+authors = ["cigetbudi"]
+license = "GPL-3.0-only"
+repository = "https://github.com/cigetbudi/pakpost-api-client"
 edition = "2024"
 rust-version = "1.90"
 

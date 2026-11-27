@@ -144,3 +144,9 @@ extension/releases/
 # Release candidates and clean demo captures
 /release-output/
 /release-screenshots/
+
+# Local private keys
+/frontend/kunci
+/frontend/kunci.pub
+id_rsa
+id_ed25519

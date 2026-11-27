@@ -13,6 +13,7 @@ RUN dotnet publish src/Pakpost.Api/Pakpost.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra
 WORKDIR /app
 COPY --from=build /out/ ./
+COPY LICENSE NOTICE ADDITIONAL_TERMS.md /app/legal/
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
     TZ=Asia/Jakarta
