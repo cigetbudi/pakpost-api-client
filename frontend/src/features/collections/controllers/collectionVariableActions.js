@@ -1,3 +1,4 @@
+import {collectionScripts} from '../services/collectionScripts.js';
 // Stateful operations remain owned by the mounted Workbench; dependencies are injected.
 // This factory is intentionally not a hook: no subscriptions or globals are created.
 export function createCollectionVariableActions(dependencies) {
@@ -11,7 +12,7 @@ export function createCollectionVariableActions(dependencies) {
     return collectionVariableKey(target,'',me?.id||'guest');
   }
   async function readSavedCollectionVariables(target,{reload=false}={}){
-    if(target.scope==='local')return {version:0,variables:localCollections.find(c=>c.id===target.collectionId)?.variables||[]};
+    if(target.scope==='local'){const c=localCollections.find(c=>c.id===target.collectionId);if(!c)throw Error('Local collection not found');return {version:0,variables:c.variables||[],...collectionScripts(c)};}
     const key=collectionTargetKey(target);
     const cached=savedCollectionVariablesCache.current.get(key);
     if(!reload&&cached&&Date.now()-cached.at<30000)return cached.data;
@@ -38,20 +39,21 @@ export function createCollectionVariableActions(dependencies) {
     const data=await readSavedCollectionVariables(collectionVariablesTarget,{reload:true});
     setCollectionVariablesData(data);setCollectionVariablesError('');
   }
-  async function saveCollectionVariableDefaults(rows){
+  async function saveCollectionVariableDefaults(rows,scripts){
     const target=collectionVariablesTarget;
     if(!target)throw Error('No collection selected');
     const normalized=validateCollectionVariableRows(rows);
+    const scriptPatch=scripts===undefined?{}:collectionScripts(scripts);
     setCollectionVariablesBusy(true);
     try{
       if(target.scope==='local'){
-        setLocalCollections(old=>old.map(c=>c.id===target.collectionId?{...c,variables:normalized.map(({key,value,isSecret})=>({key,value,isSecret}))}:c));
-        setCollectionVariablesData({version:0,variables:normalized});
+        setLocalCollections(old=>old.map(c=>c.id===target.collectionId?{...c,...scriptPatch,variables:normalized.map(({key,value,isSecret})=>({key,value,isSecret}))}:c));
+        setCollectionVariablesData({...collectionVariablesData,...scriptPatch,version:0,variables:normalized});
       }else{
         if(!canWorkspace(selfMember,'collection.write'))throw Error('Missing permission: collection.write');
         if(!collectionVariablesData)throw Error('Reload Collection Variables before saving');
         const saved=await api(`/api/workspaces/${target.workspaceId}/collections/${target.collectionId}/variables`,'PUT',
-          {version:collectionVariablesData.version,variables:normalized},token);
+          {version:collectionVariablesData.version,variables:normalized,...scriptPatch},token);
         savedCollectionVariablesCache.current.set(collectionTargetKey(target),{data:saved,at:Date.now()});
         setCollectionVariablesData(saved);
       }

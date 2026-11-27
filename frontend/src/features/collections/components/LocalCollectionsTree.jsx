@@ -10,6 +10,8 @@ import {localFolderMoveTargets,localFolderPaths} from '../services/folderMoveTar
 import {startFolderDrag,isFolderDrag,readFolderDrag,endFolderDrag} from '../services/folderDrag.js';
 import {visibleCollectionNodes,collectionParentChain,startCollectionDrag,isCollectionDrag,readCollectionDrag,endCollectionDrag,collectionDropPosition} from '../services/collectionHierarchy.js';
 
+import '../../../styles/features/collection-settings.css';
+
 const menus={
   collection:[['newRequest','New request'],['organizeFolders','Move folder…'],['organizeCollection','Move collection…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['sortMethod','Sort by method'],['exportCollection','Export collection'],['deleteCollection','Delete collection']],
   folder:[['newRequest','New request here'],['moveFolder','Move to…'],['documentation','Documentation'],['renameFolder','Rename folder'],['duplicateFolder','Duplicate folder'],['sortFolder','Sort folder'],['deleteFolder','Delete folder']],
@@ -130,8 +132,8 @@ export function LocalCollectionsTree({collections,search='',onOpen,onOpenExample
             drop(e,col.id,[]);
           }}>
           <button type="button" draggable onDragStart={e=>{e.stopPropagation();startCollectionDrag(e.dataTransfer,{scope:'local',collectionId:col.id});}}
-            className="pp-tree-row pp-explorer-tree-row" onClick={()=>toggle(key)} title={`${col.name} · Drag to reorder, or drop into another collection`} aria-expanded={opened} onContextMenu={e=>openMenu(e,{type:'collection',collectionId:col.id,name:col.name})}>
-            {opened?<ChevronDown size={14}/>:<ChevronRight size={14}/>}<FolderClosed size={15}/><span>{col.name}</span><small>{col.requests.length}</small>
+            className="pp-tree-row pp-explorer-tree-row" onClick={e=>{if(e.target.closest?.('[data-collection-disclosure]'))toggle(key);else onAction({action:'variables',collectionId:col.id,name:col.name});}} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();if((e.key==='ArrowRight')!==!!opened)toggle(key);}}} title={`${col.name} · Collection settings`} aria-expanded={opened} onContextMenu={e=>openMenu(e,{type:'collection',collectionId:col.id,name:col.name})}>
+            <span data-collection-disclosure className="pp-collection-disclosure" aria-hidden="true" title={opened?'Collapse collection':'Expand collection'}>{opened?<ChevronDown size={14}/>:<ChevronRight size={14}/>}</span><FolderClosed size={15}/><span>{col.name}</span><small>{col.requests.length}</small>
           </button>
           <div className="pp-tree-actions">
             <button className="pp-tree-action" type="button" title="New request in collection" aria-label={`New request in ${col.name}`} onClick={()=>onAction({action:'newRequest',collectionId:col.id,folderPath:[]})}><Plus size={15}/></button>

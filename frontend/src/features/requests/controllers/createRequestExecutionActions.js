@@ -33,6 +33,7 @@ export function createRequestExecutionActions(dependencies) {
     preScript,
     readCollectionVariables,
     readSavedCollectionVariables,
+    refreshSessionEnvironment = () => {},
     rows,
     savedCollectionVariableMap,
     scriptDiagnostic,
@@ -84,14 +85,16 @@ export function createRequestExecutionActions(dependencies) {
         const executed=await executeWorkbenchRequest({
           request:{method,url,rows,body,format,formFields,binaryFile,preScript,postScript,interceptorMode},
           environmentValues,collectionValues,trace,
-          loadCollectionValues:sourceAtSend?.collectionId?async()=>{
-            const savedData=await readSavedCollectionVariables(sourceAtSend);
-            return readCollectionVariables(sessionCollectionVariables.current,collectionKey,savedCollectionVariableMap(savedData.variables));
+          loadCollectionSettings:sourceAtSend?.collectionId?async()=>{
+            if(sourceAtSend.scope==='workspace'&&sourceAtSend.workspaceId!==selectedWs)throw Error('Select the request workspace before sending.');
+            const savedData=await readSavedCollectionVariables(sourceAtSend,{reload:true});
+            return {values:readCollectionVariables(sessionCollectionVariables.current,collectionKey,savedCollectionVariableMap(savedData.variables)),
+              preScript:savedData.preScript||'',postScript:savedData.postScript||''};
           }:null,
           // In-flight responses from a previous account must never restore data
           // or write variables after logout/account switch.
           isCurrent,
-          saveCollectionValues:values=>{if(isCurrent())writeCollectionVariables(sessionCollectionVariables.current,collectionKey,values)},
+          saveCollectionValues:values=>{if(isCurrent()){writeCollectionVariables(sessionCollectionVariables.current,collectionKey,values);refreshSessionEnvironment(v=>v+1);}},
           saveEnvironmentValues:values=>isCurrent()?applyScriptVariables(values,runEnvironment):undefined,
           buildOutgoing:vars=>buildOutgoing(vars),
           dispatch:command=>{

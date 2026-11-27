@@ -2,4 +2,5 @@ using System.Text.Json;
 
 namespace Pakpost.Application.Internal.Collections.DTOs;
 
-public sealed record CollectionVariablesDto(int Version, IReadOnlyList<CollectionVariableDto> Variables);
+public sealed record CollectionVariablesDto(int Version, IReadOnlyList<CollectionVariableDto> Variables,
+    string PreScript = "", string PostScript = "");

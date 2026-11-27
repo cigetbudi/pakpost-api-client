@@ -49,6 +49,28 @@ public sealed class CloudImportHandlerTests
     }
 
     [Fact]
+    public async Task ImportedCollectionScriptsAreStoredSeparately()
+    {
+        var context = MakeContext(WorkspaceAccessRole.Developer);
+        var input = new CloudImportCollection("Synthetic", [],
+            [new CloudImportRequest("Ping", "GET", "https://example.test", "{}", "")],
+            PreScript: "function helper(x){return x;}", PostScript: "pm.test('ok',()=>{});");
+        await context.Handler.Handle(new ImportCollectionsCommand(context.ActorId, context.WorkspaceId, [input]), CancellationToken.None);
+        context.Collections.Received(1).Add(Arg.Is<Collection>(c => c.ScriptsJson != null && c.ScriptsJson.Contains("helper")));
+        await context.UnitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OversizedCollectionScriptDoesNotCommit()
+    {
+        var context = MakeContext(WorkspaceAccessRole.Developer);
+        var input = new CloudImportCollection("Synthetic", [], [], PreScript: new string('x', 64001));
+        await Assert.ThrowsAsync<AppException>(async () =>
+            await context.Handler.Handle(new ImportCollectionsCommand(context.ActorId, context.WorkspaceId, [input]), CancellationToken.None));
+        await context.UnitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task InvalidSecondRequestDoesNotCommitPartialBatch()
     {
         var context = MakeContext(WorkspaceAccessRole.Developer);

@@ -117,6 +117,9 @@ public sealed partial class PakpostDbContext
         {
             await StageAsync(entry, entry.Entity.WorkspaceId, "collection",
                 entry.Entity.Id, nameof(Collection.VariablesJson), false, staged, ct);
+            if (entry.Entity.ScriptsJson is not null)
+                await StageAsync(entry, entry.Entity.WorkspaceId, "collection",
+                    entry.Entity.Id, nameof(Collection.ScriptsJson), false, staged, ct);
         }
 
         foreach (var entry in ChangeTracker.Entries<SavedRequest>()

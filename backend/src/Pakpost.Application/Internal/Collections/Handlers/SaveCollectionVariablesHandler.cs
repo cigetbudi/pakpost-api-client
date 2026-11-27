@@ -24,9 +24,10 @@ public sealed class SaveCollectionVariablesHandler(ICollectionRepository collect
             throw AppException.Conflict("Collection variables changed in another session. Reload before saving.");
         var before = CollectionVariableMapper.Read(item.VariablesJson);
         var after = CollectionVariableMapper.ToStored(cmd.Variables, before, cipher);
+        CollectionScriptSettings.Apply(item, cmd.PreScript, cmd.PostScript);
         item.SetVariables(JsonSerializer.Serialize(after));
         await uow.SaveChangesAsync(ct);
-        return CollectionVariableMapper.ToDto(item.VariablesVersion, after, cipher,
-            WorkspacePermissions.Can(member, WorkspacePermissions.EnvironmentSecretRead));
+        return CollectionScriptSettings.WithScripts(item, CollectionVariableMapper.ToDto(item.VariablesVersion, after, cipher,
+            WorkspacePermissions.Can(member, WorkspacePermissions.EnvironmentSecretRead)));
     }
 }

@@ -3,7 +3,7 @@ import hashlib
 import sys
 from pathlib import Path
 root = Path(sys.argv[1])
-names = ['PakPost-0.1.0-linux-amd64.deb','PakPost-0.1.0-linux-x86_64.rpm','PakPost-0.1.0-windows-x64.exe','PakPost-0.1.0-macos-universal.dmg','pakpost-interceptor-chrome-v0.3.0.zip','pakpost-interceptor-firefox-v0.3.0.xpi']
+names = ['PakPost-0.1.1-linux-amd64.deb','PakPost-0.1.1-linux-x86_64.rpm','PakPost-0.1.1-windows-x64.exe','PakPost-0.1.1-macos-universal.dmg','pakpost-interceptor-chrome-v0.3.0.zip','pakpost-interceptor-firefox-v0.3.0.xpi']
 lines=[]
 for name in sorted(names):
     path=root/name

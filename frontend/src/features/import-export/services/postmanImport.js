@@ -3,7 +3,7 @@ import {EMPTY,safeString,sanitizeRows,blankDraft,mimeFromHeaders} from './draftF
 import {splitQuery} from './curlImport.js';
 import {sanitizeResponseExamples} from '../../requests/services/responseExamples.js';
 function pmUrl(url){if(typeof url==='string')return url;if(!url||typeof url!=='object')return '';return safeString(url.raw||([url.protocol||'https',':','//',(Array.isArray(url.host)?url.host.join('.'):url.host||''),'/',(Array.isArray(url.path)?url.path.join('/'):url.path||'')].join('')));}
-function pmScript(events,listen){return (events||[]).filter(e=>e.listen===listen).map(e=>Array.isArray(e.script?.exec)?e.script.exec.join('\n'):safeString(e.script?.exec)).filter(Boolean).join('\n\n');}
+export function pmScript(events,listen){return (Array.isArray(events)?events:[]).filter(e=>e?.listen===listen&&e.disabled!==true).map(e=>Array.isArray(e.script?.exec)?e.script.exec.join('\n'):safeString(e.script?.exec)).filter(Boolean).join('\n\n');}
 function pmBody(body,draft){if(!body)return;
   if(body.mode==='raw'){draft.body=safeString(body.raw);const lang=body.options?.raw?.language;draft.format=mimeFromHeaders(draft.rows)||({json:'application/json',xml:'application/xml',html:'text/html',text:'text/plain',javascript:'text/plain'}[lang]||'text/plain');}
   else if(body.mode==='urlencoded'||body.mode==='formdata'){

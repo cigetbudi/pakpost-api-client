@@ -23,6 +23,9 @@ public sealed partial class PakpostDbContext
         {
             await UnprotectAsync(collection, collection.WorkspaceId, "collection", collection.Id,
                 nameof(Collection.VariablesJson), false, ct);
+            if (collection.ScriptsJson is not null)
+                await UnprotectAsync(collection, collection.WorkspaceId, "collection", collection.Id,
+                    nameof(Collection.ScriptsJson), false, ct);
         }
         catch
         {

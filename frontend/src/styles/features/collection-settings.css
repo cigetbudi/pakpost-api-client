@@ -1,0 +1,6 @@
+.pp-cv-tabs{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--pp-border, #7773);margin-bottom:12px}
+.pp-cv-tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 4px;color:inherit;font:inherit;cursor:pointer}
+.pp-cv-tabs button[aria-selected=true]{border-bottom-color:var(--pp-accent,#3b82f6);font-weight:600}
+.pp-cv-script{min-width:0;display:grid;gap:10px;padding:0 0 14px}
+.pp-cv-script p,.pp-cv-script small{font-size:12px;opacity:.8;margin:0}
+.pp-collection-disclosure{display:inline-flex!important;flex:0 0 14px!important;align-items:center;justify-content:center;overflow:visible!important}

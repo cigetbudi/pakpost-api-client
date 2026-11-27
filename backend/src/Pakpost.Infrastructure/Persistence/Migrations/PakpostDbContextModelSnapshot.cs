@@ -52,6 +52,10 @@ namespace Pakpost.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ScriptsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("scripts_json");
+
                     b.Property<string>("VariablesJson")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

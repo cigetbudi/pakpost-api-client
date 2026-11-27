@@ -5,4 +5,4 @@ using Pakpost.Application.Internal.Collections.DTOs;
 namespace Pakpost.Application.Internal.Collections.Commands;
 
 public sealed record SaveCollectionVariablesCommand(Guid ActorId, Guid WorkspaceId, Guid CollectionId,
-    int Version, List<CollectionVariableDto> Variables) : IRequest<CollectionVariablesDto>;
+    int Version, List<CollectionVariableDto> Variables, string? PreScript = null, string? PostScript = null) : IRequest<CollectionVariablesDto>;

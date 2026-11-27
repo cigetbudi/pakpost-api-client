@@ -147,7 +147,7 @@ export function exportCollectionByFormat(drafts,{name='Pakpost collection',forma
   const doc=localCollection?.documentation??documentation;const folders=localCollection?.folderDocs??folderDocs;
   if(format==='openapi')return exportOpenApiCollection(drafts,{name,includeSecrets,documentation:doc,folderDocs:folders});
   if(format==='insomnia')return exportInsomniaV4Collection(drafts,{name,includeSecrets,documentation:doc,folderDocs:folders});
-  if(localCollection){const doc=createLocalPostmanExport([localCollection],{includeSecrets});return {...doc,info:{...doc.info,name,description:localCollection.documentation||doc.info.description},item:doc.item[0]?.item||[],variable:doc.item[0]?.variable||[]};}
+  if(localCollection){const doc=createLocalPostmanExport([localCollection],{includeSecrets});return {...doc,info:{...doc.info,name,description:localCollection.documentation||doc.info.description},item:doc.item[0]?.item||[],variable:doc.item[0]?.variable||[],event:doc.item[0]?.event||[]};}
   const exported=createPostmanCollection(drafts,{name,includeSecrets});return {...exported,info:{...exported.info,description:doc||exported.info.description}};
 }
 export function exportEnvironmentByFormat(env,{format='postman',includeSecrets=false}={}){

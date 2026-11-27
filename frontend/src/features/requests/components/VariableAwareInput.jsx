@@ -37,7 +37,7 @@ export function VariablePopover({item,anchor,source,onEditVariable,onOpenEnviron
       <div className="pp-var-edit-actions"><button type="button" onClick={()=>setEditing(false)} disabled={busy}>Cancel</button><button type="submit" disabled={busy}><Check size={13}/> {busy?'Saving…':'Save'}</button></div>
     </form>:<>
       {known?<div className="pp-var-value-row"><span className="pp-var-value" aria-label={masked?'Hidden secret value':'Resolved variable value'}>{masked?'••••••••••••':item.value||'(empty value)'}</span>{item.sensitive&&<button type="button" className="pp-var-reveal" aria-label={revealed?'Hide value':'Reveal value'} onClick={()=>setRevealed(v=>!v)}>{revealed?<EyeOff size={15}/>:<Eye size={15}/>}</button>}</div>
-      :<p className="pp-var-message">{restricted?'This workspace variable is restricted for your account.':'No value in the active environment.'}</p>}
+      :<p className="pp-var-message">{restricted?'This workspace variable is restricted for your account.':'No value in the active variable scopes.'}</p>}
       {restricted?<p className="pp-var-message">Ask a workspace administrator to manage this value.</p>
       :onEditVariable?<button type="button" className="pp-var-edit-trigger" onClick={()=>{setDraft(known?item.value:'');setEditing(true);}}><Pencil size={14}/> {known?'Edit variable':'Create variable'}</button>
       :<button type="button" className="pp-var-edit-trigger" onClick={onOpenEnvironments}>Select an environment to edit</button>}
@@ -84,7 +84,7 @@ export function VariableAwareInput({value='',onChange,variables={},definitions=[
       onChange={e=>{onChange(e.target.value);refresh(e.currentTarget);}} onClick={e=>refresh(e.currentTarget)} onSelect={e=>{if(document.activeElement===e.currentTarget&&e.currentTarget.selectionStart!==cursor)refresh(e.currentTarget);}}
       onScroll={e=>{if(visual.current)visual.current.scrollLeft=e.currentTarget.scrollLeft;}} onPaste={onPaste} onKeyDown={keyDown} onBlur={()=>setOpen(false)}/>
     <VariableOverlay value={value} variables={variables} definitions={definitions} source={source} onEditVariable={onEditVariable} onOpenEnvironments={onOpenEnvironments} visualRef={visual} className="pp-value-highlight"/>
-    {open&&suggestions.length>0&&<div className="pp-url-suggestions" role="listbox" aria-label="Variable suggestions"><div className="pp-url-suggestions-title">Environment variables <span>Tab to insert</span></div>
+    {open&&suggestions.length>0&&<div className="pp-url-suggestions" role="listbox" aria-label="Variable suggestions"><div className="pp-url-suggestions-title">Available variables <span>Tab to insert</span></div>
       {suggestions.map((name,i)=><button type="button" role="option" aria-selected={i===selected} className={i===selected?'selected':''} key={name} onMouseDown={e=>e.preventDefault()} onClick={()=>insert(name)}><span className="pp-url-suggest-label">{'{{'}<strong>{name}</strong>{'}}'}</span><small>Available</small></button>)}
     </div>}
   </div>;

@@ -1,9 +1,11 @@
 import { loadDesktopEnvironments, saveDesktopEnvironments } from '../../features/environments/services/desktopEnvironmentRepository.js';
 import { loadDesktopHistory, saveDesktopHistory } from '../../features/requests/services/desktopHistoryRepository.js';
 import { createActiveEnvironmentBridge } from '../../features/environments/controllers/createActiveEnvironmentBridge.js';
+import { useRequestCollectionVariableUi } from '../../features/collections/hooks/useRequestCollectionVariableUi.js';
 import { createRequestPresentationActions } from '../../features/requests/controllers/createRequestPresentationActions.js';
 import { createCloudRequestOpenActions } from '../../features/collections/controllers/createCloudRequestOpenActions.js';
 import { useCollectionDialogState } from '../../features/collections/hooks/useCollectionDialogState.js';
+import {useCollectionWorkbenchTabs} from '../../features/collections/hooks/useCollectionWorkbenchTabs.js';
 import { useRequestAuthorizationFields } from '../../features/requests/hooks/useRequestAuthorizationFields.js';
 import { useRequestTabSession } from '../../features/requests/hooks/useRequestTabSession.js';
 import { useWorkspaceViewPreferencePersistence } from '../../features/workspace/hooks/useWorkspaceViewPreferencePersistence.js';
@@ -247,6 +249,7 @@ export function useWorkbenchController() {
   }
   const selectedWorkspaceRef=useRef(selectedWs);
   selectedWorkspaceRef.current=selectedWs;
+  const collectionWorkbench=useCollectionWorkbenchTabs(JSON.stringify([token,me?.id,authSessionRevision,selectedWs,storageScope,membershipRevision]));
   useWorkspaceViewPreferencePersistence({
     token, me, storageScope, selectedWs, workspaces, storage: localStorage,
   });
@@ -376,9 +379,9 @@ export function useWorkbenchController() {
   async function selectRequestHistoryRevision(...args) { return historyActions.selectRequestHistoryRevision(...args); }
   async function restoreRequestRevision(...args) { return historyActions.restoreRequestRevision(...args); }
 
-  function selectTab(...args) { cloudOpenEpoch.current++; return tabActions.selectTab(...args); }
-  function navigateConsoleEvent(...args) { return tabActions.navigateConsoleEvent(...args); }
-  function addTab(...args) { cloudOpenEpoch.current++; return tabActions.addTab(...args); }
+  function selectTab(...args) { collectionWorkbench.request(); cloudOpenEpoch.current++; return tabActions.selectTab(...args); }
+  function navigateConsoleEvent(...args) { collectionWorkbench.request(); return tabActions.navigateConsoleEvent(...args); }
+  function addTab(...args) { collectionWorkbench.request(); cloudOpenEpoch.current++; return tabActions.addTab(...args); }
   const { importPreparedEnvironments, importCloudCollections, importRequestsAndEnvironments } = createCollectionImportActions({
     STORAGE_LOCAL, STORAGE_WORKSPACE, activeTabRef, allowedStorageScope, api, blankDraft,
     collectionImportSources, collections, draftsRef, getMessage, localCollections, localEnvironments,
@@ -401,21 +404,27 @@ export function useWorkbenchController() {
   function openCollectionImport(...args) { return collectionActions.openCollectionImport(...args); }
   async function submitCollectionImport(...args) { return collectionActions.submitCollectionImport(...args); }
   function openBoundRequest(...args) { return collectionActions.openBoundRequest(...args); }
-  function openLocalRequest(...args) { cloudOpenEpoch.current++; return collectionActions.openLocalRequest(...args); }
+  function openLocalRequest(...args) { collectionWorkbench.request(); cloudOpenEpoch.current++; return collectionActions.openLocalRequest(...args); }
   function previewSavedExample(...args) { return collectionActions.previewSavedExample(...args); }
-  function openLocalExample(...args) { cloudOpenEpoch.current++; return collectionActions.openLocalExample(...args); }
+  function openLocalExample(...args) { collectionWorkbench.request(); cloudOpenEpoch.current++; return collectionActions.openLocalExample(...args); }
   async function openWorkspaceExample(...args) {
+    collectionWorkbench.request();
     return cloudRequestOpenActions.openWorkspaceExample(...args);
   }
   function downloadJson(...args) { return collectionActions.downloadJson(...args); }
   function updateLocal(...args) { return collectionActions.updateLocal(...args); }
-  function createCollectionDraft(...args) { return collectionActions.createCollectionDraft(...args); }
-  const { collectionTargetKey, readSavedCollectionVariables, openCollectionVariables, reloadCollectionVariables, saveCollectionVariableDefaults, applyCollectionVariableSession, resetCollectionVariableSession } = createCollectionVariableActions({
+  function createCollectionDraft(...args) { collectionWorkbench.request(); return collectionActions.createCollectionDraft(...args); }
+  const { collectionTargetKey, readSavedCollectionVariables, reloadCollectionVariables, saveCollectionVariableDefaults, applyCollectionVariableSession, resetCollectionVariableSession } = createCollectionVariableActions({
     api, canWorkspace, collectionVariableKey, collectionVariablesData, collectionVariablesFetchId, collectionVariablesTarget,
     getMessage, localCollections, me, refreshSessionEnvironment, resetCollectionVariables, rows,
     savedCollectionVariablesCache, selfMember, sessionCollectionVariables, setCollectionVariablesBusy, setCollectionVariablesData, setCollectionVariablesError,
     setCollectionVariablesLoading, setCollectionVariablesTarget, setLocalCollections, token, validateCollectionVariableRows, writeCollectionVariables,
   });
+  function openCollectionVariables(target){
+    if(target.scope==='workspace'&&target.workspaceId!==selectedWs)return;
+    cloudOpenEpoch.current++;
+    collectionWorkbench.open(target);setPage('tester');
+  }
   async function openCollectionRunner(...args) { return runnerActions.openCollectionRunner(...args); }
   function openRunnerForCurrentCollection(...args) { return runnerActions.openRunnerForCurrentCollection(...args); }
   function closeRunner(...args) { return runnerActions.closeRunner(...args); }
@@ -445,8 +454,9 @@ export function useWorkbenchController() {
   function closeTab(...args) { return tabActions.closeTab(...args); }
   function performTabAction(...args) { return tabActions.performTabAction(...args); }
   function showTabContext(...args) { return tabActions.showTabContext(...args); }
-  function selectTabFromDraft(...args) { return tabActions.selectTabFromDraft(...args); }
+  function selectTabFromDraft(...args) { collectionWorkbench.request(); return tabActions.selectTabFromDraft(...args); }
   async function loadSavedRequest(...args) {
+    collectionWorkbench.request();
     return cloudRequestOpenActions.loadSavedRequest(...args);
   }
   async function resetSandboxRequest(...args) { return tabActions.resetSandboxRequest(...args); }
@@ -463,7 +473,7 @@ export function useWorkbenchController() {
   const activeSessionEnvironmentKey=envScope===STORAGE_WORKSPACE?sessionEnvironmentKey(environmentContext,activeEnvId):'';
   const activeSessionOverrides=sessionEnvironmentOverlays.current.get(activeSessionEnvironmentKey)||{};
   const canWriteEnvironment=envScope!==STORAGE_WORKSPACE||(membersWorkspaceId===selectedWs&&canWorkspace(currentWorkspaceMember(members,me),'environment.write'));
-  const { varsFromEnv, rememberSessionValues, variableUi } = createActiveEnvironmentBridge({
+  const { varsFromEnv, rememberSessionValues, variableUi:environmentUi } = createActiveEnvironmentBridge({
     STORAGE_WORKSPACE, activeEnvironment, activeSessionEnvironmentKey,
     activeSessionOverrides, applySessionOverrides, canWriteEnvironment,
     envScope, isSensitiveVariable,
@@ -472,6 +482,12 @@ export function useWorkbenchController() {
     readableEnvironmentValues, refreshSessionEnvironment, selectedWs,
     sessionEnvironmentOverlays, sessionOverridesFromValues, setExplorerTab,
     setNotice, storeSessionOverrides, workspaces,
+  });
+  const {variableUi,varsForRequest}=useRequestCollectionVariableUi({
+    source:openTabs.find(tab=>tab.id===activeTabId)?.source,
+    localCollections,collections,token,userId:me?.id,selectedWs,membershipRevision,
+    api,savedCollectionVariablesCache,sessionCollectionVariables,refreshSessionEnvironment,
+    environmentUi,varsFromEnv,isSensitiveVariable,setNotice,
   });
   const { updateStorageScope, importEnvironmentFile, createEnvironment, duplicateEnvironment, openExportChoice, confirmExport, persistEnvironment, deleteEnvironment, applyScriptVariables } = createEnvironmentActions({
     STORAGE_WORKSPACE, allowedStorageScope, api, currentEnvironments, documentation, downloadJson,
@@ -487,7 +503,7 @@ export function useWorkbenchController() {
     buildRequestPreview, currentAuth, formFields, format, formatSource,
     getMessage, hasJsonComments, languageFromMime, method, params, result,
     rows, setBody, setFormat, setNotice, setPrettyResponse,
-    setResponsePretty, url, varsFromEnv,
+    setResponsePretty, url, varsFromEnv:varsForRequest,
   });
   useEffect(() => {
     let ignore = false;
@@ -615,7 +631,7 @@ export function useWorkbenchController() {
   });
   useWorkbenchKeyboardShortcuts({
     page, loading, busyAction, saveOpen, saveExampleOpen, actionDialog,
-    documentationTarget, saveCurrent: () => saveCurrent(), sendRequest,
+    documentationTarget, collectionActive:!!collectionWorkbench.activeId, saveCurrent: () => saveCurrent(), sendRequest,
   });
 
   const { refreshExtensionStatus } = useInterceptorLifecycle({
@@ -741,7 +757,7 @@ export function useWorkbenchController() {
     binaryFile, body, buildOutgoing, canEditCloud, canWriteEnvironment, collectionVariableKey,
     currentTokenRef, executionRef, dispatchRequest, draftsRef, envScope, executeWorkbenchRequest, formFields,
     format, getMessage, interceptorMode, isReadOnlyCloudTab, loading, me,
-    method, openTabsRef, postScript, preScript, readCollectionVariables, readSavedCollectionVariables,
+    method, openTabsRef, postScript, preScript, readCollectionVariables, readSavedCollectionVariables, refreshSessionEnvironment,
     rows, savedCollectionVariableMap, scriptDiagnostic, scriptError, selectedWs, sessionCollectionVariables,
     setLoading, setNotice, setOpenTabs, setPrettyResponse, setRecent, setResTab,
     setResponsePretty, setResult, setScriptDiagnostic, setScriptError, setScriptJump, setScriptLog,
@@ -829,6 +845,7 @@ export function useWorkbenchController() {
     setCollectionImportError, setCollectionImportFile, setCollectionImportOpen, setConflictDialog, setExampleDescription, setExampleName, setSaveCollection,
     setSaveExampleOpen, setSaveLocalCollection, setSaveName, setSaveOpen, setSaveScope, setSaveWs, setVersionDialog,
     statusTone, submitCollectionImport, versionDialog, workspaceDraft, runnerTarget, CollectionRunner, closeRunner,
+    collectionWorkbench, collectionPanelContext:{api,canWorkspace,localCollections,me,refreshSessionEnvironment,savedCollectionVariablesCache,selfMember,sessionCollectionVariables,setLocalCollections,token,theme,scopeKey:collectionWorkbench.scopeKey,scopeRef:collectionWorkbench.scopeRef},
     api, dispatchRequest, PakpostConsole, consoleEvents, clearConsoleEvents, navigateConsoleEvent, FastTooltip,
   };
 }

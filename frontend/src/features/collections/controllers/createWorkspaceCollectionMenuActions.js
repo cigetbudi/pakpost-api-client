@@ -66,6 +66,7 @@ export function createWorkspaceCollectionMenuActions({
           const result=await api(`${base}/import`,'POST',{collections:[{
             name:`${source?.name||'Collection'} (copy)`,
             variables:(variables.variables||[]).filter(v=>!v.isRedacted),
+            preScript:variables.preScript||'',postScript:variables.postScript||'',
             requests:list.map(req=>({name:req.name,method:req.method,url:req.url,headersJson:req.headersJson,
               body:req.body,bodyMode:req.bodyMode,contentType:req.contentType,formFieldsJson:req.formFieldsJson,
               preRequestScript:req.preRequestScript,postResponseScript:req.postResponseScript,

@@ -1,6 +1,7 @@
 /** Postman export; secrets are redacted by default. */
 import {blankDraft,sanitizeRows,named} from './draftFormat.js';
 import {sanitizeResponseExamples} from '../../requests/services/responseExamples.js';
+import {collectionPostmanEvents} from '../../collections/services/collectionScripts.js';
 function pmEvent(listen,code){return {listen,script:{type:'text/javascript',exec:code.split('\n')}};}
 function pmResponse(example){
   return {
@@ -37,7 +38,7 @@ export function createPostmanCollection(drafts,{includeSecrets=false,name='Pakpo
 export function createLocalPostmanExport(collections,{includeSecrets=false}={}){
   const root=createPostmanCollection([],{name:'Pakpost local collections',includeSecrets});
   for(const col of collections||[]){
-    const parent={name:col.name,description:col.documentation||'',item:[],variable:(col.variables||[]).map(v=>({key:v.key,value:v.isSecret&&!includeSecrets?'':v.value,type:v.isSecret?'secret':'string'}))};root.item.push(parent);
+    const parent={name:col.name,description:col.documentation||'',item:[],event:collectionPostmanEvents(col),variable:(col.variables||[]).map(v=>({key:v.key,value:v.isSecret&&!includeSecrets?'':v.value,type:v.isSecret?'secret':'string'}))};root.item.push(parent);
     // Create explicit empty folders as well as folders populated by requests.
     for(const path of col.folderPaths||[]){
       let target=parent;

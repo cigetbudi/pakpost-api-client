@@ -2,6 +2,7 @@ import {parseScriptOutput,validateScriptInput,SANDBOX_LIMITS} from './sandboxLim
 import {scriptDiagnostic, formatScriptDiagnostic} from './scriptDiagnostics.js';
 import {newQuickJSWASMModuleFromVariant} from 'quickjs-emscripten-core';
 import releaseVariant from '@jitl/quickjs-singlefile-browser-release-sync';
+import {installSandboxRandom} from './sandboxRandom.js';
 
 self.onmessage = async ({data}) => {
   const {id, code, phase, variables, collectionVariables, localVariables, request, response, iterationData, iterationInfo}=data;
@@ -19,6 +20,8 @@ self.onmessage = async ({data}) => {
 
     // Load only an allowlisted, locally installed package. No remote imports or host require().
     if (/\bcrypto-js\b/.test(code)) {
+      // CryptoJS captures native crypto when its UMD bundle initializes.
+      installSandboxRandom(vm);
       const {default: cryptoJsSource} = await import('crypto-js/crypto-js.js?raw');
       const libraryResult = vm.evalCode(cryptoJsSource, 'crypto-js.js');
       if (libraryResult.error) {
@@ -145,6 +148,7 @@ self.onmessage = async ({data}) => {
         },
         require:(name)=>require(name)
       };
+      pm.expect.fail=(message)=>{throw Error(String(message||"Assertion failed"));};
       const require=(name)=>{
         if(name==='crypto-js') {
           if(!globalThis.CryptoJS)throw Error('crypto-js is not loaded');

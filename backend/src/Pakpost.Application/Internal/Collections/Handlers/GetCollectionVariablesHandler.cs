@@ -20,7 +20,7 @@ public sealed class GetCollectionVariablesHandler(ICollectionRepository collecti
         var item = await collections.FindAsync(query.CollectionId, ct);
         if (item is null || item.WorkspaceId != query.WorkspaceId)
             throw AppException.NotFound("Collection not found");
-        return CollectionVariableMapper.ToDto(item.VariablesVersion, CollectionVariableMapper.Read(item.VariablesJson),
-            cipher, WorkspacePermissions.Can(member, WorkspacePermissions.EnvironmentSecretRead));
+        return CollectionScriptSettings.WithScripts(item, CollectionVariableMapper.ToDto(item.VariablesVersion, CollectionVariableMapper.Read(item.VariablesJson),
+            cipher, WorkspacePermissions.Can(member, WorkspacePermissions.EnvironmentSecretRead)));
     }
 }

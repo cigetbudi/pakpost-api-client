@@ -14,6 +14,7 @@ public sealed class Collection
     public int SortOrder { get; private set; }
     public string VariablesJson { get; private set; } = "[]";
     public int VariablesVersion { get; private set; }
+    public string? ScriptsJson { get; private set; }
     public Guid CreatedByUserId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -47,6 +48,8 @@ public sealed class Collection
         ParentCollectionId = parentCollectionId;
         SortOrder = sortOrder;
     }
+
+    public void SetScripts(string json) => ScriptsJson = json;
 
     public void SetVariables(string json)
     {

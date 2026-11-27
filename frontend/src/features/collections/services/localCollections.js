@@ -1,6 +1,7 @@
 /** Browser-local imported collections. Nothing is sent to a remote workspace. */
 import {blankDraft, safeExportDraft} from '../../import-export/services/importExport.js';
 import {validateCollectionVariableRows} from './collectionVariableSession.js';
+import {collectionScripts} from './collectionScripts.js';
 
 const LIVE='pakpost_v5_collections_live';
 const FALLBACK='pakpost_v5_collections_recovery';
@@ -21,7 +22,7 @@ export function toLocalCollection(source,idFactory=uid){
     responseExamples:(r.responseExamples||[]).map(example=>({...example,headers:{...(example.headers||{})}})),
     result:null,scriptLog:[],scriptTests:[],scriptError:'',
   }));
-  return {id:idFactory(),name:String(source?.name||'Imported collection'),parentCollectionId:null,sortOrder:0,variables:(source?.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret})),documentation:String(source?.documentation||''),folderDocs:{...(source?.folderDocs||{})},requests};
+  return {id:idFactory(),name:String(source?.name||'Imported collection'),parentCollectionId:null,sortOrder:0,...collectionScripts(source),variables:(source?.variables||[]).map(v=>({key:String(v.key||''),value:String(v.value||''),isSecret:!!v.isSecret})),documentation:String(source?.documentation||''),folderDocs:{...(source?.folderDocs||{})},requests};
 }
 
 export function validateLibrary(collections){
@@ -31,6 +32,7 @@ export function validateLibrary(collections){
   if(ids.size!==collections.length)throw Error('Duplicate local collection IDs');
   for(const collection of collections){
     validateCollectionVariableRows(collection.variables||[]);
+    collectionScripts(collection);
     if(collection.parentCollectionId&&(!ids.has(collection.parentCollectionId)||collection.parentCollectionId===collection.id))
       throw Error('Invalid local collection parent');
   }

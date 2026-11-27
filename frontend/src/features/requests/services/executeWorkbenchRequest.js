@@ -1,4 +1,5 @@
 import { runSandbox } from './runScript.js';
+import {runCollectionPhase} from '../../collections/services/collectionScripts.js';
 import { postmanRequestSnapshot } from './postmanCompat.js';
 import { languageFromMime, syntaxProblem } from './requestTools.js';
 import { stripJsonComments } from './jsonComments.js';
@@ -11,7 +12,7 @@ import { resolvedScriptVariables } from '../../collections/services/collectionVa
  * A failed pre-script aborts Send; a failed post-script keeps the HTTP response.
  */
 export async function executeWorkbenchRequest({
-  request, environmentValues, collectionValues, loadCollectionValues,
+  request, environmentValues, collectionValues, loadCollectionValues, loadCollectionSettings,
   saveCollectionValues, saveEnvironmentValues, buildOutgoing, dispatch, isCurrent = () => true,
   trace = () => {}, sandbox = runSandbox,
 }) {
@@ -19,6 +20,7 @@ export async function executeWorkbenchRequest({
   const logs = [], tests = [];
   let variables = { ...environmentValues };
   let collectionVars = { ...collectionValues };
+  let collectionPre = "", collectionPost = "";
   const fail = (error, diagnostic) => {
     const fault = new Error(error);
     fault.scriptDiagnostic = diagnostic || null;
@@ -27,12 +29,16 @@ export async function executeWorkbenchRequest({
     return fault;
   };
   try {
-    if (loadCollectionValues) {
+    if (loadCollectionSettings) {
+      const settings=await loadCollectionSettings();
+      collectionVars=settings.values;
+      collectionPre=settings.preScript||""; collectionPost=settings.postScript||"";
+    } else if (loadCollectionValues) {
       try { collectionVars = await loadCollectionValues(collectionVars); }
       catch { trace('warn', 'collection', 'Saved Collection Variables unavailable; continuing with session values'); }
     }
     if (!isCurrent()) throw new Error('Request cancelled: account changed');
-    const pre = await sandbox(preScript, 'pre', variables, postmanRequestSnapshot({
+    const pre = await runCollectionPhase(sandbox,collectionPre,preScript, 'pre', variables, postmanRequestSnapshot({
       method, url,
       headers: Object.fromEntries(rows.filter(x => x.key?.trim() && x.enabled !== false).map(x => [x.key.trim(), x.value])),
       body: languageFromMime(format) === 'json' ? stripJsonComments(body) : body, format,
@@ -74,7 +80,7 @@ export async function executeWorkbenchRequest({
     let scriptError = '', scriptDiagnostic = null;
     try {
       if (!isCurrent()) throw new Error('Request cancelled: account changed');
-      const post = await sandbox(postScript, 'post', pre.environmentVariables || environmentValues,
+      const post = await runCollectionPhase(sandbox,collectionPost,postScript, 'post', pre.environmentVariables || environmentValues,
         command, response, pre.localVariables || {}, collectionVars);
       logs.push(...post.logs.map(line => 'POST: ' + line));
       tests.push(...post.tests);

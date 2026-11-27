@@ -5,10 +5,10 @@ import shutil
 import sys
 from pathlib import Path
 NAMES = {
-    'deb': ('*.deb', 'PakPost-0.1.0-linux-amd64.deb'),
-    'rpm': ('*.rpm', 'PakPost-0.1.0-linux-x86_64.rpm'),
-    'windows': ('*-setup.exe', 'PakPost-0.1.0-windows-x64.exe'),
-    'mac-universal': ('*.dmg', 'PakPost-0.1.0-macos-universal.dmg'),
+    'deb': ('*.deb', 'PakPost-0.1.1-linux-amd64.deb'),
+    'rpm': ('*.rpm', 'PakPost-0.1.1-linux-x86_64.rpm'),
+    'windows': ('*-setup.exe', 'PakPost-0.1.1-windows-x64.exe'),
+    'mac-universal': ('*.dmg', 'PakPost-0.1.1-macos-universal.dmg'),
     'chromium': ('pakpost-interceptor-chrome-v0.3.0.zip', 'pakpost-interceptor-chrome-v0.3.0.zip'),
     'firefox': ('pakpost-interceptor-firefox-v0.3.0.xpi', 'pakpost-interceptor-firefox-v0.3.0.xpi'),
 }
@@ -32,6 +32,6 @@ if __name__ == '__main__':
         raise SystemExit('Usage: collect.py <bundle-root> <output-dir> <slot> ...')
     root = Path(__file__).resolve().parents[2]
     for name in ("desktop/package.json", "desktop/src-tauri/tauri.conf.json", "frontend/package.json"):
-        if json.loads((root/name).read_text())["version"] != "0.1.0":
+        if json.loads((root/name).read_text())["version"] != "0.1.1":
             raise SystemExit(f"Version mismatch: {name}")
     collect(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3:])

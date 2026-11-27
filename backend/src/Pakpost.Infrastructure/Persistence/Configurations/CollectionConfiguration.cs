@@ -16,6 +16,8 @@ public sealed class CollectionConfiguration : IEntityTypeConfiguration<Collectio
             .HasDefaultValue("[]")
             .IsRequired();
 
+        builder.Property(x => x.ScriptsJson).HasColumnName("scripts_json").HasColumnType("text");
+
         builder.Property(x => x.VariablesVersion)
             .HasColumnName("variables_version")
             .HasDefaultValue(0)
