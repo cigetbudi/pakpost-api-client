@@ -1,9 +1,11 @@
 # Third-party notices — review required before redistribution
 
 PakPost's own code is GPL-3.0-only. Third-party components retain their original
-licenses and copyright notices. This file is a preliminary inventory of direct
-components observed in the project manifests, not a complete notice bundle or a
-certification of license compatibility.
+licenses and copyright notices. This file is a scope guide and review record, not a certification of license
+compatibility. The collected version-specific texts are available in
+`THIRD_PARTY_LICENSES.txt` (desktop and frontend) and
+`docs/backend-third-party-licenses.txt` (backend). Both include unresolved
+entries and build/test components; do not treat either as a final sign-off.
 
 | Area | Components to review |
 | --- | --- |
@@ -28,3 +30,23 @@ certification of license compatibility.
 4. Verify ownership or permission for all original contributions and branding.
 
 See [release licensing](docs/release-licensing.md) for the release checklist.
+
+## v0.1.1 evidence scope and open issues
+
+- The desktop/frontend evidence contains the union of the four normal Cargo
+  dependency trees and the installed frontend npm inventory. The backend
+  evidence contains restored NuGet packages, including test packages.
+- Verify upstream candidates against exact source revisions and the actual
+  artifact. In particular, selectors 0.38.0 has the standard MPL text only;
+  the objc2 family has upstream licensing explanations requiring further
+  review; SignalR has the ASP.NET Core release-tag MIT text, but package
+  mapping and applicable notices remain to be checked.
+- For MPL components, the evidence index provides exact package-version links.
+  Verify source completeness and preserve all notices, and supply access to
+  the matching source (including any modifications) as required by MPL 2.0.
+- Review bundled QuickJS/Emscripten, SQLite, native platform libraries,
+  installer bootstrapper materials, original icons/assets, and container
+  base images separately. The browser interceptor has its own scope; do not
+  assume desktop/backend dependencies are part of the extension.
+- Do not publish while relevant evidence gaps or corresponding-source
+  obligations remain unresolved.

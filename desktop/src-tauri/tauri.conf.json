@@ -29,6 +29,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "license": "GPL-3.0-only",
+    "licenseFile": "../../LICENSE",
+    "resources": {
+      "../../LICENSE": "legal/LICENSE.txt",
+      "../../NOTICE": "legal/NOTICE.txt",
+      "../../ADDITIONAL_TERMS.md": "legal/ADDITIONAL_TERMS.md",
+      "../../THIRD_PARTY_NOTICES.md": "legal/THIRD_PARTY_NOTICES.md",
+      "../../THIRD_PARTY_LICENSES.txt": "legal/THIRD_PARTY_LICENSES.txt"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

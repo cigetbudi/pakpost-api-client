@@ -12,6 +12,7 @@ jobs:
           persist-credentials: false
       - run: python3 scripts/release/audit-tracked.py HEAD
       - run: python3 scripts/release/test_release.py
+      - run: python3 scripts/release/verify-legal.py source
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -82,6 +83,9 @@ jobs:
       - name: Collect exact release filenames
         shell: bash
         run: python scripts/release/collect.py desktop/src-tauri/target/${{ matrix.target }}/release/bundle release-output ${{ matrix.slots }}
+      - name: Verify Linux installer legal documents
+        if: runner.os == 'Linux'
+        run: python scripts/release/verify-legal.py linux release-output
       - uses: actions/upload-artifact@v4
         with:
           name: pakpost-${{ matrix.target }}
@@ -100,6 +104,7 @@ jobs:
       - run: node --test frontend/tests/network/interceptorPermissionModes.test.js frontend/tests/network/interceptorOriginDiscovery.test.js frontend/tests/network/interceptorTransport.test.js
       - run: bash extension/release.sh
       - run: python3 scripts/release/collect.py extension/releases release-output chromium firefox
+      - run: python3 scripts/release/verify-legal.py extensions release-output
       - uses: actions/upload-artifact@v4
         with:
           name: pakpost-interceptor
