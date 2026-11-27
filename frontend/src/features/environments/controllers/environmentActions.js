@@ -67,7 +67,9 @@ export function createEnvironmentActions(dependencies) {
         const documentation=scope==='workspace'?workspaceCollectionDocs[workspaceDocKey(selectedWs,collectionId)]||'':'';
         const output=exportCollectionByFormat(drafts,{name,format:exportFormat,includeSecrets:exportIncludeSecrets,localCollection,documentation});
         if(scope==='workspace'&&exportFormat==='postman'){
+          const {collectionPostmanEvents}=await import('../../collections/services/collectionScripts.js');
           const cloudVars=await readSavedCollectionVariables({scope:'workspace',workspaceId:selectedWs,collectionId},{reload:true});
+          output.event=collectionPostmanEvents(cloudVars);
           output.variable=(cloudVars.variables||[]).map(v=>({key:v.key,value:v.isRedacted||v.isSecret&&!exportIncludeSecrets?'':v.value,type:v.isSecret?'secret':'string'}));
         }
         downloadJson(output,exportFileName(name,exportFormat));

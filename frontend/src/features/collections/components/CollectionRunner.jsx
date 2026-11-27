@@ -32,7 +32,7 @@ export default function CollectionRunner({target,requests=[],environmentVariable
     setRunning(true);setFailure('');setSummary(null);setExpanded('');
     try{
       await executeCollectionRun({requests,selectedIds:selected,iterations,delayMs,stopOnFailure,
-        environmentVariables,collectionVariables,iterationData:dataset,signal:aborter.signal,
+        environmentVariables,collectionVariables,collectionPreScript:target?.preScript,collectionPostScript:target?.postScript,iterationData:dataset,signal:aborter.signal,
         script:runSandbox,send,
         onProgress:setSummary,
         onStep:row=>appendConsoleEvent({executionId:row.runId,phase:'runner',level:row.passed?'info':'error',

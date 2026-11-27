@@ -46,14 +46,14 @@ export function createCollectionRunnerActions(dependencies) {
           items=(await api(`/api/workspaces/${source.workspaceId}/collections/${source.collectionId}/requests`,'GET',undefined,token))
             .map(item=>workspaceDraft(item));
         }
-        const saved=await readSavedCollectionVariables(source);
+        const saved=await readSavedCollectionVariables(source,{reload:true});
         const key=collectionVariableKey(source,'',me?.id||'guest');
         const collectionVars=readCollectionVariables(sessionCollectionVariables.current,key,savedCollectionVariableMap(saved.variables));
         // Snapshot is intentionally private to this single run. Runner scripts never
         // call applyScriptVariables or write Collection/Environment Cloud defaults.
         if(fetchId!==runnerFetchId.current)return;
         setRunnerTarget({...source,requests:items,environmentVariables:{...varsFromEnv()},
-          collectionVariables:collectionVars,transport:interceptorMode,environmentName:activeEnvironment?.name||'No environment'});
+          collectionVariables:collectionVars,preScript:saved.preScript||'',postScript:saved.postScript||'',transport:interceptorMode,environmentName:activeEnvironment?.name||'No environment'});
       }catch(error){if(fetchId===runnerFetchId.current)setNotice(`Collection Runner: ${getMessage(error)}`);}
       finally{if(fetchId===runnerFetchId.current)setRunnerLoading(false);}
     }

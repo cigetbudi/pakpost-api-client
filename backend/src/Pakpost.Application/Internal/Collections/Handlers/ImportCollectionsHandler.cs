@@ -58,6 +58,7 @@ public sealed class ImportCollectionsHandler(
                 collection.SetVariables(JsonSerializer.Serialize(storedVariables));
             }
 
+            CollectionScriptSettings.Apply(collection, incomingCollection.PreScript, incomingCollection.PostScript);
             collections.Add(collection);
 
             var pathFolders = new ImportedFolderPathResolver(collection.Id, folders);

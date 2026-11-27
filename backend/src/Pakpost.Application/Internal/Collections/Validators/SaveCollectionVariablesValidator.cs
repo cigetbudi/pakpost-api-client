@@ -9,6 +9,8 @@ public sealed class SaveCollectionVariablesValidator : AbstractValidator<SaveCol
     public SaveCollectionVariablesValidator()
     {
         RuleFor(x => x.Version).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.PreScript).MaximumLength(64000);
+        RuleFor(x => x.PostScript).MaximumLength(64000);
         RuleFor(x => x.Variables).NotNull().Must(x => x is not null && x.Count <= 100);
         RuleForEach(x => x.Variables).ChildRules(v =>
             {

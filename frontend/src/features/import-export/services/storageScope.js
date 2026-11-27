@@ -2,6 +2,7 @@
 import {encodeStoredHeaders} from '../../requests/services/requestMetadata.js';
 import {bodyFormat} from '../../requests/services/requestTools.js';
 import {validateCollectionVariableRows} from '../../collections/services/collectionVariableSession.js';
+import {collectionScripts} from '../../collections/services/collectionScripts.js';
 
 const CLOUD_IMPORT_MAX_REQUESTS = 200;
 const CLOUD_REQUEST_METHODS = new Set(['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS']);
@@ -63,6 +64,7 @@ export async function saveCloudCollections(sources,{workspaceId,token,request,on
   if(totalRequests>CLOUD_IMPORT_MAX_REQUESTS)throw Error(`Cloud import limit: maximum ${CLOUD_IMPORT_MAX_REQUESTS} requests across all collections.`);
   const prepared=sources.map(source=>({
     name:String(source.name||'Imported collection').trim(),
+    ...collectionScripts(source),
     variables:validateCollectionVariableRows((source.variables||[]).map(v=>({key:v.key,value:v.value??'',isSecret:!!v.isSecret}))),
     requests:(source.requests||[]).map(importedRequestPayload)
   }));

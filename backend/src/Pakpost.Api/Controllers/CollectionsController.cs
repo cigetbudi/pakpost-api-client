@@ -29,12 +29,13 @@ public sealed class CollectionsController(ISender sender,IWorkspaceChangePublish
         [FromBody] SaveCollectionVariablesRequest body, CancellationToken ct)
     {
         var result=await sender.Send(new SaveCollectionVariablesCommand(User.GetUserId(), workspaceId,
-            collectionId, body.Version, body.Variables), ct);
+            collectionId, body.Version, body.Variables, body.PreScript, body.PostScript), ct);
         await realtime.PublishAsync(workspaceId,"collection.variables",collectionId,null,null,Instance,ct);
         return Ok(result);
     }
 
-    public sealed record SaveCollectionVariablesRequest(int Version, List<CollectionVariableDto> Variables);
+    public sealed record SaveCollectionVariablesRequest(int Version, List<CollectionVariableDto> Variables,
+        string? PreScript = null, string? PostScript = null);
 
     [HttpPut("{collectionId:guid}")]
     public async Task<ActionResult<CollectionDto>> Rename(Guid workspaceId, Guid collectionId, [FromBody] CreateCollectionRequest body, CancellationToken ct)

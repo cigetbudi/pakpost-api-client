@@ -34,7 +34,7 @@ internal static class CloudImportGuard
             command.WorkspaceId,
             Guid.Empty,
             0,
-            incomingCollection.Variables));
+            incomingCollection.Variables, incomingCollection.PreScript, incomingCollection.PostScript));
 
         if (!variableCheck.IsValid)
         {

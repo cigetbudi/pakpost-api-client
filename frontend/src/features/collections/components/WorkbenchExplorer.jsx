@@ -156,8 +156,8 @@ export function WorkbenchExplorer({ data, actions, refs, deferred }) {
                   }}>
                   <button type="button" draggable={canEditCloud}
                     onDragStart={e=>{if(!canEditCloud)return;e.stopPropagation();startCollectionDrag(e.dataTransfer,{scope:'workspace',workspaceId:selectedWs,collectionId:c.id});}}
-                    aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row pp-explorer-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} title={`${c.name} · Drag to reorder, or drop into another collection`} onClick={() => toggleWorkspaceCollectionById(c.id)}>
-                    {opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                    aria-expanded={opened} className={`pp-tree-row pp-cloud-collection-row pp-explorer-tree-row ${selectedCol === c.id ? 'active' : ''}`} onContextMenu={e=>showWorkspaceMenu(e,{type:'collection',collectionId:c.id,name:c.name})} title={`${c.name} · Drag to reorder, or drop into another collection`} onClick={e=>{if(e.target.closest?.('[data-collection-disclosure]'))toggleWorkspaceCollectionById(c.id);else handleWorkspaceMenu('variables',{type:'collection',collectionId:c.id,name:c.name});}} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();if((e.key==='ArrowRight')!==!!opened)toggleWorkspaceCollectionById(c.id);}}}>
+                    <span data-collection-disclosure className="pp-collection-disclosure" aria-hidden="true" title={opened?'Collapse collection':'Expand collection'}>{opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</span>
                     <FolderClosed className="pp-cloud-folder-icon" size={15}/><span>{c.name}</span><small className="pp-cloud-endpoint-count" title={`${endpointCount} saved endpoints`} aria-label={`${endpointCount} saved endpoints`}>{endpointCount}</small>
                   </button>
                   <div className="pp-tree-actions">

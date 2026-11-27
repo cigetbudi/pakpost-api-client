@@ -4,6 +4,7 @@ import { WorkbenchOverlays } from './WorkbenchOverlays.jsx';
 import React, { useEffect, useState } from 'react';
 import { Play, Terminal } from 'lucide-react';
 import { WorkbenchButton } from '../../components/ui/WorkbenchButton.jsx';
+const CollectionWorkbenchPanel=React.lazy(()=>import('../../features/collections/components/CollectionWorkbenchPanel.jsx'));
 
 /** Pure workbench renderer. No data fetching or workspace mutations. */
 export function WorkbenchView({ model }) {
@@ -60,6 +61,8 @@ export function WorkbenchView({ model }) {
     setInviteEmail, setInviteRoles, actOnInvitation, setMemberSearch, setMemberRoleFilter, setExpandedMemberAccess,
     setEditingMemberId, setEditingMemberRoles, removeWorkspaceMember, selectedWorkspaceRef, currentTokenRef,
   } = model;
+  const {collectionWorkbench,collectionPanelContext}=model;
+  const collectionActive=page==='tester'&&!!collectionWorkbench.activeId;
   const [responseMode, setResponseMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'collapsed' : 'expanded');
   const preferences=useWorkbenchPreferences();
   useEffect(()=>{
@@ -140,7 +143,7 @@ export function WorkbenchView({ model }) {
 />}
       <main className="pp-content">
         {page==='settings'&&<WorkbenchSettings category={settingsCategory} onCategoryChange={setSettingsCategory} theme={theme} onThemeChange={setTheme} token={token} me={me} split={split} onSplitChange={setSplit} interceptorMode={interceptorMode} onInterceptorChange={setInterceptorMode} extensionStatus={extensionStatus} onCheckExtension={refreshExtensionStatus} onBack={()=>setPage('tester')} onOpenEnvironments={()=>{setPage('tester');openContext('environments')}} onOpenImportExport={()=>{setPage('tester');openContext('exchange')}}/>}
-        <RequestTabs store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
+        <RequestTabs collectionWorkbench={collectionWorkbench} onActivateCollection={id=>{collectionWorkbench.activate(id);setPage('tester');}} store={requestWorkbenchStore} page={page} remoteAlerts={remoteAlerts} snapshot={snapshot} draftsRef={draftsRef} tabDragRef={tabDragRef} selectTab={selectTab} closeTab={closeTab} showTabContext={showTabContext} setTabMenu={setTabMenu} addTab={addTab} navigate={navigate} token={token} collectionsScope={collectionsScope} realtimeStatus={realtimeStatus} openRequestHistory={openRequestHistory}/>
         {workspaceMenu&&<div className="pp-collection-popup" role="menu" style={{left:workspaceMenu.x,top:workspaceMenu.y}}>
           {(workspaceMenu.type==='collection'?[
             ['newRequest','New request'],['newFolder','New folder'],['organizeFolders','Move folder…'],['organizeCollection','Move collection…'],['runCollection','Run collection'],['variables','Variables'],['documentation','Documentation'],['renameCollection','Rename'],['duplicateCollection','Duplicate collection'],['sortCollection','Sort by name'],['exportCollection','Export collection'],['deleteCollection','Delete collection']
@@ -168,11 +171,15 @@ export function WorkbenchView({ model }) {
           <button role="menuitem" disabled={openTabs.findIndex(t=>t.id===tabMenu.id)>=openTabs.length-1} onClick={()=>performTabAction('right',tabMenu.id)}><ArrowRight size={14}/> Close tabs to the right</button>
         </div>}
 
-        {page==='tester'&&remoteAlerts[activeTabId]&&<div className="pp-conflict-conflict-banner" role="status">
+        {page==='tester'&&!collectionActive&&remoteAlerts[activeTabId]&&<div className="pp-conflict-conflict-banner" role="status">
           <AlertTriangle size={17}/><span><strong>{remoteAlerts[activeTabId].kind==='deleted'?'Cloud request deleted or moved':'A newer Cloud version is available'}</strong><small>Your current draft was not overwritten. Review before saving.</small></span>
           <button type="button" onClick={()=>showConflictDialog(activeTabId)}>Review / Resync</button>
         </div>}
-        {page === 'tester' ? <RequestWorkbench key={`${me?.id||'guest'}:${selectedWs||'local'}:${activeTabId}`} responseMode={responseMode} setResponseMode={setResponseMode} {...{        AUTH_OPTIONS, ChevronRight, Code2, Columns2, History, KeyValueEditor,
+        {collectionWorkbench.tabs.map(tab=><Suspense key={tab.id} fallback={collectionActive&&collectionWorkbench.activeId===tab.id?<div className="pp-feature-loading"><Spinner label="Opening collection settings…"/></div>:null}>
+          <CollectionWorkbenchPanel tab={tab} active={collectionActive&&collectionWorkbench.activeId===tab.id}
+            context={collectionPanelContext} onReport={collectionWorkbench.report} onClose={collectionWorkbench.close}/>
+        </Suspense>)}
+        {page === 'tester' ? !collectionActive&&<RequestWorkbench key={`${me?.id||'guest'}:${selectedWs||'local'}:${activeTabId}`} responseMode={responseMode} setResponseMode={setResponseMode} {...{        AUTH_OPTIONS, ChevronRight, Code2, Columns2, History, KeyValueEditor,
         LayoutPanelTop, Link2, METHODS, Pencil, RequestBody, ResponsePane,
         RetroSelect, Save, ScriptEditor, Send, ShieldCheck, Suspense,
         TextEditor, VariableAwareInput, VariableUrlInput, activeRequestName, activeTabId, apiKeyIn,

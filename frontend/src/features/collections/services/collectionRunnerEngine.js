@@ -7,6 +7,7 @@ import {stripJsonComments} from '../../requests/services/jsonComments.js';
 import {applyAuthorization} from '../../requests/services/authorization.js';
 import {postmanRequestSnapshot} from '../../requests/services/postmanCompat.js';
 import {resolvedScriptVariables} from './collectionVariableSession.js';
+import {runCollectionPhase} from './collectionScripts.js';
 import {redactConsoleMessage} from '../../console/services/pakpostConsoleStore.js';
 
 export const RUNNER_MAX_STEPS=100;
@@ -70,7 +71,7 @@ function sleep(ms,signal){
  * @param {Function} options.onProgress - receives sanitized progress, never raw HTTP data
  */
 export async function executeCollectionRun({requests,selectedIds,iterations=1,delayMs=0,stopOnFailure=true,
-  environmentVariables={},collectionVariables={},iterationData=[],script,send,signal,onProgress=()=>{},onStep=()=>{}}){
+  environmentVariables={},collectionVariables={},collectionPreScript='',collectionPostScript='',iterationData=[],script,send,signal,onProgress=()=>{},onStep=()=>{}}){
   const steps=validateRunnerConfig({requests,selectedIds,iterations,delayMs});
   if(typeof script!=='function'||typeof send!=='function')throw Error('Runner execution adapters are missing.');
   if(!Array.isArray(iterationData)||(iterationData.length&&iterationData.length!==iterations))throw Error('Iterations must match dataset row count.');
@@ -90,7 +91,7 @@ export async function executeCollectionRun({requests,selectedIds,iterations=1,de
         method:String(request.method||'GET').toUpperCase(),iteration,status:null,elapsedMs:null,passed:false,
         tests:[],logs:[],error:''};
       try{
-        const pre=await script(request.preScript||'','pre',env,
+        const pre=await runCollectionPhase(script,collectionPreScript,request.preScript||'','pre',env,
           postmanRequestSnapshot({method:row.method,url:request.url,headers:Object.fromEntries((request.rows||[]).filter(r=>r.key&&r.enabled!==false).map(r=>[r.key,r.value])),body:request.body||'',format:request.format},resolvedScriptVariables(collection,{...env,...dataVars},local)),
           null,local,collection,data,{iteration:iteration-1,iterationCount:iterations});
         const logs=[...(pre.logs||[])];
@@ -105,7 +106,7 @@ export async function executeCollectionRun({requests,selectedIds,iterations=1,de
         const response=await send(command);
         row.status=response.statusCode;
         row.elapsedMs=Number.isFinite(response.elapsedMs)?response.elapsedMs:Date.now()-started;
-        const post=await script(request.postScript||'','post',env,command,response,local,collection,data,{iteration:iteration-1,iterationCount:iterations});
+        const post=await runCollectionPhase(script,collectionPostScript,request.postScript||'','post',env,command,response,local,collection,data,{iteration:iteration-1,iterationCount:iterations});
         logs.push(...(post.logs||[]));
         row.logs=logs.slice(-MAX_VISIBLE_LOGS).map(safeText);
         row.tests=[...(pre.tests||[]),...(post.tests||[])].slice(0,100).map(test=>({

@@ -6,17 +6,18 @@ import { useEffect, useRef } from 'react';
  */
 export function useWorkbenchKeyboardShortcuts({
   page, loading, busyAction, saveOpen, saveExampleOpen, actionDialog,
-  documentationTarget, saveCurrent, sendRequest,
+  documentationTarget, collectionActive=false, saveCurrent, sendRequest,
 }) {
   const latest = useRef(null);
   latest.current = {
     page, loading, busyAction, saveOpen, saveExampleOpen,
-    actionDialog, documentationTarget, saveCurrent, sendRequest,
+    actionDialog, documentationTarget, collectionActive, saveCurrent, sendRequest,
   };
 
   useEffect(() => {
     const onKeyboard = e => {
       const state = latest.current;
+      if(state.collectionActive)return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         if (state.page === 'tester' && !state.busyAction && !state.saveOpen &&

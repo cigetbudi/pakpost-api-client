@@ -35,7 +35,7 @@ export function WorkbenchOverlays({ model }) {
   return <>
 <CommandPalette {...{        ArrowRight, Code2, Search, commandIndex, commandOpen, commandQuery,
         setCommandIndex, setCommandOpen, setCommandQuery, visibleCommandItems,}}/>    {undoLocalDelete && (!notice || notice==='Deleted from local collection. Open drafts are preserved.') ? createPortal(<div className="pp-toast pp-toast-note" role="status"><NoticeIcon/><span>Local request deleted</span><button type="button" onClick={undoDeletedLocalRequest}>Undo</button><button type="button" onClick={()=>setUndoLocalDelete(null)} aria-label="Dismiss undo"><X size={15}/></button></div>,document.body) : notice && createPortal(<div className="pp-toast pp-toast-note" role="status" aria-live="polite"><NoticeIcon/><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss notice"><X size={15}/></button></div>,document.body)}
-<CollectionDialogs {...{        ArrowDownToLine, Braces, CollectionVariablesEditor, Dialog, DocumentationEditor, FileJson,
+<CollectionDialogs theme={model.theme} {...{        ArrowDownToLine, Braces, CollectionVariablesEditor, Dialog, DocumentationEditor, FileJson,
         Suspense, applyCollectionVariableSession, canWorkspace, collectionTargetKey, collectionVariablesBusy, collectionVariablesData,
         collectionVariablesError, collectionVariablesFetchId, collectionVariablesLoading, collectionVariablesTarget, confirmExport, docBusy,
         documentationTarget, exportChoice, exportFormat, exportIncludeSecrets, readCollectionVariables, reloadCollectionVariables,

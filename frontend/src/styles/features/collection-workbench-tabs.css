@@ -1,0 +1,22 @@
+/* A workbench view, not a modal. No viewport height or backdrop. */
+.pp-collection-workbench{display:flex;flex:1 1 0;min-height:0;min-width:0;overflow:hidden;width:100%}
+.pp-collection-workbench[hidden]{display:none!important}
+.pp-cv-dialog.pp-cv-workbench-editor{width:100%;max-width:none;max-height:none;min-height:0;min-width:0;flex:1;overflow:hidden;padding:16px 20px;box-sizing:border-box;gap:12px;background:transparent;border:0;border-radius:0;box-shadow:none}
+.pp-cv-workbench-editor>.dialog-top{flex:none;margin:0;padding:0;min-width:0}
+.pp-cv-workbench-editor>.dialog-top h2{overflow-wrap:anywhere}
+.pp-cv-workbench-editor>.pp-cv-tabs{flex:none;margin:0;gap:18px}
+.pp-cv-workbench-editor>.pp-cv-explain,.pp-cv-workbench-editor>.pp-cv-info,.pp-cv-workbench-editor>.pp-cv-create,.pp-cv-workbench-editor>.pp-cv-footer{flex:none}
+.pp-cv-workbench-editor>.pp-cv-scroll{flex:1 1 0;min-height:0;max-height:none;min-width:0;overflow:auto;padding-bottom:4px}
+.pp-cv-workbench-editor .pp-cv-columns{position:sticky;top:0;z-index:1;background:var(--surface,var(--pp-panel,#171b26));opacity:1}
+.pp-cv-workbench-editor .pp-cv-row,.pp-cv-workbench-editor .pp-cv-session-row,.pp-cv-workbench-editor .pp-cv-columns{min-width:540px;flex-shrink:0}
+.pp-cv-workbench-editor>.pp-cv-script{display:flex;flex-direction:column;align-items:stretch;flex:1 1 0;min-height:0;min-width:0;overflow:hidden;padding:0;gap:8px}
+.pp-cv-workbench-editor .pp-cv-script>.pp-editor-wrap{display:flex;flex:1 1 0;min-height:0;min-width:0;overflow:hidden;flex-direction:column}
+.pp-cv-workbench-editor .pp-cv-script .pp-cm-fill{flex:1 1 0;min-height:0;min-width:0;overflow:hidden}
+.pp-cv-workbench-editor .pp-cv-script .cm-editor{height:100%;min-height:0;overflow:hidden}
+.pp-cv-workbench-editor .pp-cv-script .cm-scroller{overflow:auto;min-height:0}
+.pp-cv-workbench-editor .pp-cv-script>p,.pp-cv-workbench-editor .pp-cv-script>small{flex:none}
+.pp-cv-workbench-editor .pp-cv-script>p{overflow-wrap:anywhere}
+.pp-cv-workbench-editor .pp-cv-script>small{text-align:right}
+.pp-cv-workbench-editor .pp-cv-footer{padding-top:10px;gap:8px}
+.pp-collection-tab-icon{flex:none;color:var(--pp-accent,var(--accent,#83a5ff))}
+@media(max-width:750px){.pp-cv-dialog.pp-cv-workbench-editor{padding:12px;gap:8px}.pp-cv-workbench-editor .pp-cv-footer{justify-content:flex-start}.pp-cv-workbench-editor .pp-cv-footnote{flex-basis:100%}}
