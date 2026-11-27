@@ -1,4 +1,4 @@
-name: PakPost v0.1.0 distribution build
+name: PakPost v0.1.1 distribution build
 on:
   workflow_dispatch:
 permissions:
