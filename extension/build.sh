@@ -9,5 +9,8 @@ for browser in chrome firefox; do
   mkdir -p "$out/icons"
   cp common/icons/icon-*.png "$out/icons/"
   cp "manifest.$browser.json" "$out/manifest.json"
+  cp ../LICENSE "$out/LICENSE.txt"
+  cp ../NOTICE "$out/NOTICE.txt"
+  cp ../ADDITIONAL_TERMS.md "$out/ADDITIONAL_TERMS.txt"
   echo "Prepared $out"
 done

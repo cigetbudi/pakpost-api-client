@@ -22,5 +22,5 @@ rsync "${args[@]}" \
   --exclude='playwright-report/' --exclude='test-results/' --exclude='TestResults/' \
   --exclude='.pakpost-patch-backups/' --exclude='artifacts/' \
   ./frontend/ ./backend/ ./docker/ ./scripts/production/ \
-  ./compose.yaml ./compose.production-hardening.yaml ./.dockerignore "$host:$path/"
+  ./compose.yaml ./compose.production-hardening.yaml ./.dockerignore ./LICENSE ./NOTICE ./ADDITIONAL_TERMS.md "$host:$path/"
 echo 'Source sync only; review deployment separately. Exclusions are not a substitute for secret scanning.'

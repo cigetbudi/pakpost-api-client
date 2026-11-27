@@ -4,6 +4,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0
 WORKDIR /src
 COPY backend/ ./
+COPY LICENSE NOTICE ADDITIONAL_TERMS.md /src/legal/
 RUN dotnet tool restore && dotnet restore src/Pakpost.Api/Pakpost.Api.csproj
 ENTRYPOINT ["dotnet", "ef"]
 CMD ["database", "update", "--project", "src/Pakpost.Infrastructure/Pakpost.Infrastructure.csproj", "--startup-project", "src/Pakpost.Api/Pakpost.Api.csproj", "--context", "PakpostDbContext"]

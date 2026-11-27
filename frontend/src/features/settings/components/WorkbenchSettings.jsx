@@ -7,6 +7,7 @@ import {AppearanceSidebar} from './AppearanceSidebar';
 import {SystemHealthPanel} from './SystemHealthPanel';
 import {AccountSecurityPanel} from './AccountSecurityPanel.jsx';
 import {InstanceAdminPanel} from './InstanceAdminPanel.jsx';
+import {AboutLicense} from './AboutLicense.jsx';
 
 /** Full-workspace preferences; no extra router or UI dependencies. */
 export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,interceptorMode='proxy',onInterceptorChange=()=>{},extensionStatus={state:'unknown'},onCheckExtension=()=>{},onBack,onOpenEnvironments,onOpenImportExport,token='',me=null,category:categoryProp,onCategoryChange}){
@@ -63,7 +64,7 @@ export function WorkbenchSettings({theme,onThemeChange,split,onSplitChange,inter
       {category==='security'&&<AccountSecurityPanel token={token}/>}
       {category==='instance'&&me?.isSuperAdmin&&<InstanceAdminPanel token={token}/>}
       {category==='system'&&<SystemHealthPanel token={token}/>}
-      {category==='about'&&<><h2>About Pakpost</h2><p>Pakpost is an API workbench with local guest drafts and signed-in workspaces.</p><div className="pp-settings-privacy"><Info size={20}/><div><strong>Pakpost Workbench</strong><p>React/Vite with Bun, isolated QuickJS scripting and selectable HTTP interceptors.</p></div></div></>}
+      {category==='about'&&<><h2>About Pakpost</h2><p>Pakpost is an API workbench with local guest drafts and signed-in workspaces.</p><div className="pp-settings-privacy"><Info size={20}/><div><strong>PakPost Workbench</strong><p>React/Vite with Bun, isolated QuickJS scripting and selectable HTTP interceptors.</p></div></div><AboutLicense/></>}
     </section></div>
   </div>;
 }

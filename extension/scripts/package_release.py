@@ -15,6 +15,7 @@ REQUIRED = {
     'manifest.json', 'background.js', 'content.js', 'popup.html',
     'popup.css', 'popup.js', 'icons/icon-16.png', 'icons/icon-32.png',
     'icons/icon-48.png', 'icons/icon-128.png',
+    'LICENSE.txt', 'NOTICE.txt', 'ADDITIONAL_TERMS.txt',
 }
 
 
