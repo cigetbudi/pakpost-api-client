@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-import hashlib
-import sys
+import hashlib, sys
 from pathlib import Path
+from collect import NAMES
 root = Path(sys.argv[1])
-names = ['PakPost-0.1.1-linux-amd64.deb','PakPost-0.1.1-linux-x86_64.rpm','PakPost-0.1.1-windows-x64.exe','PakPost-0.1.1-macos-universal.dmg','pakpost-interceptor-chrome-v0.3.0.zip','pakpost-interceptor-firefox-v0.3.0.xpi']
+required = {name for _, name in NAMES.values()}
+files = sorted(p for p in root.iterdir() if p.name != 'SHA256SUMS')
+if not required.issubset({p.name for p in files}):
+    raise SystemExit('Missing expected distribution files')
 lines=[]
-for name in sorted(names):
-    path=root/name
-    if not path.is_file() or path.is_symlink() or path.stat().st_size<8:
-        raise SystemExit(f'Missing or invalid: {name}')
-    with path.open('rb') as handle:
-        digest=hashlib.file_digest(handle,'sha256').hexdigest()
-    lines.append(f'{digest}  {name}\n')
+for p in files:
+    if not p.is_file() or p.is_symlink() or p.stat().st_size < 8:
+        raise SystemExit(f'Invalid artifact: {p.name}')
+    with p.open('rb') as handle:
+        lines.append(f'{hashlib.file_digest(handle,"sha256").hexdigest()}  {p.name}\n')
 (root/'SHA256SUMS').write_text(''.join(lines),encoding='utf-8')
-print('Checksums generated for six expected artifacts; signing and installer smoke tests are separate.')
+print('Checksums generated for all distribution assets.')

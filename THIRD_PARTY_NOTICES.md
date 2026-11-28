@@ -50,3 +50,18 @@ See [release licensing](docs/release-licensing.md) for the release checklist.
   assume desktop/backend dependencies are part of the extension.
 - Do not publish while relevant evidence gaps or corresponding-source
   obligations remain unresolved.
+
+<!-- BEGIN PAKPOST BUNDLED FONT NOTICES -->
+## Locally bundled fonts
+
+- `@fontsource/dm-sans` 5.3.0 — OFL-1.1
+- `@fontsource/jetbrains-mono` 5.3.0 — OFL-1.1
+
+Exact package license/copyright texts are appended to `THIRD_PARTY_LICENSES.txt` and embedded in the application About notices. Existing release review items remain open.
+<!-- END PAKPOST BUNDLED FONT NOTICES -->
+
+## v0.1.2 updater review
+
+- New dependency: tauri-plugin-updater 2.14.1 and its resolved transitives.
+  Refresh the version-specific third-party license and corresponding-source
+  evidence from the updated Cargo.lock before publishing any installer.

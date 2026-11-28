@@ -20,4 +20,22 @@ class Test(unittest.TestCase):
    with self.assertRaises(SystemExit):m.collect(src,out,['windows'])
    with self.assertRaises(SystemExit):m.collect(src,p/'missing',['rpm'])
    (src/'other-setup.exe').write_bytes(b'fixture-not-a-real-installer');self.assertRaises(SystemExit,m.collect,src,p/'multi',['windows'])
+ def test_updater_manifest(self):
+  import base64
+  spec=importlib.util.spec_from_file_location('updater_manifest',root/'updater-manifest.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+  with tempfile.TemporaryDirectory() as t:
+   p=Path(t);v='1.2.3'
+   names=[f'PakPost-{v}-linux-amd64.deb',f'PakPost-{v}-linux-x86_64.rpm',f'PakPost-{v}-windows-x64.exe',f'PakPost-{v}-macos-universal.app.tar.gz']
+   for name in names:
+    (p/name).write_bytes(b'not-a-real-installer')
+    (p/(name+'.sig')).write_bytes(base64.b64encode(b'trusted comment: version:1.2.3'))
+   result=m.generate(p,v);targets=result['platforms']
+   self.assertNotIn('linux-x86_64',targets)
+   self.assertTrue(targets['linux-x86_64-deb']['url'].endswith('.deb'))
+   self.assertTrue(targets['linux-x86_64-rpm']['url'].endswith('.rpm'))
+   self.assertEqual(targets['darwin-x86_64-app'],targets['darwin-aarch64-app'])
+   (p/(names[0]+'.sig')).write_bytes(base64.b64encode(b'trusted comment: version:0.1.0'))
+   with self.assertRaises(ValueError):m.generate(p,v)
+   (p/(names[0]+'.sig')).unlink()
+   with self.assertRaises(ValueError):m.generate(p,v)
 if __name__=='__main__':unittest.main()

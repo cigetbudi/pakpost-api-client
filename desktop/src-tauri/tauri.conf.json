@@ -1,7 +1,7 @@
 {
   "$schema": "../../frontend/node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "PakPost",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "app.pakpost.desktop",
   "build": {
     "frontendDist": "../../frontend/dist",
@@ -47,6 +47,15 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEExQTI3NDhDNkU3Q0I5MDIKUldRQ3VYeHVqSFNpb1I4d1k1ZGw5NXBKOWUzVmE2cFRPVEhzc2Q1SWxWeXdaYXBubkp1QTRaK0EK",
+      "endpoints": [
+        "https://github.com/cigetbudi/pakpost-api-client/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true
     }
   }
 }
