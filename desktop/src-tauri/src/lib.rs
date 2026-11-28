@@ -3,13 +3,18 @@ mod database;
 mod http;
 mod profiles;
 mod remote;
+mod updates;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::InstallLock::default())
         .manage(remote::RemoteState::default())
         .manage(remote::socket::HubSockets::default())
         .manage(http::NativeCancellation::default())
         .invoke_handler(tauri::generate_handler![
+            updates::check_pakpost_update,
+            updates::install_pakpost_update,
             remote::begin_remote_sign_in,
             remote::poll_remote_sign_in,
             remote::desktop_remote_status,

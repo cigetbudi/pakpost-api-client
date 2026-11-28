@@ -1,10 +1,11 @@
-name: PakPost v0.1.1 distribution build
+name: PakPost signed distribution draft
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   preflight:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +40,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             slots: windows
           - os: macos-15
-            bundles: dmg
+            bundles: dmg,app
             target: universal-apple-darwin
             slots: mac-universal
     runs-on: ${{ matrix.os }}
@@ -77,12 +78,18 @@ jobs:
       - name: Native tests
         working-directory: desktop/src-tauri
         run: cargo test --locked --lib
-      - name: Build installer
+      - name: Build signed installer
         working-directory: desktop
-        run: bun run build --bundles "${{ matrix.bundles }}" --target "${{ matrix.target }}"
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          bun run build --bundles "${{ matrix.bundles }}" --target "${{ matrix.target }}" --config '{"bundle":{"createUpdaterArtifacts":true}}' 
       - name: Collect exact release filenames
         shell: bash
-        run: python scripts/release/collect.py desktop/src-tauri/target/${{ matrix.target }}/release/bundle release-output ${{ matrix.slots }}
+        run: python scripts/release/collect.py desktop/src-tauri/target/${{ matrix.target }}/release/bundle release-output ${{ matrix.slots }} --signed
       - name: Verify Linux installer legal documents
         if: runner.os == 'Linux'
         run: python scripts/release/verify-legal.py linux release-output
@@ -110,3 +117,42 @@ jobs:
           name: pakpost-interceptor
           path: release-output/*
           if-no-files-found: error
+
+  draft:
+    needs: [build, extensions]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: pakpost-release-draft
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pakpost-*
+          path: release-output
+          merge-multiple: true
+      - name: Build release metadata and source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c 'import json; print(json.load(open("desktop/src-tauri/tauri.conf.json"))["version"])')
+          python3 scripts/release/updater-manifest.py release-output
+          git archive --format=tar.gz --prefix="pakpost-$VERSION/" --output="release-output/PakPost-$VERSION-source.tar.gz" HEAD
+          python3 scripts/release/checksums.py release-output
+      - name: Create unpublished release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c 'import json; print(json.load(open("desktop/src-tauri/tauri.conf.json"))["version"])')
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION"; then
+            echo 'Release tag already exists; refusing to replace.'; exit 1
+          else
+            rc=$?; test "$rc" = 2
+          fi
+          gh release create "v$VERSION" release-output/* --target "$GITHUB_SHA" --draft --title "PakPost v$VERSION" --generate-notes

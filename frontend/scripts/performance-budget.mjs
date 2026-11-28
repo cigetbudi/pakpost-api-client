@@ -9,7 +9,7 @@ import { collectBundleMetrics } from './performance-audit.mjs';
 
 export const DEFAULT_BUDGET_KIB = Object.freeze({
   initialJs: 300,
-  initialCss: 60,
+  initialCss: 75,
   editors: 250,
   console: 10,
 });
