@@ -59,3 +59,9 @@ See [release licensing](docs/release-licensing.md) for the release checklist.
 
 Exact package license/copyright texts are appended to `THIRD_PARTY_LICENSES.txt` and embedded in the application About notices. Existing release review items remain open.
 <!-- END PAKPOST BUNDLED FONT NOTICES -->
+
+## v0.1.2 updater review
+
+- New dependency: tauri-plugin-updater 2.14.1 and its resolved transitives.
+  Refresh the version-specific third-party license and corresponding-source
+  evidence from the updated Cargo.lock before publishing any installer.
